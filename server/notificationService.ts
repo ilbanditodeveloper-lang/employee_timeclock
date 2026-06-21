@@ -295,7 +295,7 @@ export async function checkAndSendNotifications(
 
   if (openTimeclocks.length === 0) return;
 
-  const openByEmployee = new Map<number, typeof openTimeclocks>();
+  const openByEmployee = new Map<number, Array<(typeof openTimeclocks)[number]>>();
   for (const clock of openTimeclocks) {
     if (!clock.entryTime) continue;
     const list = openByEmployee.get(clock.employeeId) || [];
@@ -311,7 +311,7 @@ export async function checkAndSendNotifications(
 
     const candidateEmployeeIds: number[] = [];
     for (const [employeeId, clocks] of openByEmployee.entries()) {
-      const hasOpenOnDate = clocks.some(clock => {
+      const hasOpenOnDate = clocks.some((clock) => {
         if (!clock.entryTime) return false;
         const entryDateKey = getDateKeyInTimeZone(new Date(clock.entryTime), timeZone);
         return entryDateKey === reminderDateKey;

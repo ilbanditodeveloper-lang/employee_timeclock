@@ -16,12 +16,16 @@ import {
   getSchedulesByEmployee,
   getIncidentById,
   getEmployeeByUsername,
-  getOrCreateLocalAdmin,
+  getCompanyBySlug,
+  getLocalAdminByCompany,
+  createLocalAdminForCompany,
+  normalizeCompanySlug,
   getTimeclockById,
   getTodayTimeclocksByEmployee,
   getLatestOpenTimeclockByEmployee
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
+import { hashPassword, verifyPassword } from "./_core/password";
 import {
   restaurants,
   employees,
@@ -29,6 +33,7 @@ import {
   timeclocks,
   incidents,
   users,
+  companies,
   pushSubscriptions,
   notificationLogs,
   timeOffRequests,
@@ -71,6 +76,105 @@ function todayYmdInTimeZone(timeZone: string): string {
   return new Date().toLocaleDateString("en-CA", { timeZone });
 }
 
+function parseScopedUsername(rawValue: string): { companySlug: string; username: string } {
+  const raw = rawValue.trim();
+  const parts = raw.split("::");
+  if (parts.length > 1) {
+    return {
+      companySlug: normalizeCompanySlug(parts[0]),
+      username: parts.slice(1).join("::").trim(),
+    };
+  }
+  return { companySlug: "default", username: raw };
+}
+
+function requireSuperAdminCredentials(params: { username: string; password: string }) {
+  const expectedUsername = process.env.SUPERADMIN_USERNAME;
+  const expectedPassword = process.env.SUPERADMIN_PASSWORD;
+  if (!expectedUsername || !expectedPassword) {
+    throw new Error(
+      "Superadmin no configurado. Define SUPERADMIN_USERNAME y SUPERADMIN_PASSWORD en el entorno."
+    );
+  }
+  if (params.username !== expectedUsername || params.password !== expectedPassword) {
+    throw new Error("Credenciales de superadmin inválidas");
+  }
+}
+
+async function requireAdminUser(params: {
+  username: string;
+  password: string;
+}) {
+  const scoped = parseScopedUsername(params.username);
+  const company = await getCompanyBySlug(scoped.companySlug);
+  if (!company || !company.isActive) {
+    throw new Error("Empresa no disponible");
+  }
+
+  const existingAdmin = await getLocalAdminByCompany(company.id);
+  if (!existingAdmin) {
+    throw new Error(
+      "Administrador de empresa no configurado. Solicita al superadmin la creación de la cuenta."
+    );
+  }
+
+  if ((existingAdmin.name ?? "") !== scoped.username) {
+    throw new Error("Invalid admin credentials");
+  }
+
+  const check = verifyPassword(params.password, existingAdmin.password);
+  if (!check.isValid) {
+    throw new Error("Invalid admin credentials");
+  }
+
+  if (check.needsUpgrade) {
+    const db = await getDb();
+    if (db) {
+      await db
+        .update(users)
+        .set({ password: hashPassword(params.password) })
+        .where(eq(users.id, existingAdmin.id));
+    }
+  }
+
+  return { company, admin: existingAdmin };
+}
+
+async function validateEmployeeCredentials(params: {
+  companySlug?: string;
+  username: string;
+  password: string;
+  expectedEmployeeId?: number;
+}) {
+  const scoped = parseScopedUsername(params.username);
+  const company = await getCompanyBySlug(params.companySlug ?? scoped.companySlug ?? "default");
+  if (!company || !company.isActive) {
+    throw new Error("Empresa no disponible");
+  }
+
+  const employee = await getEmployeeByUsername(scoped.username, company.id);
+  if (!employee || (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId)) {
+    throw new Error("Empleado no encontrado");
+  }
+
+  const check = verifyPassword(params.password, employee.password);
+  if (!check.isValid) {
+    throw new Error("Credenciales inválidas");
+  }
+
+  if (check.needsUpgrade) {
+    const db = await getDb();
+    if (db) {
+      await db
+        .update(employees)
+        .set({ password: hashPassword(params.password) })
+        .where(and(eq(employees.id, employee.id), eq(employees.companyId, company.id)));
+    }
+  }
+
+  return employee;
+}
+
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== 'admin') {
     throw new Error('Unauthorized: Admin access required');
@@ -91,20 +195,180 @@ export const appRouter = router({
   }),
 
   publicApi: router({
+    superAdminLogin: publicProcedure
+      .input(
+        z.object({
+          username: z.string().min(1),
+          password: z.string().min(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        requireSuperAdminCredentials({
+          username: input.username,
+          password: input.password,
+        });
+        return { success: true };
+      }),
+
+    superAdminListCompanies: publicProcedure
+      .input(
+        z.object({
+          username: z.string().min(1),
+          password: z.string().min(1),
+        })
+      )
+      .query(async ({ input }) => {
+        requireSuperAdminCredentials({
+          username: input.username,
+          password: input.password,
+        });
+        const db = await getDb();
+        if (!db) return [];
+        const companyRows = await db.select().from(companies).orderBy(desc(companies.createdAt));
+        const adminRows = await db
+          .select()
+          .from(users)
+          .where(and(eq(users.role, "admin"), sql`${users.openId} LIKE 'local-admin-%'`));
+        const adminByCompany = new Map(
+          adminRows
+            .filter((row) => row.companyId != null)
+            .map((row) => [row.companyId as number, row])
+        );
+        return companyRows.map((company) => ({
+          ...company,
+          adminUsername: adminByCompany.get(company.id)?.name ?? null,
+        }));
+      }),
+
+    superAdminCreateCompany: publicProcedure
+      .input(
+        z.object({
+          username: z.string().min(1),
+          password: z.string().min(1),
+          companyName: z.string().min(2),
+          companySlug: z.string().min(2),
+          adminUsername: z.string().min(3),
+          adminPassword: z.string().min(6),
+        })
+      )
+      .mutation(async ({ input }) => {
+        requireSuperAdminCredentials({
+          username: input.username,
+          password: input.password,
+        });
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const slug = normalizeCompanySlug(input.companySlug);
+        const existing = await getCompanyBySlug(slug);
+        if (existing) {
+          throw new Error("Ya existe una empresa con ese slug");
+        }
+        await db.insert(companies).values({
+          name: input.companyName.trim(),
+          slug,
+          isActive: true,
+        });
+        const createdCompany = await getCompanyBySlug(slug);
+        if (!createdCompany) {
+          throw new Error("No se pudo crear la empresa");
+        }
+        const createdAdmin = await createLocalAdminForCompany({
+          companyId: createdCompany.id,
+          name: input.adminUsername.trim(),
+          password: hashPassword(input.adminPassword),
+        });
+        if (!createdAdmin) {
+          throw new Error("No se pudo crear el admin de empresa");
+        }
+        return { success: true, companyId: createdCompany.id, companySlug: createdCompany.slug };
+      }),
+
+    superAdminSetCompanyStatus: publicProcedure
+      .input(
+        z.object({
+          username: z.string().min(1),
+          password: z.string().min(1),
+          companyId: z.number().int().positive(),
+          isActive: z.boolean(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        requireSuperAdminCredentials({
+          username: input.username,
+          password: input.password,
+        });
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const [company] = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.id, input.companyId))
+          .limit(1);
+        if (!company) throw new Error("Empresa no encontrada");
+        await db
+          .update(companies)
+          .set({ isActive: input.isActive, updatedAt: new Date() })
+          .where(eq(companies.id, input.companyId));
+        return { success: true };
+      }),
+
+    superAdminSetCompanyAdmin: publicProcedure
+      .input(
+        z.object({
+          username: z.string().min(1),
+          password: z.string().min(1),
+          companyId: z.number().int().positive(),
+          adminUsername: z.string().min(3),
+          adminPassword: z.string().min(6),
+        })
+      )
+      .mutation(async ({ input }) => {
+        requireSuperAdminCredentials({
+          username: input.username,
+          password: input.password,
+        });
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const [company] = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.id, input.companyId))
+          .limit(1);
+        if (!company) throw new Error("Empresa no encontrada");
+        const existingAdmin = await getLocalAdminByCompany(input.companyId);
+        if (existingAdmin) {
+          await db
+            .update(users)
+            .set({
+              name: input.adminUsername.trim(),
+              password: hashPassword(input.adminPassword),
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, existingAdmin.id));
+          return { success: true };
+        }
+        const created = await createLocalAdminForCompany({
+          companyId: input.companyId,
+          name: input.adminUsername.trim(),
+          password: hashPassword(input.adminPassword),
+        });
+        if (!created) {
+          throw new Error("No se pudo crear el admin de empresa");
+        }
+        return { success: true };
+      }),
+
     adminLogin: publicProcedure.input(
       z.object({
         username: z.string().min(1),
         password: z.string().min(1),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      return { success: true, adminId: admin.id };
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      return { success: true, adminId: admin.id, companySlug: company.slug };
     }),
 
     getRestaurant: publicProcedure.input(
@@ -113,14 +377,11 @@ export const appRouter = router({
         password: z.string().min(1),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      return await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      return (await getRestaurantByAdmin(admin.id, company.id)) ?? null;
     }),
 
     upsertRestaurant: publicProcedure.input(
@@ -134,16 +395,13 @@ export const appRouter = router({
         radiusMeters: z.number().default(100),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      const existing = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const existing = await getRestaurantByAdmin(admin.id, company.id);
       if (existing) {
         await db.update(restaurants).set({
           name: input.name,
@@ -155,6 +413,7 @@ export const appRouter = router({
         return { success: true, restaurantId: existing.id };
       }
       await db.insert(restaurants).values({
+        companyId: company.id,
         name: input.name,
         address: input.address,
         latitude: input.latitude.toString(),
@@ -162,7 +421,7 @@ export const appRouter = router({
         radiusMeters: input.radiusMeters,
         adminId: admin.id,
       });
-      const created = await getRestaurantByAdmin(admin.id);
+      const created = await getRestaurantByAdmin(admin.id, company.id);
       return { success: true, restaurantId: created?.id };
     }),
 
@@ -188,28 +447,25 @@ export const appRouter = router({
         ),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
-      const hashedPassword = Buffer.from(input.employeePassword).toString("base64");
       const result = await db.insert(employees).values({
+        companyId: restaurant.companyId,
         restaurantId: restaurant.id,
         name: input.employeeName,
         username: input.employeeUsername,
-        password: hashedPassword,
+        password: hashPassword(input.employeePassword),
         phone: input.employeePhone,
         lateGraceMinutes: input.lateGraceMinutes,
         isActive: true,
       });
-      const employee = await getEmployeeByUsername(input.employeeUsername);
+      const employee = await getEmployeeByUsername(input.employeeUsername, restaurant.companyId);
       if (!employee) return { success: true };
       const dayMap: Record<string, number> = {
         sunday: 0,
@@ -233,6 +489,7 @@ export const appRouter = router({
         if (dayOfWeek === undefined) continue;
         if (!value.isActive) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: employee.id,
             dayOfWeek,
             entryTime: "00:00",
@@ -243,6 +500,7 @@ export const appRouter = router({
         }
         if (value.entry1) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: employee.id,
             dayOfWeek,
             entryTime: value.entry1,
@@ -252,6 +510,7 @@ export const appRouter = router({
         }
         if (value.entry2) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: employee.id,
             dayOfWeek,
             entryTime: value.entry2,
@@ -286,11 +545,10 @@ export const appRouter = router({
         ),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
+      await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const employee = await getEmployeeById(input.employeeId);
@@ -303,7 +561,7 @@ export const appRouter = router({
         lateGraceMinutes: input.lateGraceMinutes,
       };
       if (input.employeePassword) {
-        updateData.password = Buffer.from(input.employeePassword).toString("base64");
+        updateData.password = hashPassword(input.employeePassword);
       }
       await db.update(employees).set(updateData).where(eq(employees.id, input.employeeId));
 
@@ -330,6 +588,7 @@ export const appRouter = router({
         if (dayOfWeek === undefined) continue;
         if (!value.isActive) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             dayOfWeek,
             entryTime: "00:00",
@@ -340,6 +599,7 @@ export const appRouter = router({
         }
         if (value.entry1) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             dayOfWeek,
             entryTime: value.entry1,
@@ -349,6 +609,7 @@ export const appRouter = router({
         }
         if (value.entry2) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             dayOfWeek,
             entryTime: value.entry2,
@@ -366,16 +627,13 @@ export const appRouter = router({
         password: z.string().min(1),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) return [];
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
-      return await getEmployeesByRestaurant(restaurant.id);
+      return await getEmployeesByRestaurant(restaurant.id, company.id);
     }),
 
     getEmployeeRestaurant: publicProcedure.input(
@@ -385,14 +643,11 @@ export const appRouter = router({
         employeeId: z.number(),
       })
     ).query(async ({ input }) => {
-      const employee = await getEmployeeByUsername(input.username);
-      if (!employee || employee.id !== input.employeeId) {
-        throw new Error("Empleado no encontrado");
-      }
-      const hashed = Buffer.from(input.password).toString("base64");
-      if (employee.password !== hashed) {
-        throw new Error("Credenciales inválidas");
-      }
+      const employee = await validateEmployeeCredentials({
+        username: input.username,
+        password: input.password,
+        expectedEmployeeId: input.employeeId,
+      });
       const restaurant = await getRestaurantById(employee.restaurantId);
       if (!restaurant) throw new Error("Restaurant not found");
       return restaurant;
@@ -405,12 +660,11 @@ export const appRouter = router({
         employeeId: z.number(),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      return await getTimeclocksByEmployee(input.employeeId);
+      const { company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      return await getTimeclocksByEmployee(input.employeeId, company.id);
     }),
 
     listIncidents: publicProcedure.input(
@@ -419,16 +673,13 @@ export const appRouter = router({
         password: z.string().min(1),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) return [];
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((e) => e.id);
       if (employeeIds.length === 0) return [];
       const db = await getDb();
@@ -443,16 +694,13 @@ export const appRouter = router({
         password: z.string().min(1),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((employee) => employee.id);
       if (employeeIds.length === 0) return { success: true };
 
@@ -469,16 +717,13 @@ export const appRouter = router({
         password: z.string().min(1),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) return [];
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((e) => e.id);
       if (employeeIds.length === 0) return [];
       const db = await getDb();
@@ -496,16 +741,13 @@ export const appRouter = router({
         rangeEnd: z.string().optional(),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       let employeeIds = restaurantEmployees.map((employee) => employee.id);
       if (input.employeeId) {
         employeeIds = employeeIds.filter((id) => id === input.employeeId);
@@ -553,16 +795,13 @@ export const appRouter = router({
         employeeId: z.number().optional(),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) return [];
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((e) => e.id);
       if (employeeIds.length === 0) return [];
       if (input.employeeId && !employeeIds.includes(input.employeeId)) {
@@ -593,19 +832,16 @@ export const appRouter = router({
         exitTime: z.string().optional().nullable(),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
 
-      const timeclock = await getTimeclockById(input.timeclockId);
+      const timeclock = await getTimeclockById(input.timeclockId, company.id);
       if (!timeclock || !employeeIds.has(timeclock.employeeId)) {
         throw new Error("Timeclock not found");
       }
@@ -651,19 +887,16 @@ export const appRouter = router({
         timeclockId: z.number(),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
-      const admin = await getOrCreateLocalAdmin(input.username);
-      if (!admin) throw new Error("Admin not available");
-      const restaurant = await getRestaurantByAdmin(admin.id);
+      const { admin, company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
 
-      const timeclock = await getTimeclockById(input.timeclockId);
+      const timeclock = await getTimeclockById(input.timeclockId, company.id);
       if (!timeclock || !employeeIds.has(timeclock.employeeId)) {
         throw new Error("Timeclock not found");
       }
@@ -681,15 +914,14 @@ export const appRouter = router({
         employeeId: z.number(),
       })
     ).query(async ({ input }) => {
-      const employee = await getEmployeeByUsername(input.username);
-      if (!employee || employee.id !== input.employeeId) {
-        throw new Error("Empleado no encontrado");
-      }
-      const hashed = Buffer.from(input.password).toString("base64");
-      if (employee.password !== hashed) {
-        throw new Error("Credenciales inválidas");
-      }
-      return await getTimeclocksByEmployee(input.employeeId);
+      await validateEmployeeCredentials({
+        username: input.username,
+        password: input.password,
+        expectedEmployeeId: input.employeeId,
+      });
+      const scoped = parseScopedUsername(input.username);
+      const company = await getCompanyBySlug(scoped.companySlug);
+      return await getTimeclocksByEmployee(input.employeeId, company?.id);
     }),
 
     getEmployeeSchedule: publicProcedure.input(
@@ -699,24 +931,28 @@ export const appRouter = router({
         employeeId: z.number(),
       })
     ).query(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      const isAdmin = input.username === adminUsername && input.password === adminPassword;
+      const scoped = parseScopedUsername(input.username);
+      const company = await getCompanyBySlug(scoped.companySlug);
+      if (!company) throw new Error("Empresa no disponible");
+      let isAdmin = false;
+      try {
+        await requireAdminUser({ username: input.username, password: input.password });
+        isAdmin = true;
+      } catch {
+        isAdmin = false;
+      }
 
       let targetEmployeeId = input.employeeId;
       if (!isAdmin) {
-        const employee = await getEmployeeByUsername(input.username);
-        if (!employee || employee.id !== input.employeeId) {
-          throw new Error("Empleado no encontrado");
-        }
-        const hashed = Buffer.from(input.password).toString("base64");
-        if (employee.password !== hashed) {
-          throw new Error("Credenciales inválidas");
-        }
+        const employee = await validateEmployeeCredentials({
+          username: input.username,
+          password: input.password,
+          expectedEmployeeId: input.employeeId,
+        });
         targetEmployeeId = employee.id;
       }
 
-      const scheduleRows = await getSchedulesByEmployee(targetEmployeeId);
+      const scheduleRows = await getSchedulesByEmployee(targetEmployeeId, company.id);
       const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
       const scheduleMap: Record<string, { entry1: string; entry2: string; isActive: boolean }> = {};
       for (const row of scheduleRows) {
@@ -753,11 +989,10 @@ export const appRouter = router({
         ),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
+      await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const employee = await getEmployeeById(input.employeeId);
@@ -788,6 +1023,7 @@ export const appRouter = router({
 
         if (!value.isActive) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             dayOfWeek,
             entryTime: "00:00",
@@ -798,6 +1034,7 @@ export const appRouter = router({
         }
         if (value.entry1) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             dayOfWeek,
             entryTime: value.entry1,
@@ -807,6 +1044,7 @@ export const appRouter = router({
         }
         if (value.entry2) {
           await db.insert(schedules).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             dayOfWeek,
             entryTime: value.entry2,
@@ -825,12 +1063,10 @@ export const appRouter = router({
         password: z.string().min(1),
       })
     ).mutation(async ({ input }) => {
-      const employee = await getEmployeeByUsername(input.username);
-      if (!employee) throw new Error("Empleado no encontrado");
-      const hashed = Buffer.from(input.password).toString("base64");
-      if (employee.password !== hashed) {
-        throw new Error("Credenciales inválidas");
-      }
+      const employee = await validateEmployeeCredentials({
+        username: input.username,
+        password: input.password,
+      });
       const scheduleRows = await getSchedulesByEmployee(employee.id);
       const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
       const scheduleMap: Record<string, { entry1: string; entry2: string; isActive: boolean }> = {};
@@ -865,14 +1101,11 @@ export const appRouter = router({
         longitude: z.number(),
       })
     ).mutation(async ({ input }) => {
-      const employee = await getEmployeeByUsername(input.username);
-      if (!employee || employee.id !== input.employeeId) {
-        throw new Error("Empleado no encontrado");
-      }
-      const hashed = Buffer.from(input.password).toString("base64");
-      if (employee.password !== hashed) {
-        throw new Error("Credenciales inválidas");
-      }
+      const employee = await validateEmployeeCredentials({
+        username: input.username,
+        password: input.password,
+        expectedEmployeeId: input.employeeId,
+      });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const restaurant = await getRestaurantById(employee.restaurantId);
@@ -912,6 +1145,7 @@ export const appRouter = router({
         }
       }
       await db.insert(timeclocks).values({
+        companyId: employee.companyId,
         employeeId: input.employeeId,
         entryTime: now,
         isLate,
@@ -930,14 +1164,11 @@ export const appRouter = router({
         longitude: z.number(),
       })
     ).mutation(async ({ input }) => {
-      const employee = await getEmployeeByUsername(input.username);
-      if (!employee || employee.id !== input.employeeId) {
-        throw new Error("Empleado no encontrado");
-      }
-      const hashed = Buffer.from(input.password).toString("base64");
-      if (employee.password !== hashed) {
-        throw new Error("Credenciales inválidas");
-      }
+      const employee = await validateEmployeeCredentials({
+        username: input.username,
+        password: input.password,
+        expectedEmployeeId: input.employeeId,
+      });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const restaurant = await getRestaurantById(employee.restaurantId);
@@ -970,17 +1201,15 @@ export const appRouter = router({
         timeclockId: z.number().optional(),
       })
     ).mutation(async ({ input }) => {
-      const employee = await getEmployeeByUsername(input.username);
-      if (!employee || employee.id !== input.employeeId) {
-        throw new Error("Empleado no encontrado");
-      }
-      const hashed = Buffer.from(input.password).toString("base64");
-      if (employee.password !== hashed) {
-        throw new Error("Credenciales inválidas");
-      }
+      const employee = await validateEmployeeCredentials({
+        username: input.username,
+        password: input.password,
+        expectedEmployeeId: input.employeeId,
+      });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.insert(incidents).values({
+        companyId: employee.companyId,
         employeeId: input.employeeId,
         timeclockId: input.timeclockId,
         type: input.type,
@@ -1003,14 +1232,11 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const employee = await getEmployeeByUsername(input.username);
-        if (!employee || employee.id !== input.employeeId) {
-          throw new Error("Empleado no encontrado");
-        }
-        const hashed = Buffer.from(input.password).toString("base64");
-        if (employee.password !== hashed) {
-          throw new Error("Credenciales inválidas");
-        }
+        const employee = await validateEmployeeCredentials({
+          username: input.username,
+          password: input.password,
+          expectedEmployeeId: input.employeeId,
+        });
         if (input.endDate < input.startDate) {
           throw new Error("La fecha fin debe ser igual o posterior a la de inicio");
         }
@@ -1046,6 +1272,7 @@ export const appRouter = router({
         }
         try {
           await db.insert(timeOffRequests).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             kind: input.kind,
             startDate: input.startDate,
@@ -1080,14 +1307,11 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const employee = await getEmployeeByUsername(input.username);
-        if (!employee || employee.id !== input.employeeId) {
-          throw new Error("Empleado no encontrado");
-        }
-        const hashed = Buffer.from(input.password).toString("base64");
-        if (employee.password !== hashed) {
-          throw new Error("Credenciales inválidas");
-        }
+        await validateEmployeeCredentials({
+          username: input.username,
+          password: input.password,
+          expectedEmployeeId: input.employeeId,
+        });
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const [row] = await db
@@ -1114,16 +1338,13 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-        const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-        if (input.username !== adminUsername || input.password !== adminPassword) {
-          throw new Error("Invalid admin credentials");
-        }
-        const admin = await getOrCreateLocalAdmin(input.username);
-        if (!admin) throw new Error("Admin not available");
-        const restaurant = await getRestaurantByAdmin(admin.id);
+        const { admin, company } = await requireAdminUser({
+          username: input.username,
+          password: input.password,
+        });
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) throw new Error("Restaurant not found");
-        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = new Set(restaurantEmployees.map((e) => e.id));
         const db = await getDb();
         if (!db) throw new Error("Database not available");
@@ -1150,20 +1371,22 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        const employee = await getEmployeeByUsername(input.username);
-        if (!employee || employee.id !== input.employeeId) {
-          throw new Error("Empleado no encontrado");
-        }
-        const hashed = Buffer.from(input.password).toString("base64");
-        if (employee.password !== hashed) {
-          throw new Error("Credenciales inválidas");
-        }
+        const employee = await validateEmployeeCredentials({
+          username: input.username,
+          password: input.password,
+          expectedEmployeeId: input.employeeId,
+        });
         const db = await getDb();
         if (!db) return [];
         return await db
           .select()
           .from(timeOffRequests)
-          .where(eq(timeOffRequests.employeeId, input.employeeId))
+          .where(
+            and(
+              eq(timeOffRequests.employeeId, input.employeeId),
+              eq(timeOffRequests.companyId, employee.companyId)
+            )
+          )
           .orderBy(desc(timeOffRequests.createdAt));
       }),
 
@@ -1176,16 +1399,13 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-        const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-        if (input.username !== adminUsername || input.password !== adminPassword) {
-          throw new Error("Invalid admin credentials");
-        }
-        const admin = await getOrCreateLocalAdmin(input.username);
-        if (!admin) return [];
-        const restaurant = await getRestaurantByAdmin(admin.id);
+        const { admin, company } = await requireAdminUser({
+          username: input.username,
+          password: input.password,
+        });
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) return [];
-        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = restaurantEmployees.map((e) => e.id);
         if (employeeIds.length === 0) return [];
         const db = await getDb();
@@ -1194,7 +1414,12 @@ export const appRouter = router({
         const rows = await db
           .select()
           .from(timeOffRequests)
-          .where(inArray(timeOffRequests.employeeId, employeeIds))
+          .where(
+            and(
+              inArray(timeOffRequests.employeeId, employeeIds),
+              eq(timeOffRequests.companyId, company.id)
+            )
+          )
           .orderBy(desc(timeOffRequests.createdAt));
         const filtered =
           input.status === "all" ? rows : rows.filter((r) => r.status === input.status);
@@ -1214,23 +1439,22 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-        const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-        if (input.username !== adminUsername || input.password !== adminPassword) {
-          throw new Error("Invalid admin credentials");
-        }
-        const admin = await getOrCreateLocalAdmin(input.username);
-        if (!admin) throw new Error("Admin not available");
-        const restaurant = await getRestaurantByAdmin(admin.id);
+        const { admin, company } = await requireAdminUser({
+          username: input.username,
+          password: input.password,
+        });
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) throw new Error("Restaurant not found");
-        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = new Set(restaurantEmployees.map((e) => e.id));
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const [row] = await db
           .select()
           .from(timeOffRequests)
-          .where(eq(timeOffRequests.id, input.requestId))
+          .where(
+            and(eq(timeOffRequests.id, input.requestId), eq(timeOffRequests.companyId, company.id))
+          )
           .limit(1);
         if (!row) throw new Error("Solicitud no encontrada");
         if (!employeeIds.has(row.employeeId)) throw new Error("No autorizado");
@@ -1258,16 +1482,20 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-        const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-        if (input.username !== adminUsername || input.password !== adminPassword) {
-          throw new Error("Invalid admin credentials");
+        const { admin, company } = await requireAdminUser({
+          username: input.username,
+          password: input.password,
+        });
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        if (!restaurant) {
+          return {
+            days: [] as {
+              date: string;
+              entries: { employeeName: string; kind: string; status: string; requestId: number }[];
+            }[],
+          };
         }
-        const admin = await getOrCreateLocalAdmin(input.username);
-        if (!admin) return { days: [] as { date: string; entries: { employeeName: string; kind: string; status: string; requestId: number }[] }[] };
-        const restaurant = await getRestaurantByAdmin(admin.id);
-        if (!restaurant) return { days: [] };
-        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
+        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = restaurantEmployees.map((e) => e.id);
         if (employeeIds.length === 0) return { days: [] };
         const nameById = new Map(restaurantEmployees.map((e) => [e.id, e.name]));
@@ -1280,6 +1508,7 @@ export const appRouter = router({
           .where(
             and(
               inArray(timeOffRequests.employeeId, employeeIds),
+              eq(timeOffRequests.companyId, company.id),
               sql`${timeOffRequests.startDate}::text <= ${rangeEndStr}`,
               sql`${timeOffRequests.endDate}::text >= ${rangeStartStr}`
             )
@@ -1336,15 +1565,11 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        const employee = await getEmployeeByUsername(input.username);
-        if (!employee || employee.id !== input.employeeId) {
-          throw new Error("Invalid employee credentials");
-        }
-
-        const hashedPassword = Buffer.from(input.password).toString("base64");
-        if (employee.password !== hashedPassword) {
-          throw new Error("Invalid employee credentials");
-        }
+        const employee = await validateEmployeeCredentials({
+          username: input.username,
+          password: input.password,
+          expectedEmployeeId: input.employeeId,
+        });
 
         const existing = await db
           .select()
@@ -1356,6 +1581,7 @@ export const appRouter = router({
           await db
             .update(pushSubscriptions)
             .set({
+              companyId: employee.companyId,
               employeeId: input.employeeId,
               p256dh: input.subscription.keys.p256dh,
               auth: input.subscription.keys.auth,
@@ -1364,6 +1590,7 @@ export const appRouter = router({
             .where(eq(pushSubscriptions.endpoint, input.subscription.endpoint));
         } else {
           await db.insert(pushSubscriptions).values({
+            companyId: employee.companyId,
             employeeId: input.employeeId,
             endpoint: input.subscription.endpoint,
             p256dh: input.subscription.keys.p256dh,
@@ -1397,11 +1624,10 @@ export const appRouter = router({
         employeeId: z.number(),
       })
     ).mutation(async ({ input }) => {
-      const adminUsername = process.env.ADMIN_USERNAME ?? "ilbandito";
-      const adminPassword = process.env.ADMIN_PASSWORD ?? "Vat1stop";
-      if (input.username !== adminUsername || input.password !== adminPassword) {
-        throw new Error("Invalid admin credentials");
-      }
+      const { company } = await requireAdminUser({
+        username: input.username,
+        password: input.password,
+      });
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -1412,7 +1638,12 @@ export const appRouter = router({
       const subscriptions = await db
         .select()
         .from(pushSubscriptions)
-        .where(eq(pushSubscriptions.employeeId, input.employeeId));
+        .where(
+          and(
+            eq(pushSubscriptions.employeeId, input.employeeId),
+            eq(pushSubscriptions.companyId, company.id)
+          )
+        );
 
       if (subscriptions.length === 0) {
         throw new Error("No hay dispositivos suscritos para este empleado");
@@ -1466,6 +1697,7 @@ export const appRouter = router({
       if (!db) throw new Error('Database not available');
       
       const result = await db.insert(restaurants).values({
+        companyId: ctx.user.companyId ?? 1,
         name: input.name,
         address: input.address,
         latitude: input.latitude.toString(),
@@ -1525,14 +1757,12 @@ export const appRouter = router({
       const restaurant = await getRestaurantByAdmin(ctx.user.id);
       if (!restaurant) throw new Error('Restaurant not found');
       
-      // Hash password (in production, use bcrypt)
-      const hashedPassword = Buffer.from(input.password).toString('base64');
-      
       const result = await db.insert(employees).values({
+        companyId: restaurant.companyId,
         restaurantId: restaurant.id,
         name: input.name,
         username: input.username,
-        password: hashedPassword,
+        password: hashPassword(input.password),
         phone: input.phone,
         isActive: true,
       });
@@ -1570,6 +1800,7 @@ export const appRouter = router({
       }
       
       await db.insert(schedules).values({
+        companyId: employee.companyId,
         employeeId: input.employeeId,
         dayOfWeek: input.dayOfWeek,
         entryTime: input.entryTime,
@@ -1647,6 +1878,7 @@ export const appRouter = router({
       }
       
       await db.insert(timeclocks).values({
+        companyId: employee.companyId,
         employeeId: input.employeeId,
         entryTime: now,
         isLate,
@@ -1715,6 +1947,7 @@ export const appRouter = router({
       if (!db) throw new Error('Database not available');
       
       await db.insert(incidents).values({
+        companyId: ctx.user.companyId ?? 1,
         employeeId: input.employeeId,
         timeclockId: input.timeclockId,
         type: input.type,

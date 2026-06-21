@@ -103,8 +103,14 @@ employee_timeclock/
 
 ### Administrador
 1. Accede a `/admin-login`
-2. Ingresa credenciales de administrador
+2. Ingresa `Empresa (slug)` y credenciales de administrador
 3. Accede al panel de control completo
+
+### Multiempresa (modo universal)
+- Cada negocio usa un `slug` de empresa (por ejemplo `cafeteria-sol`).
+- El admin de empresa se configura desde superadmin (sin autoaprovisionamiento).
+- En las credenciales internas se usa el formato `slug::usuario` para aislar datos por empresa.
+- Superadmin web: `/superadmin` (requiere `SUPERADMIN_USERNAME` y `SUPERADMIN_PASSWORD`).
 
 ## API Endpoints (tRPC)
 
@@ -278,19 +284,10 @@ pnpm install
 pnpm build
 ```
 
-## Contribuciones
-
-Las contribuciones son bienvenidas. Por favor:
-
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
 ## Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+Este proyecto es **propietario** y no está permitido copiar, redistribuir o revender el código.
+Consulta el archivo `LICENSE` para los términos completos.
 
 ## Soporte
 

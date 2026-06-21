@@ -20,11 +20,27 @@ export const timeOffKindEnum = pgEnum("time_off_kind", ["vacation", "day_off"]);
 export const timeOffStatusEnum = pgEnum("time_off_status", ["pending", "approved", "rejected"]);
 
 /**
+ * Company/tenant for multi-business SaaS deployments.
+ */
+export const companies = pgTable("companies", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 80 }).notNull().unique(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = typeof companies.$inferInsert;
+
+/**
  * Core user table backing auth flow.
  * Extended with employee-specific fields for the timeclock system.
  */
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -46,6 +62,7 @@ export type InsertUser = typeof users.$inferInsert;
  */
 export const restaurants = pgTable("restaurants", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address"),
   latitude: numeric("latitude", { precision: 10, scale: 8 }).notNull(),
@@ -64,6 +81,7 @@ export type InsertRestaurant = typeof restaurants.$inferInsert;
  */
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   restaurantId: integer("restaurantId").notNull(), // Reference to restaurant
   name: varchar("name", { length: 255 }).notNull(),
   username: varchar("username", { length: 100 }).notNull().unique(),
@@ -83,6 +101,7 @@ export type InsertEmployee = typeof employees.$inferInsert;
  */
 export const schedules = pgTable("schedules", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   employeeId: integer("employeeId").notNull(), // Reference to employee
   dayOfWeek: integer("dayOfWeek").notNull(), // 0-6 (Sunday-Saturday)
   entryTime: varchar("entryTime", { length: 5 }).notNull(), // HH:mm format
@@ -101,6 +120,7 @@ export type InsertSchedule = typeof schedules.$inferInsert;
  */
 export const timeclocks = pgTable("timeclocks", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   employeeId: integer("employeeId").notNull(), // Reference to employee
   entryTime: timestamp("entryTime"),
   exitTime: timestamp("exitTime"),
@@ -119,6 +139,7 @@ export type InsertTimeclock = typeof timeclocks.$inferInsert;
  */
 export const incidents = pgTable("incidents", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   employeeId: integer("employeeId").notNull(), // Reference to employee
   timeclockId: integer("timeclockId"), // Reference to timeclock entry
   type: incidentTypeEnum("type").notNull(),
@@ -133,6 +154,7 @@ export const incidents = pgTable("incidents", {
  */
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   employeeId: integer("employeeId").notNull(),
   endpoint: text("endpoint").notNull().unique(),
   p256dh: text("p256dh").notNull(),
@@ -149,6 +171,7 @@ export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
  */
 export const notificationLogs = pgTable("notification_logs", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   employeeId: integer("employeeId").notNull(),
   entryTime: varchar("entryTime", { length: 5 }).notNull(),
   scheduleDate: date("scheduleDate").notNull(), // Date of the scheduled entry
@@ -167,6 +190,7 @@ export type InsertIncident = typeof incidents.$inferInsert;
  */
 export const timeOffRequests = pgTable("time_off_requests", {
   id: serial("id").primaryKey(),
+  companyId: integer("companyId").default(1).notNull(),
   employeeId: integer("employeeId").notNull(),
   kind: timeOffKindEnum("kind").notNull(),
   startDate: date("startDate").notNull(),

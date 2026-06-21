@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 dotenv.config();
 import express from "express";
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -33,6 +33,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  const localhostOriginRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
   const allowedOrigins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -42,18 +43,21 @@ async function startServer() {
     .map(origin => origin.trim())
     .filter(Boolean);
 
-  app.use(
-    cors({
-      origin(origin, callback) {
+  const corsOptions: CorsOptions = {
+    origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
         if (!origin) return callback(null, true);
+        if (process.env.NODE_ENV === "development" && localhostOriginRegex.test(origin)) {
+          return callback(null, true);
+        }
         if (allowedOrigins.length === 0) return callback(null, true);
         return allowedOrigins.includes(origin)
           ? callback(null, true)
           : callback(new Error(`CORS blocked for origin: ${origin}`));
-      },
-      credentials: true,
-    })
-  );
+    },
+    credentials: true,
+  };
+
+  app.use(cors(corsOptions));
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

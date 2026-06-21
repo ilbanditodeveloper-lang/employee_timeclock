@@ -1,7 +1,16 @@
 import { eq, and, desc, gte, lt, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { InsertUser, users, employees, restaurants, schedules, timeclocks, incidents } from "../drizzle/schema";
+import {
+  InsertUser,
+  users,
+  employees,
+  restaurants,
+  schedules,
+  timeclocks,
+  incidents,
+  companies,
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -124,54 +133,158 @@ export async function getOrCreateLocalAdmin(name: string) {
   return created.length > 0 ? created[0] : undefined;
 }
 
-// Employee queries
-export async function getEmployeeById(id: number) {
+export function normalizeCompanySlug(rawSlug: string | undefined | null): string {
+  return (rawSlug ?? "default")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "default";
+}
+
+export async function getCompanyBySlug(rawSlug: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(employees).where(eq(employees.id, id)).limit(1);
+  const slug = normalizeCompanySlug(rawSlug);
+  const result = await db.select().from(companies).where(eq(companies.slug, slug)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getEmployeesByRestaurant(restaurantId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(employees).where(eq(employees.restaurantId, restaurantId));
-}
-
-export async function getEmployeeByUsername(username: string) {
+export async function getOrCreateCompanyBySlug(rawSlug: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(employees).where(eq(employees.username, username)).limit(1);
+  const slug = normalizeCompanySlug(rawSlug);
+  const existing = await db.select().from(companies).where(eq(companies.slug, slug)).limit(1);
+  if (existing.length > 0) return existing[0];
+
+  const prettyName = slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+
+  await db.insert(companies).values({
+    name: prettyName || "Default Company",
+    slug,
+    isActive: true,
+  });
+
+  const created = await db.select().from(companies).where(eq(companies.slug, slug)).limit(1);
+  return created.length > 0 ? created[0] : undefined;
+}
+
+export async function getCompanyById(companyId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getLocalAdminByCompany(companyId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const openId = `local-admin-${companyId}`;
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createLocalAdminForCompany(params: {
+  companyId: number;
+  name: string;
+  password: string;
+}) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const openId = `local-admin-${params.companyId}`;
+  await db.insert(users).values({
+    companyId: params.companyId,
+    openId,
+    name: params.name,
+    role: "admin",
+    password: params.password,
+    lastSignedIn: new Date(),
+  });
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// Employee queries
+export async function getEmployeeById(id: number, companyId?: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const where = companyId
+    ? and(eq(employees.id, id), eq(employees.companyId, companyId))
+    : eq(employees.id, id);
+  const result = await db.select().from(employees).where(where).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getEmployeesByRestaurant(restaurantId: number, companyId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const where = companyId
+    ? and(eq(employees.restaurantId, restaurantId), eq(employees.companyId, companyId))
+    : eq(employees.restaurantId, restaurantId);
+  return await db.select().from(employees).where(where);
+}
+
+export async function getEmployeeByUsername(username: string, companyId?: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const where = companyId
+    ? and(eq(employees.username, username), eq(employees.companyId, companyId))
+    : eq(employees.username, username);
+  const result = await db.select().from(employees).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 // Restaurant queries
-export async function getRestaurantById(id: number) {
+export async function getRestaurantById(id: number, companyId?: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(restaurants).where(eq(restaurants.id, id)).limit(1);
+  const where = companyId
+    ? and(eq(restaurants.id, id), eq(restaurants.companyId, companyId))
+    : eq(restaurants.id, id);
+  const result = await db.select().from(restaurants).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getRestaurantByAdmin(adminId: number) {
+export async function getRestaurantByAdmin(adminId: number, companyId?: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(restaurants).where(eq(restaurants.adminId, adminId)).limit(1);
+  const where = companyId
+    ? and(eq(restaurants.adminId, adminId), eq(restaurants.companyId, companyId))
+    : eq(restaurants.adminId, adminId);
+  const result = await db.select().from(restaurants).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 // Schedule queries
-export async function getSchedulesByEmployee(employeeId: number) {
+export async function getSchedulesByEmployee(employeeId: number, companyId?: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(schedules).where(eq(schedules.employeeId, employeeId));
+  const where = companyId
+    ? and(eq(schedules.employeeId, employeeId), eq(schedules.companyId, companyId))
+    : eq(schedules.employeeId, employeeId);
+  return await db.select().from(schedules).where(where);
 }
 
-export async function getScheduleByEmployeeAndDay(employeeId: number, dayOfWeek: number) {
+export async function getScheduleByEmployeeAndDay(
+  employeeId: number,
+  dayOfWeek: number,
+  companyId?: number
+) {
   const db = await getDb();
   if (!db) return undefined;
+  const where = companyId
+    ? and(
+        eq(schedules.employeeId, employeeId),
+        eq(schedules.dayOfWeek, dayOfWeek),
+        eq(schedules.companyId, companyId)
+      )
+    : and(eq(schedules.employeeId, employeeId), eq(schedules.dayOfWeek, dayOfWeek));
   const result = await db.select().from(schedules)
-    .where(and(eq(schedules.employeeId, employeeId), eq(schedules.dayOfWeek, dayOfWeek)))
+    .where(where)
     .orderBy(schedules.entrySlot)
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
@@ -180,32 +293,46 @@ export async function getScheduleByEmployeeAndDay(employeeId: number, dayOfWeek:
 export async function getScheduleByEmployeeDayAndSlot(
   employeeId: number,
   dayOfWeek: number,
-  entrySlot: number
+  entrySlot: number,
+  companyId?: number
 ) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(schedules)
-    .where(
-      and(
+  const where = companyId
+    ? and(
+        eq(schedules.employeeId, employeeId),
+        eq(schedules.dayOfWeek, dayOfWeek),
+        eq(schedules.entrySlot, entrySlot),
+        eq(schedules.companyId, companyId)
+      )
+    : and(
         eq(schedules.employeeId, employeeId),
         eq(schedules.dayOfWeek, dayOfWeek),
         eq(schedules.entrySlot, entrySlot)
-      )
-    )
+      );
+  const result = await db
+    .select()
+    .from(schedules)
+    .where(where)
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 // Timeclock queries
-export async function getTimeclocksByEmployee(employeeId: number) {
+export async function getTimeclocksByEmployee(employeeId: number, companyId?: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(timeclocks).where(eq(timeclocks.employeeId, employeeId));
+  const where = companyId
+    ? and(eq(timeclocks.employeeId, employeeId), eq(timeclocks.companyId, companyId))
+    : eq(timeclocks.employeeId, employeeId);
+  return await db.select().from(timeclocks).where(where);
 }
 
-export async function getTodayTimeclocksByEmployee(employeeId: number, date = new Date()) {
+export async function getTodayTimeclocksByEmployee(
+  employeeId: number,
+  date = new Date(),
+  companyId?: number
+) {
   const db = await getDb();
   if (!db) return [];
 
@@ -220,6 +347,7 @@ export async function getTodayTimeclocksByEmployee(employeeId: number, date = ne
     .where(
       and(
         eq(timeclocks.employeeId, employeeId),
+        ...(companyId ? [eq(timeclocks.companyId, companyId)] : []),
         gte(timeclocks.createdAt, dayStart),
         lt(timeclocks.createdAt, dayEnd)
       )
@@ -227,35 +355,50 @@ export async function getTodayTimeclocksByEmployee(employeeId: number, date = ne
     .orderBy(desc(timeclocks.createdAt));
 }
 
-export async function getLatestOpenTimeclockByEmployee(employeeId: number) {
+export async function getLatestOpenTimeclockByEmployee(employeeId: number, companyId?: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(timeclocks)
-    .where(and(eq(timeclocks.employeeId, employeeId), isNull(timeclocks.exitTime)))
+    .where(
+      and(
+        eq(timeclocks.employeeId, employeeId),
+        ...(companyId ? [eq(timeclocks.companyId, companyId)] : []),
+        isNull(timeclocks.exitTime)
+      )
+    )
     .orderBy(desc(timeclocks.createdAt))
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getTimeclockById(id: number) {
+export async function getTimeclockById(id: number, companyId?: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(timeclocks).where(eq(timeclocks.id, id)).limit(1);
+  const where = companyId
+    ? and(eq(timeclocks.id, id), eq(timeclocks.companyId, companyId))
+    : eq(timeclocks.id, id);
+  const result = await db.select().from(timeclocks).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 // Incident queries
-export async function getIncidentsByEmployee(employeeId: number) {
+export async function getIncidentsByEmployee(employeeId: number, companyId?: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(incidents).where(eq(incidents.employeeId, employeeId));
+  const where = companyId
+    ? and(eq(incidents.employeeId, employeeId), eq(incidents.companyId, companyId))
+    : eq(incidents.employeeId, employeeId);
+  return await db.select().from(incidents).where(where);
 }
 
-export async function getIncidentById(id: number) {
+export async function getIncidentById(id: number, companyId?: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(incidents).where(eq(incidents.id, id)).limit(1);
+  const where = companyId
+    ? and(eq(incidents.id, id), eq(incidents.companyId, companyId))
+    : eq(incidents.id, id);
+  const result = await db.select().from(incidents).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }

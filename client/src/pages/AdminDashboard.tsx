@@ -972,7 +972,7 @@ export default function AdminDashboard() {
           {/* Restaurant Tab */}
           <TabsContent value="restaurant" className="space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Gestión del Restaurante</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-6">Gestión del Negocio</h2>
               
               <div className="space-y-4 mb-8">
                 <div>

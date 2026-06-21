@@ -18,6 +18,7 @@ import EmployeeCalculator from "./pages/EmployeeCalculator";
 import EmployeeSchedule from "./pages/EmployeeSchedule";
 import EmployeeTimeOff from "./pages/EmployeeTimeOff";
 import AdminDashboard from "./pages/AdminDashboard";
+import SuperAdmin from "./pages/SuperAdmin";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/admin-login"} component={AdminLogin} />
+      <Route path={"/superadmin"} component={SuperAdmin} />
       <Route path={"/employee"} component={EmployeeDashboard} />
       <Route path={"/employee/calendar"} component={EmployeeCalendar} />
       <Route path={"/employee/schedule"} component={EmployeeSchedule} />

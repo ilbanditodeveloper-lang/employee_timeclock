@@ -10,6 +10,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
+  const [companySlug, setCompanySlug] = useState('default');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,8 +22,9 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      await adminLogin.mutateAsync({ username, password });
-      setAdminAuth({ username, password });
+      const scopedUsername = `${companySlug.trim().toLowerCase()}::${username.trim()}`;
+      await adminLogin.mutateAsync({ username: scopedUsername, password });
+      setAdminAuth({ username: scopedUsername, password });
       setEmployeeAuth(null);
       
       toast.success('¡Bienvenido Administrador!');
@@ -59,6 +61,19 @@ export default function AdminLogin() {
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Empresa (slug)
+              </label>
+              <Input
+                type="text"
+                placeholder="mi-negocio"
+                value={companySlug}
+                onChange={(e) => setCompanySlug(e.target.value)}
+                required
+                className="input-elegant"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Usuario

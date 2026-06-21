@@ -10,6 +10,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 
 export default function EmployeeLogin() {
   const [, setLocation] = useLocation();
+  const [companySlug, setCompanySlug] = useState('default');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,9 +22,10 @@ export default function EmployeeLogin() {
     setLoading(true);
 
     try {
-      const result = await employeeLogin.mutateAsync({ username, password });
+      const scopedUsername = `${companySlug.trim().toLowerCase()}::${username.trim()}`;
+      const result = await employeeLogin.mutateAsync({ username: scopedUsername, password });
       setEmployeeAuth({
-        username,
+        username: scopedUsername,
         password,
         employeeId: result.employeeId,
         schedule: result.schedule,
@@ -65,6 +67,19 @@ export default function EmployeeLogin() {
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Empresa (slug)
+              </label>
+              <Input
+                type="text"
+                placeholder="mi-negocio"
+                value={companySlug}
+                onChange={(e) => setCompanySlug(e.target.value)}
+                required
+                className="input-elegant"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Usuario

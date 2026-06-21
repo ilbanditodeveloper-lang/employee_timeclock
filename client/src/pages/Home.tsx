@@ -82,6 +82,13 @@ export default function Home() {
           >
             Acceso Administrador
           </Button>
+          <Button
+            onClick={() => setLocation('/superadmin')}
+            variant="ghost"
+            className="w-full text-base"
+          >
+            Acceso Superadmin
+          </Button>
         </div>
 
         {/* Footer */}

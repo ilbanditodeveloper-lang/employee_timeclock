@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { addDays, format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
@@ -14,7 +15,7 @@ export default function EmployeeCalendar() {
   const { employeeAuth } = useAuthContext();
   const [selectionMode, setSelectionMode] = useState<"single" | "range">("single");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [selectedRange, setSelectedRange] = useState<{ from?: Date; to?: Date } | undefined>();
+  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
   const [hoursWorked, setHoursWorked] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
   const employeeTimeclocks = trpc.publicApi.getEmployeeTimeclocks.useQuery(
