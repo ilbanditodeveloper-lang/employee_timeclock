@@ -15,7 +15,7 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const adminLogin = trpc.publicApi.adminLogin.useMutation();
-  const { setAdminAuth, setEmployeeAuth } = useAuthContext();
+  const { setAdminSession, setEmployeeSession, clearAllSessions } = useAuthContext();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +23,12 @@ export default function AdminLogin() {
 
     try {
       const scopedUsername = `${companySlug.trim().toLowerCase()}::${username.trim()}`;
-      await adminLogin.mutateAsync({ username: scopedUsername, password });
-      setAdminAuth({ username: scopedUsername, password });
-      setEmployeeAuth(null);
+      const result = await adminLogin.mutateAsync({ username: scopedUsername, password });
+      setAdminSession({
+        companySlug: result.companySlug,
+        displayName: username.trim(),
+      });
+      setEmployeeSession(null);
       
       toast.success('¡Bienvenido Administrador!');
       setLocation('/admin');

@@ -1,4 +1,4 @@
-import { eq, and, desc, gte, lt, isNull } from "drizzle-orm";
+import { eq, and, desc, gte, lt, isNull, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -10,6 +10,8 @@ import {
   timeclocks,
   incidents,
   companies,
+  legalAcceptances,
+  auditLogs,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -401,4 +403,84 @@ export async function getIncidentById(id: number, companyId?: number) {
     : eq(incidents.id, id);
   const result = await db.select().from(incidents).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getLegalAcceptance(
+  employeeId: number,
+  documentType: "employee_privacy_notice" | "platform_terms",
+  documentVersion: string
+) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(legalAcceptances)
+    .where(
+      and(
+        eq(legalAcceptances.employeeId, employeeId),
+        eq(legalAcceptances.documentType, documentType),
+        eq(legalAcceptances.documentVersion, documentVersion)
+      )
+    )
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function listEmployeePrivacyAcceptances(
+  companyId: number,
+  restaurantId: number,
+  documentVersion: string
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const emps = await getEmployeesByRestaurant(restaurantId, companyId);
+  const rows = [];
+  for (const emp of emps) {
+    const acceptance = await getLegalAcceptance(
+      emp.id,
+      "employee_privacy_notice",
+      documentVersion
+    );
+    rows.push({
+      employeeId: emp.id,
+      employeeName: emp.name,
+      username: emp.username,
+      isActive: emp.isActive,
+      acceptedAt: acceptance?.acceptedAt ?? null,
+      ipAddress: acceptance?.ipAddress ?? null,
+      documentVersion: acceptance?.documentVersion ?? null,
+    });
+  }
+  return rows;
+}
+
+export async function listAuditLogsByCompany(companyId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(auditLogs)
+    .where(eq(auditLogs.companyId, companyId))
+    .orderBy(desc(auditLogs.performedAt))
+    .limit(limit);
+}
+
+export async function listTimeclocksForEmployeeIds(employeeIds: number[], companyId: number) {
+  const db = await getDb();
+  if (!db || employeeIds.length === 0) return [];
+  return db
+    .select()
+    .from(timeclocks)
+    .where(and(eq(timeclocks.companyId, companyId), inArray(timeclocks.employeeId, employeeIds)))
+    .orderBy(desc(timeclocks.entryTime));
+}
+
+export async function listIncidentsForEmployeeIds(employeeIds: number[], companyId: number) {
+  const db = await getDb();
+  if (!db || employeeIds.length === 0) return [];
+  return db
+    .select()
+    .from(incidents)
+    .where(and(eq(incidents.companyId, companyId), inArray(incidents.employeeId, employeeIds)))
+    .orderBy(desc(incidents.createdAt));
 }

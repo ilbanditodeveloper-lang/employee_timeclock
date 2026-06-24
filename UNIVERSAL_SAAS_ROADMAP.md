@@ -1,94 +1,45 @@
-# Roadmap para convertir TimeClock en sistema universal
+# Roadmap TimeClock universal (actualizado)
 
-Este documento define el plan para ofrecer la app a varios negocios sin entregar el codigo fuente.
+## Completado en esta copia
 
-## Objetivo
+### Fase 1 — Seguridad y multiempresa
+- Licencia propietaria (`UNLICENSED` + `LICENSE`)
+- Hash `scrypt` + migración Base64 legado
+- Multiempresa: `companies`, `companyId`, login `slug::usuario`
+- Superadmin web (`/superadmin`)
+- **Sesiones JWT en cookie httpOnly** (sin contraseña en localStorage)
+- **Rate limiting** en login
+- **Aislamiento reforzado** por `companyId` en listados y mutaciones
+- Username único por empresa `(companyId, username)`
 
-- Un solo producto para multiples empresas (multi-tenant).
-- Codigo privado y controlado solo por el propietario.
-- Despliegue centralizado tipo SaaS (los clientes usan URL, no reciben repo).
+### Fase 2 — Registro horario y auditoría
+- Campos `status`, `source`, corrección y anulación en `timeclocks`
+- **Audit log** (`audit_logs`) en correcciones/anulaciones
+- **Sin borrado físico** de fichajes desde UI (anulación con motivo)
+- Motivo obligatorio al corregir fichajes
 
-## Estado actual de esta copia
+### Fase 3 — RGPD y legal (plantillas)
+- Pantallas: `/legal/privacy`, `/legal/terms`, aviso empleado embebido
+- Registro `legal_acceptances` (lectura informativa, no consentimiento)
+- Datos legales por empresa (CIF, contacto privacidad, timezone, GPS opcional)
+- Documentos: `PRIVACY_POLICY.md`, `TERMS_OF_USE.md`, `DATA_PROCESSING_AGREEMENT_TEMPLATE.md`, etc.
 
-- Licencia del proyecto cambiada a `UNLICENSED`.
-- Archivo `LICENSE` propietario agregado.
-- Credenciales admin por defecto eliminadas (ahora son obligatorias en entorno).
-- Passwords migradas a hash seguro con `scrypt` (compatibilidad temporal con base64 legado).
-- Base multiempresa agregada en esquema (`companies` + `companyId` en tablas core).
-- Login multiempresa habilitado por `slug::usuario` (admin y empleado).
-- Pantalla de superadmin agregada para crear/activar/desactivar empresas y configurar admin.
-- Aprovisionamiento automatico de admin deshabilitado (ahora lo crea solo superadmin).
+### Fase 4 — Exportaciones
+- Excel y PDF en admin (existentes)
+- Pendiente: CSV dedicado y metadatos legales en cabecera de informes
 
-## Fase 1 - Seguridad base (completada en esta copia)
+### Fase 5 — Google Play
+- `GOOGLE_PLAY_DATA_SAFETY.md` borrador
+- Pendiente: TWA/Capacitor, iconos 512px, URL pública en producción
 
-1. Licencia propietaria y aviso legal.
-2. Quitar credenciales hardcodeadas.
-3. Usar hash seguro para passwords.
-4. Mantener compatibilidad de login para usuarios existentes.
+## Pendiente recomendado
 
-## Fase 2 - Multiempresa en datos
+1. Pestaña **Legal** en admin (UI para `updateCompanyLegal`)
+2. Export **CSV** y cabecera legal en PDF/Excel
+3. Rol **manager** con permisos limitados
+4. Onboarding empresa ampliado (CIF, términos)
+5. Modo **demo** aislado
+6. Billing y bloqueo por impago
+7. Revisión legal profesional de todas las plantillas
 
-1. Crear tabla `companies`:
-   - `id`
-   - `name`
-   - `slug` (unico)
-   - `isActive`
-   - `plan`
-   - `createdAt`, `updatedAt`
-2. Agregar `companyId` en tablas:
-   - `users`
-   - `restaurants`
-   - `employees`
-   - `schedules`
-   - `timeclocks`
-   - `incidents`
-   - `timeOffRequests`
-   - `pushSubscriptions`
-   - `notificationLogs`
-3. Crear indices por `companyId`.
-4. Migrar data existente a una empresa inicial (`default-company`).
-
-## Fase 3 - Aislamiento por tenant
-
-1. Resolver tenant por `subdominio` o `slug` en login.
-2. Inyectar `companyId` en el contexto de request.
-3. Filtrar todas las queries por `companyId`.
-4. Validar que un admin solo opera su empresa.
-5. Agregar pruebas de aislamiento entre empresas.
-
-## Fase 4 - SaaS operativo
-
-1. Panel superadmin (solo propietario):
-   - alta/baja de empresas
-   - activar/desactivar cuentas
-   - ver consumo y errores
-2. Billing:
-   - plan por empleados o por sede
-   - renovacion mensual
-   - bloqueo por impago (gracia configurable)
-3. Logs y auditoria:
-   - acciones admin criticas
-   - accesos y cambios de fichajes
-
-## Fase 5 - Proteccion comercial
-
-1. Contrato de servicio (SaaS) con terminos anti-reventa.
-2. Politica de privacidad y procesamiento de datos (RGPD/LOPD si aplica).
-3. Marca y dominio propio.
-4. Repositorio privado con acceso solo del propietario.
-5. Backups y plan de continuidad.
-
-## Checklist de despliegue recomendado
-
-1. Entorno productivo separado (`prod`).
-2. Base de datos gestionada (PostgreSQL).
-3. Variables seguras en plataforma cloud.
-4. HTTPS obligatorio.
-5. Copias automaticas y monitorizacion.
-
-## Siguiente implementacion sugerida en codigo
-
-1. Crear migracion `companies` + `companyId` en `drizzle/schema.ts`.
-2. Adaptar `server/db.ts` para consultas scoping por `companyId`.
-3. Actualizar `server/routers.ts` para validar tenant en cada endpoint.
-4. Ajustar frontend para login con `companySlug`.
+> **Aviso:** Los textos legales son plantillas. Deben revisarse con un asesor antes de comercializar.

@@ -15,7 +15,7 @@ export default function EmployeeLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const employeeLogin = trpc.publicApi.employeeLogin.useMutation();
-  const { setEmployeeAuth, setAdminAuth } = useAuthContext();
+  const { setEmployeeSession, setAdminSession, clearAllSessions } = useAuthContext();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,14 +24,17 @@ export default function EmployeeLogin() {
     try {
       const scopedUsername = `${companySlug.trim().toLowerCase()}::${username.trim()}`;
       const result = await employeeLogin.mutateAsync({ username: scopedUsername, password });
-      setEmployeeAuth({
+      setEmployeeSession({
         username: scopedUsername,
-        password,
         employeeId: result.employeeId,
+        companySlug: result.companySlug ?? companySlug.trim().toLowerCase(),
+        displayName: username.trim(),
         schedule: result.schedule,
         lateGraceMinutes: result.lateGraceMinutes,
+        locationEnabled: result.locationEnabled,
+        needsPrivacyNotice: result.needsPrivacyNotice,
       });
-      setAdminAuth(null);
+      setAdminSession(null);
       
       toast.success('¡Bienvenido!');
       setLocation('/employee');

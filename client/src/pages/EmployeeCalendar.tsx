@@ -8,23 +8,20 @@ import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
 
 export default function EmployeeCalendar() {
   const [, setLocation] = useLocation();
-  const { employeeAuth } = useAuthContext();
+  const { employeeSession } = useAuthContext();
   const [selectionMode, setSelectionMode] = useState<"single" | "range">("single");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
   const [hoursWorked, setHoursWorked] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
   const employeeTimeclocks = trpc.publicApi.getEmployeeTimeclocks.useQuery(
-    {
-      username: employeeAuth?.username || "",
-      password: employeeAuth?.password || "",
-      employeeId: employeeAuth?.employeeId || 0,
-    },
-    { enabled: Boolean(employeeAuth?.username && employeeAuth?.password && employeeAuth?.employeeId) }
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
+    { enabled: Boolean(employeeSession?.employeeId) }
   );
 
   const salaryTotal = useMemo(() => {

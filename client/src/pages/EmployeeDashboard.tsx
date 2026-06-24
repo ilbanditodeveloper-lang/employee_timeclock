@@ -6,6 +6,8 @@ import { Clock, LogOut, Calendar, AlertCircle, CalendarDays, Palmtree } from 'lu
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { employeeQueryInput } from '@/lib/authApi';
+import EmployeePrivacyNotice from '@/pages/EmployeePrivacyNotice';
 import EmployeeBottomMenu from '@/components/EmployeeBottomMenu';
 
 const LATE_CUTOFF_HOUR = 9;
@@ -96,10 +98,10 @@ export default function EmployeeDashboard() {
   const subscribePushMutation = trpc.publicApi.pushNotifications.subscribe.useMutation();
   const vapidKeyQuery = trpc.publicApi.pushNotifications.getVapidPublicKey.useQuery();
   const [, setLocation] = useLocation();
-  const { employeeAuth, setEmployeeAuth, setLastLocation, lastLocation } = useAuthContext();
-  const [location, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(() => lastLocation);
-  const [lastLocationFixAt, setLastLocationFixAt] = useState<number | null>(() => (lastLocation ? Date.now() : null));
-  const [isAtRestaurant, setIsAtRestaurant] = useState(false);
+  const { employeeSession, setEmployeeSession, clearAllSessions } = useAuthContext();
+  const logoutSession = trpc.publicApi.logoutSession.useMutation();
+  const locationEnabled = employeeSession?.locationEnabled ?? false;
+  const [isAtRestaurant, setIsAtRestaurant] = useState(() => !locationEnabled);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -110,39 +112,27 @@ export default function EmployeeDashboard() {
   const pushSubscriptionAttempted = useRef(false);
 
   const employeeTimeclocks = trpc.publicApi.getEmployeeTimeclocks.useQuery(
-    {
-      username: employeeAuth?.username || "",
-      password: employeeAuth?.password || "",
-      employeeId: employeeAuth?.employeeId || 0,
-    },
-    { enabled: Boolean(employeeAuth?.username && employeeAuth?.password && employeeAuth?.employeeId) }
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
+    { enabled: Boolean(employeeSession?.employeeId) }
   );
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
-    {
-      username: employeeAuth?.username || "",
-      password: employeeAuth?.password || "",
-      employeeId: employeeAuth?.employeeId || 0,
-    },
-    { enabled: Boolean(employeeAuth?.username && employeeAuth?.password && employeeAuth?.employeeId) }
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
+    { enabled: Boolean(employeeSession?.employeeId) }
   );
   const employeeRestaurantQuery = trpc.publicApi.getEmployeeRestaurant.useQuery(
-    {
-      username: employeeAuth?.username || "",
-      password: employeeAuth?.password || "",
-      employeeId: employeeAuth?.employeeId || 0,
-    },
-    { enabled: Boolean(employeeAuth?.username && employeeAuth?.password && employeeAuth?.employeeId) }
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
+    { enabled: Boolean(employeeSession?.employeeId) }
   );
 
   useEffect(() => {
-    if (!employeeAuth) {
+    if (!employeeSession) {
       setLocation('/employee-login');
     }
-  }, [employeeAuth, setLocation]);
+  }, [employeeSession, setLocation]);
 
   // Request push notification permission and subscribe — solo una vez por sesión y con retraso para no saturar el servidor (p. ej. Render al despertar).
   useEffect(() => {
-    if (!employeeAuth || !vapidKeyQuery.data?.publicKey || pushSubscriptionAttempted.current) return;
+    if (!employeeSession || !vapidKeyQuery.data?.publicKey || pushSubscriptionAttempted.current) return;
     pushSubscriptionAttempted.current = true;
 
     const subscribeToPushNotifications = async () => {
@@ -169,9 +159,7 @@ export default function EmployeeDashboard() {
         const authKey = subscription.getKey('auth');
         if (!p256dhKey || !authKey) return;
         await subscribePushMutation.mutateAsync({
-          username: employeeAuth!.username,
-          password: employeeAuth!.password,
-          employeeId: employeeAuth!.employeeId,
+          ...employeeQueryInput(employeeSession!.employeeId),
           subscription: {
             endpoint: subscription.endpoint,
             keys: { p256dh: base64UrlEncode(p256dhKey), auth: base64UrlEncode(authKey) },
@@ -203,15 +191,15 @@ export default function EmployeeDashboard() {
     };
 
     subscribeToPushNotifications();
-  }, [employeeAuth, vapidKeyQuery.data, subscribePushMutation]);
+  }, [employeeSession, vapidKeyQuery.data, subscribePushMutation]);
 
   useEffect(() => {
-    if (!employeeAuth || !vapidKeyQuery.isSuccess) return;
+    if (!employeeSession || !vapidKeyQuery.isSuccess) return;
     if (!vapidKeyQuery.data?.publicKey && !notificationWarningShown.current) {
       notificationWarningShown.current = true;
       toast.error("Notificaciones no configuradas. Contacta con el administrador.");
     }
-  }, [employeeAuth, vapidKeyQuery.isSuccess, vapidKeyQuery.data]);
+  }, [employeeSession, vapidKeyQuery.isSuccess, vapidKeyQuery.data]);
 
   // Update current time
   useEffect(() => {
@@ -243,7 +231,7 @@ export default function EmployeeDashboard() {
 
     const scheduleKey = weekdayKeys[currentTime.getDay()];
     const daySchedule =
-      employeeScheduleQuery.data?.[scheduleKey] ?? employeeAuth?.schedule?.[scheduleKey];
+      employeeScheduleQuery.data?.[scheduleKey] ?? employeeSession?.schedule?.[scheduleKey];
     const entry1 = daySchedule?.entry1 || null;
     const entry2 = daySchedule?.entry2 || null;
     const dayActive = daySchedule?.isActive ?? true;
@@ -283,7 +271,7 @@ export default function EmployeeDashboard() {
 
     const hours = currentTime.getHours();
     const minutes = currentTime.getMinutes();
-    const graceMinutes = employeeAuth?.lateGraceMinutes ?? LATE_GRACE_MINUTES;
+    const graceMinutes = employeeSession?.lateGraceMinutes ?? LATE_GRACE_MINUTES;
     const cutoffTotalMinutes = cutoffHour * 60 + cutoffMinute + graceMinutes;
     const currentTotalMinutes = hours * 60 + minutes;
     const isAfterCutoff = currentTotalMinutes > cutoffTotalMinutes;
@@ -292,88 +280,35 @@ export default function EmployeeDashboard() {
   }, [
     currentTime,
     isClockedIn,
-    employeeAuth?.schedule,
+    employeeSession?.schedule,
     employeeScheduleQuery.data,
     lastClockOut,
   ]);
 
-  // Get user location
   useEffect(() => {
-    let cancelled = false;
-    let warningShown = false;
+    setIsAtRestaurant(!locationEnabled);
+  }, [locationEnabled]);
 
-    const refreshLocation = async () => {
-      try {
-        const coords = await getCurrentLocationOnce();
-        if (cancelled) return;
-        setCurrentLocation(coords);
-        setLastLocationFixAt(Date.now());
-        setLastLocation(coords);
-      } catch (error) {
-        if (!warningShown) {
-          warningShown = true;
-          toast.error('No se pudo obtener tu ubicación');
-        }
-        console.error(error);
-      }
-    };
-
-    refreshLocation();
-    const timer = setInterval(refreshLocation, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!location) {
-      setIsAtRestaurant(false);
-      return;
-    }
-    const restaurant = employeeRestaurantQuery.data;
-    if (!restaurant) {
-      setIsAtRestaurant(false);
-      return;
-    }
-    const distance = calculateDistance(
-      Number(restaurant.latitude),
-      Number(restaurant.longitude),
-      location.lat,
-      location.lng
-    );
-    setIsAtRestaurant(distance <= restaurant.radiusMeters);
-  }, [location, employeeRestaurantQuery.data]);
-
-  const getLatestClockLocation = async () => {
-    const now = Date.now();
-    const canReuseLocation = Boolean(
-      location &&
-      lastLocationFixAt &&
-      now - lastLocationFixAt < 180_000
-    );
-    const latestLocation = canReuseLocation ? location! : await getCurrentLocationOnce();
-    if (!canReuseLocation) {
-      setCurrentLocation(latestLocation);
-      setLastLocationFixAt(Date.now());
-      setLastLocation(latestLocation);
-    }
-    return latestLocation;
+  const buildClockPayload = async () => {
+    if (!employeeSession?.employeeId) throw new Error("Sesión no válida");
+    const base = employeeQueryInput(employeeSession.employeeId);
+    if (!locationEnabled) return base;
+    const coords = await getCurrentLocationOnce();
+    return { ...base, latitude: coords.lat, longitude: coords.lng };
   };
 
   const handleClockIn = async () => {
     if (loading) return;
     setLoading(true);
     try {
-      const latestLocation = await getLatestClockLocation();
-
-      await clockInMutation.mutateAsync({
-        username: employeeAuth?.username || "",
-        password: employeeAuth?.password || "",
-        employeeId: employeeAuth?.employeeId || 0,
-        latitude: latestLocation.lat,
-        longitude: latestLocation.lng,
-      });
+      if (locationEnabled && !window.confirm(
+        "Tu empresa requiere ubicación puntual solo al fichar. ¿Continuar?"
+      )) {
+        return;
+      }
+      const payload = await buildClockPayload();
+      if (locationEnabled) setIsAtRestaurant(true);
+      await clockInMutation.mutateAsync(payload);
       setIsClockedIn(true);
       employeeTimeclocks.refetch().catch(() => {});
       toast.success('¡Entrada registrada!');
@@ -385,14 +320,8 @@ export default function EmployeeDashboard() {
         for (const delayMs of [500, 1500]) {
           try {
             await wait(delayMs);
-            const retryLocation = await getLatestClockLocation();
-            await clockInMutation.mutateAsync({
-              username: employeeAuth?.username || "",
-              password: employeeAuth?.password || "",
-              employeeId: employeeAuth?.employeeId || 0,
-              latitude: retryLocation.lat,
-              longitude: retryLocation.lng,
-            });
+            const payload = await buildClockPayload();
+            await clockInMutation.mutateAsync(payload);
             setIsClockedIn(true);
             employeeTimeclocks.refetch().catch(() => {});
             toast.success('¡Entrada registrada!');
@@ -426,15 +355,8 @@ export default function EmployeeDashboard() {
     if (loading) return;
     setLoading(true);
     try {
-      const latestLocation = await getLatestClockLocation();
-
-      await clockOutMutation.mutateAsync({
-        username: employeeAuth?.username || "",
-        password: employeeAuth?.password || "",
-        employeeId: employeeAuth?.employeeId || 0,
-        latitude: latestLocation.lat,
-        longitude: latestLocation.lng,
-      });
+      const payload = await buildClockPayload();
+      await clockOutMutation.mutateAsync(payload);
       setIsClockedIn(false);
       employeeTimeclocks.refetch().catch(() => {});
       toast.success('¡Salida registrada!');
@@ -446,14 +368,8 @@ export default function EmployeeDashboard() {
         for (const delayMs of [500, 1500]) {
           try {
             await wait(delayMs);
-            const retryLocation = await getLatestClockLocation();
-            await clockOutMutation.mutateAsync({
-              username: employeeAuth?.username || "",
-              password: employeeAuth?.password || "",
-              employeeId: employeeAuth?.employeeId || 0,
-              latitude: retryLocation.lat,
-              longitude: retryLocation.lng,
-            });
+            const payload = await buildClockPayload();
+            await clockOutMutation.mutateAsync(payload);
             setIsClockedIn(false);
             employeeTimeclocks.refetch().catch(() => {});
             toast.success('¡Salida registrada!');
@@ -487,10 +403,26 @@ export default function EmployeeDashboard() {
     setLocation('/employee/incident');
   };
 
-  const handleLogout = () => {
-    setEmployeeAuth(null);
+  const handleLogout = async () => {
+    try {
+      await logoutSession.mutateAsync();
+    } catch {
+      // ignore
+    }
+    clearAllSessions();
+    setEmployeeSession(null);
     setLocation('/');
   };
+
+  if (employeeSession?.needsPrivacyNotice) {
+    return (
+      <div className="min-h-screen bg-slate-900/40 flex items-center justify-center p-4">
+        <EmployeePrivacyNotice embedded />
+      </div>
+    );
+  }
+
+  const canClockByLocation = !locationEnabled || isAtRestaurant;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -536,8 +468,10 @@ export default function EmployeeDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground mb-2">Estado de Ubicación</h2>
-              <p className={`text-sm ${isAtRestaurant ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                {isAtRestaurant ? '✓ Estás en el restaurante' : '✗ No estás en el restaurante'}
+              <p className={`text-sm ${locationEnabled ? (isAtRestaurant ? 'text-green-600 dark:text-green-400' : 'text-amber-600') : 'text-muted-foreground'}`}>
+                {locationEnabled
+                  ? (isAtRestaurant ? '✓ Ubicación validada al fichar' : 'Se validará ubicación al fichar')
+                  : 'Fichaje sin geolocalización (configuración de tu empresa)'}
               </p>
               {!isWorkDay && (
                 <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
@@ -554,7 +488,7 @@ export default function EmployeeDashboard() {
           {/* Entrada Button */}
           <Button
             onClick={handleClockIn}
-            disabled={!isAtRestaurant || isClockedIn || loading}
+            disabled={!canClockByLocation || isClockedIn || loading}
             className="btn-primary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
           >
             <Clock className="w-6 h-6" />
@@ -565,7 +499,7 @@ export default function EmployeeDashboard() {
           {/* Salida Button */}
           <Button
             onClick={handleClockOut}
-            disabled={!isAtRestaurant || !isClockedIn || loading}
+            disabled={!canClockByLocation || !isClockedIn || loading}
             className="btn-secondary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
           >
             <Clock className="w-6 h-6" />

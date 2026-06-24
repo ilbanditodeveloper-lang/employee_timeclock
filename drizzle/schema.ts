@@ -10,6 +10,8 @@ import {
   numeric,
   jsonb,
   date,
+  uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -18,6 +20,18 @@ export const incidentTypeEnum = pgEnum("incident_type", ["late_arrival", "early_
 export const incidentStatusEnum = pgEnum("incident_status", ["pending", "approved", "rejected"]);
 export const timeOffKindEnum = pgEnum("time_off_kind", ["vacation", "day_off"]);
 export const timeOffStatusEnum = pgEnum("time_off_status", ["pending", "approved", "rejected"]);
+export const timeclockStatusEnum = pgEnum("timeclock_status", ["valid", "corrected", "voided"]);
+export const clockSourceEnum = pgEnum("clock_source", ["mobile", "admin_panel", "tablet", "qr"]);
+export const auditEntityTypeEnum = pgEnum("audit_entity_type", [
+  "timeclock",
+  "employee",
+  "company",
+  "incident",
+]);
+export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
+  "employee_privacy_notice",
+  "platform_terms",
+]);
 
 /**
  * Company/tenant for multi-business SaaS deployments.
@@ -26,6 +40,15 @@ export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 80 }).notNull().unique(),
+  legalName: varchar("legalName", { length: 255 }),
+  taxId: varchar("taxId", { length: 32 }),
+  address: text("address"),
+  privacyContactEmail: varchar("privacyContactEmail", { length: 320 }),
+  country: varchar("country", { length: 2 }).default("ES").notNull(),
+  timezone: varchar("timezone", { length: 64 }).default("Europe/Madrid").notNull(),
+  locationEnabled: boolean("locationEnabled").default(false).notNull(),
+  dataRetentionYears: integer("dataRetentionYears").default(4).notNull(),
+  termsAcceptedAt: timestamp("termsAcceptedAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -79,19 +102,29 @@ export type InsertRestaurant = typeof restaurants.$inferInsert;
 /**
  * Employee table for storing employee information
  */
-export const employees = pgTable("employees", {
-  id: serial("id").primaryKey(),
-  companyId: integer("companyId").default(1).notNull(),
-  restaurantId: integer("restaurantId").notNull(), // Reference to restaurant
-  name: varchar("name", { length: 255 }).notNull(),
-  username: varchar("username", { length: 100 }).notNull().unique(),
-  password: varchar("password", { length: 255 }).notNull(), // Hashed password
-  phone: varchar("phone", { length: 20 }),
-  lateGraceMinutes: integer("lateGraceMinutes").default(5).notNull(),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
-});
+export const employees = pgTable(
+  "employees",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").default(1).notNull(),
+    restaurantId: integer("restaurantId").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    username: varchar("username", { length: 100 }).notNull(),
+    password: varchar("password", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 20 }),
+    lateGraceMinutes: integer("lateGraceMinutes").default(5).notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    companyUsernameIdx: uniqueIndex("employees_company_username_idx").on(
+      table.companyId,
+      table.username
+    ),
+    companyIdx: index("employees_company_idx").on(table.companyId),
+  })
+);
 
 export type Employee = typeof employees.$inferSelect;
 export type InsertEmployee = typeof employees.$inferInsert;
@@ -118,18 +151,39 @@ export type InsertSchedule = typeof schedules.$inferInsert;
 /**
  * Timeclock table for storing clock-in/clock-out records
  */
-export const timeclocks = pgTable("timeclocks", {
-  id: serial("id").primaryKey(),
-  companyId: integer("companyId").default(1).notNull(),
-  employeeId: integer("employeeId").notNull(), // Reference to employee
-  entryTime: timestamp("entryTime"),
-  exitTime: timestamp("exitTime"),
-  isLate: boolean("isLate").default(false).notNull(),
-  latitude: numeric("latitude", { precision: 10, scale: 8 }),
-  longitude: numeric("longitude", { precision: 11, scale: 8 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
-});
+export const timeclocks = pgTable(
+  "timeclocks",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").default(1).notNull(),
+    employeeId: integer("employeeId").notNull(),
+    entryTime: timestamp("entryTime"),
+    exitTime: timestamp("exitTime"),
+    isLate: boolean("isLate").default(false).notNull(),
+    status: timeclockStatusEnum("status").default("valid").notNull(),
+    source: clockSourceEnum("source").default("mobile").notNull(),
+    latitude: numeric("latitude", { precision: 10, scale: 8 }),
+    longitude: numeric("longitude", { precision: 11, scale: 8 }),
+    exitLatitude: numeric("exitLatitude", { precision: 10, scale: 8 }),
+    exitLongitude: numeric("exitLongitude", { precision: 11, scale: 8 }),
+    correctionReason: text("correctionReason"),
+    correctedByUserId: integer("correctedByUserId"),
+    correctedAt: timestamp("correctedAt"),
+    voidReason: text("voidReason"),
+    voidedByUserId: integer("voidedByUserId"),
+    voidedAt: timestamp("voidedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    companyEmployeeEntryIdx: index("timeclocks_company_employee_entry_idx").on(
+      table.companyId,
+      table.employeeId,
+      table.entryTime
+    ),
+    companyIdx: index("timeclocks_company_idx").on(table.companyId),
+  })
+);
 
 export type Timeclock = typeof timeclocks.$inferSelect;
 export type InsertTimeclock = typeof timeclocks.$inferInsert;
@@ -204,3 +258,59 @@ export const timeOffRequests = pgTable("time_off_requests", {
 
 export type TimeOffRequest = typeof timeOffRequests.$inferSelect;
 export type InsertTimeOffRequest = typeof timeOffRequests.$inferInsert;
+
+/**
+ * Immutable audit trail for compliance (timeclock corrections, etc.).
+ */
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").notNull(),
+    entityType: auditEntityTypeEnum("entityType").notNull(),
+    entityId: integer("entityId").notNull(),
+    action: varchar("action", { length: 64 }).notNull(),
+    oldValue: jsonb("oldValue"),
+    newValue: jsonb("newValue"),
+    reason: text("reason"),
+    performedByType: varchar("performedByType", { length: 32 }).notNull(),
+    performedById: integer("performedById"),
+    performedAt: timestamp("performedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    companyEntityIdx: index("audit_logs_company_entity_idx").on(
+      table.companyId,
+      table.entityType,
+      table.entityId
+    ),
+  })
+);
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+/**
+ * Employee informational privacy notice acceptance (not consent as legal basis).
+ */
+export const legalAcceptances = pgTable(
+  "legal_acceptances",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").notNull(),
+    employeeId: integer("employeeId").notNull(),
+    documentType: legalDocumentTypeEnum("documentType").notNull(),
+    documentVersion: varchar("documentVersion", { length: 32 }).notNull(),
+    acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
+    ipAddress: varchar("ipAddress", { length: 64 }),
+  },
+  (table) => ({
+    employeeDocIdx: uniqueIndex("legal_acceptances_employee_doc_idx").on(
+      table.employeeId,
+      table.documentType,
+      table.documentVersion
+    ),
+  })
+);
+
+export type LegalAcceptance = typeof legalAcceptances.$inferSelect;
+export type InsertLegalAcceptance = typeof legalAcceptances.$inferInsert;

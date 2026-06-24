@@ -1,13 +1,13 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Clock, Users, AlertCircle } from "lucide-react";
 
 export default function Home() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { adminSession, employeeSession, isAuthLoading } = useAuthContext();
   const [, setLocation] = useLocation();
 
-  if (loading) {
+  if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center">
@@ -18,13 +18,12 @@ export default function Home() {
     );
   }
 
-  if (isAuthenticated && user) {
-    // Redirect based on role
-    if (user.role === 'admin') {
-      setLocation('/admin');
-    } else {
-      setLocation('/employee');
-    }
+  if (adminSession) {
+    setLocation("/admin");
+    return null;
+  }
+  if (employeeSession) {
+    setLocation("/employee");
     return null;
   }
 
@@ -46,7 +45,7 @@ export default function Home() {
             <Clock className="w-5 h-5 text-accent flex-shrink-0 mt-1" />
             <div>
               <h3 className="font-semibold text-foreground">Fichaje Inteligente</h3>
-              <p className="text-sm text-muted-foreground">Validación por ubicación GPS</p>
+              <p className="text-sm text-muted-foreground">Validación por ubicación (opcional por empresa)</p>
             </div>
           </div>
 
@@ -92,9 +91,17 @@ export default function Home() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground mt-8">
-          © 2024 TimeClock. Todos los derechos reservados.
-        </p>
+        <div className="text-center text-xs text-muted-foreground mt-8 space-y-2">
+          <p>© {new Date().getFullYear()} TimeClock. Todos los derechos reservados.</p>
+          <p className="flex justify-center gap-3">
+            <Link href="/legal/privacy" className="underline hover:text-foreground">
+              Privacidad
+            </Link>
+            <Link href="/legal/terms" className="underline hover:text-foreground">
+              Términos
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

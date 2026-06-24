@@ -19,6 +19,9 @@ import EmployeeSchedule from "./pages/EmployeeSchedule";
 import EmployeeTimeOff from "./pages/EmployeeTimeOff";
 import AdminDashboard from "./pages/AdminDashboard";
 import SuperAdmin from "./pages/SuperAdmin";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
+import EmployeePrivacyNotice from "./pages/EmployeePrivacyNotice";
 
 function Router() {
   return (
@@ -33,6 +36,9 @@ function Router() {
       <Route path={"/employee/calculator"} component={EmployeeCalculator} />
       <Route path={"/employee/incident"} component={EmployeeIncident} />
       <Route path={"/employee/time-off"} component={EmployeeTimeOff} />
+      <Route path={"/legal/privacy"} component={PrivacyPolicy} />
+      <Route path={"/legal/terms"} component={TermsOfUse} />
+      <Route path={"/legal/employee-notice"} component={() => <EmployeePrivacyNotice />} />
       <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

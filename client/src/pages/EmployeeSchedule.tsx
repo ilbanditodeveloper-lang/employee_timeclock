@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
 
 const scheduleDays = [
@@ -34,15 +35,11 @@ function getShiftLabel(daySchedule?: DaySchedule): string {
 
 export default function EmployeeSchedule() {
   const [, setLocation] = useLocation();
-  const { employeeAuth } = useAuthContext();
+  const { employeeSession } = useAuthContext();
 
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
-    {
-      username: employeeAuth?.username || "",
-      password: employeeAuth?.password || "",
-      employeeId: employeeAuth?.employeeId || 0,
-    },
-    { enabled: Boolean(employeeAuth?.username && employeeAuth?.password && employeeAuth?.employeeId) }
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
+    { enabled: Boolean(employeeSession?.employeeId) }
   );
 
   const normalizedSchedule = useMemo(() => {

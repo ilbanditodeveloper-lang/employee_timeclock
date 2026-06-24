@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { employeeQueryInput } from "@/lib/authApi";
 
 export default function EmployeeIncident() {
   const [, setLocation] = useLocation();
@@ -16,7 +17,7 @@ export default function EmployeeIncident() {
   const [submitting, setSubmitting] = useState(false);
   const createIncident = trpc.publicApi.createIncident.useMutation();
   const clockIn = trpc.publicApi.clockIn.useMutation();
-  const { employeeAuth } = useAuthContext();
+  const { employeeSession } = useAuthContext();
 
   useEffect(() => {
     const now = new Date();
@@ -31,7 +32,7 @@ export default function EmployeeIncident() {
       toast.error("Completa la descripción");
       return;
     }
-    if (!employeeAuth) {
+    if (!employeeSession) {
       toast.error("Inicia sesión para reportar una incidencia");
       setLocation("/employee-login");
       return;
@@ -39,19 +40,15 @@ export default function EmployeeIncident() {
 
     setSubmitting(true);
     try {
-      const username = employeeAuth?.username || "";
-      const password = employeeAuth?.password || "";
-      const employeeId = employeeAuth?.employeeId || 0;
+      const employeeId = employeeSession.employeeId;
       const now = new Date();
       await createIncident.mutateAsync({
-        username,
-        password,
-        employeeId,
+        ...employeeQueryInput(employeeId),
         type: incidentType === "delay" ? "late_arrival" : "other",
         reason: description.trim(),
       });
 
-      if (incidentType === "delay") {
+      if (incidentType === "delay" && employeeSession.locationEnabled) {
         const clockInDate = now;
         if (!navigator.geolocation) {
           toast.error("Geolocalización no disponible en tu navegador");
@@ -60,13 +57,13 @@ export default function EmployeeIncident() {
             navigator.geolocation.getCurrentPosition(resolve, reject);
           });
           await clockIn.mutateAsync({
-            username,
-            password,
-            employeeId,
+            ...employeeQueryInput(employeeId),
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
         }
+      } else if (incidentType === "delay") {
+        await clockIn.mutateAsync(employeeQueryInput(employeeId));
       }
 
       toast.success(

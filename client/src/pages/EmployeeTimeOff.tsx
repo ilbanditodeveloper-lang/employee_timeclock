@@ -8,6 +8,7 @@ import { ArrowLeft, Palmtree, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { employeeQueryInput, emptyCreds } from "@/lib/authApi";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
 
 const kindLabels: Record<string, string> = {
@@ -39,23 +40,17 @@ function ymdRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: st
 
 export default function EmployeeTimeOff() {
   const [, setLocation] = useLocation();
-  const { employeeAuth } = useAuthContext();
+  const { employeeSession } = useAuthContext();
   const [kind, setKind] = useState<"vacation" | "day_off">("vacation");
   const [startDate, setStartDate] = useState(() => todayYmdMadrid());
   const [endDate, setEndDate] = useState(() => todayYmdMadrid());
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const enabled = Boolean(
-    employeeAuth?.username && employeeAuth?.password && employeeAuth?.employeeId
-  );
+  const enabled = Boolean(employeeSession?.employeeId);
 
   const listQuery = trpc.publicApi.listMyTimeOffRequests.useQuery(
-    {
-      username: employeeAuth?.username || "",
-      password: employeeAuth?.password || "",
-      employeeId: employeeAuth?.employeeId || 0,
-    },
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
     { enabled }
   );
 
@@ -63,10 +58,10 @@ export default function EmployeeTimeOff() {
   const deleteMutation = trpc.publicApi.deleteMyTimeOffRequest.useMutation();
 
   useEffect(() => {
-    if (!employeeAuth) {
+    if (!employeeSession) {
       setLocation("/employee-login");
     }
-  }, [employeeAuth, setLocation]);
+  }, [employeeSession, setLocation]);
 
   const blockedRanges = useMemo(() => {
     return (listQuery.data || [])
@@ -90,7 +85,7 @@ export default function EmployeeTimeOff() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeAuth) {
+    if (!employeeSession) {
       toast.error("Inicia sesión");
       setLocation("/employee-login");
       return;
@@ -114,9 +109,7 @@ export default function EmployeeTimeOff() {
     setSubmitting(true);
     try {
       await createMutation.mutateAsync({
-        username: employeeAuth.username,
-        password: employeeAuth.password,
-        employeeId: employeeAuth.employeeId,
+        ...employeeQueryInput(employeeSession!.employeeId),
         kind,
         startDate,
         endDate,
@@ -136,7 +129,7 @@ export default function EmployeeTimeOff() {
   };
 
   const handleDeleteRequest = async (requestId: number, status: string) => {
-    if (!employeeAuth) return;
+    if (!employeeSession) return;
     const msg =
       status === "approved"
         ? "¿Anular esta solicitud ya aprobada? Los días dejarán de figurar como libres y no podrás deshacerlo."
@@ -145,9 +138,7 @@ export default function EmployeeTimeOff() {
     if (!ok) return;
     try {
       await deleteMutation.mutateAsync({
-        username: employeeAuth.username,
-        password: employeeAuth.password,
-        employeeId: employeeAuth.employeeId,
+        ...employeeQueryInput(employeeSession!.employeeId),
         requestId,
       });
       toast.success(status === "approved" ? "Solicitud aprobada anulada" : "Solicitud eliminada");

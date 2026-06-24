@@ -1,104 +1,95 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { trpc } from "@/lib/trpc";
 
-type AdminAuth = {
-  username: string;
-  password: string;
-};
-
-type EmployeeScheduleDay = {
+export type EmployeeScheduleDay = {
   entry1: string;
   entry2: string;
   isActive: boolean;
 };
 
-type EmployeeAuth = {
+export type AdminSession = {
+  companySlug: string;
+  displayName?: string;
+};
+
+export type EmployeeSession = {
   username: string;
-  password: string;
   employeeId: number;
+  companySlug: string;
+  displayName?: string;
   schedule?: Record<string, EmployeeScheduleDay>;
   lateGraceMinutes?: number;
+  locationEnabled?: boolean;
+  needsPrivacyNotice?: boolean;
 };
 
 type AuthContextValue = {
-  adminAuth: AdminAuth | null;
-  employeeAuth: EmployeeAuth | null;
-  lastLocation: { lat: number; lng: number } | null;
-  setAdminAuth: (auth: AdminAuth | null) => void;
-  setEmployeeAuth: (auth: EmployeeAuth | null) => void;
-  setLastLocation: (location: { lat: number; lng: number } | null) => void;
+  adminSession: AdminSession | null;
+  employeeSession: EmployeeSession | null;
+  setAdminSession: (session: AdminSession | null) => void;
+  setEmployeeSession: (session: EmployeeSession | null) => void;
+  clearAllSessions: () => void;
+  isAuthLoading: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [adminAuth, setAdminAuth] = useState<AdminAuth | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem("timeclock.adminAuth");
-      return raw ? (JSON.parse(raw) as AdminAuth) : null;
-    } catch (error) {
-      console.warn("No se pudo leer adminAuth guardado", error);
-      return null;
-    }
-  });
-  const [employeeAuth, setEmployeeAuth] = useState<EmployeeAuth | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem("timeclock.employeeAuth");
-      return raw ? (JSON.parse(raw) as EmployeeAuth) : null;
-    } catch (error) {
-      console.warn("No se pudo leer employeeAuth guardado", error);
-      return null;
-    }
-  });
-  const [lastLocation, setLastLocation] = useState<{ lat: number; lng: number } | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem("timeclock.lastLocation");
-      return raw ? (JSON.parse(raw) as { lat: number; lng: number }) : null;
-    } catch (error) {
-      console.warn("No se pudo leer lastLocation guardado", error);
-      return null;
-    }
+  const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
+  const [employeeSession, setEmployeeSession] = useState<EmployeeSession | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  const sessionQuery = trpc.publicApi.getSession.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (adminAuth) {
-      window.localStorage.setItem("timeclock.adminAuth", JSON.stringify(adminAuth));
-    } else {
-      window.localStorage.removeItem("timeclock.adminAuth");
+    if (!sessionQuery.isFetched) return;
+    const session = sessionQuery.data?.session;
+    if (!session) {
+      setAdminSession(null);
+      setEmployeeSession(null);
+      setHydrated(true);
+      return;
     }
-  }, [adminAuth]);
+    if (session.type === "admin" && session.companySlug) {
+      setAdminSession({
+        companySlug: session.companySlug,
+        displayName: session.displayName,
+      });
+      setEmployeeSession(null);
+    } else if (session.type === "employee" && session.employeeId && session.companySlug) {
+      setEmployeeSession((prev) => ({
+        username: prev?.username ?? session.displayName ?? "",
+        employeeId: session.employeeId!,
+        companySlug: session.companySlug!,
+        displayName: session.displayName,
+        schedule: prev?.schedule,
+        lateGraceMinutes: prev?.lateGraceMinutes,
+        locationEnabled: prev?.locationEnabled,
+        needsPrivacyNotice: prev?.needsPrivacyNotice,
+      }));
+      setAdminSession(null);
+    }
+    setHydrated(true);
+  }, [sessionQuery.isFetched, sessionQuery.data]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (employeeAuth) {
-      window.localStorage.setItem("timeclock.employeeAuth", JSON.stringify(employeeAuth));
-    } else {
-      window.localStorage.removeItem("timeclock.employeeAuth");
-    }
-  }, [employeeAuth]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (lastLocation) {
-      window.localStorage.setItem("timeclock.lastLocation", JSON.stringify(lastLocation));
-    } else {
-      window.localStorage.removeItem("timeclock.lastLocation");
-    }
-  }, [lastLocation]);
+  const clearAllSessions = () => {
+    setAdminSession(null);
+    setEmployeeSession(null);
+  };
 
   const value = useMemo(
     () => ({
-      adminAuth,
-      employeeAuth,
-      lastLocation,
-      setAdminAuth,
-      setEmployeeAuth,
-      setLastLocation,
+      adminSession,
+      employeeSession,
+      setAdminSession,
+      setEmployeeSession,
+      clearAllSessions,
+      isAuthLoading: !hydrated && sessionQuery.isLoading,
     }),
-    [adminAuth, employeeAuth, lastLocation]
+    [adminSession, employeeSession, hydrated, sessionQuery.isLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

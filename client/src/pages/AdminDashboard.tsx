@@ -4,17 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree } from 'lucide-react';
+import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { emptyCreds } from '@/lib/authApi';
 import { Calendar as UiCalendar, CalendarDayButton } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import AdminLegalPanel from '@/components/AdminLegalPanel';
 
 const createEmptySchedule = () => ({
   monday: { entry1: '', entry2: '', isActive: true },
@@ -54,6 +56,7 @@ export default function AdminDashboard() {
   const [editingTimeclockId, setEditingTimeclockId] = useState<number | null>(null);
   const [editingEntryTime, setEditingEntryTime] = useState('');
   const [editingExitTime, setEditingExitTime] = useState('');
+  const [editingCorrectionReason, setEditingCorrectionReason] = useState('');
   const [employeeSchedule, setEmployeeSchedule] = useState(() => createEmptySchedule());
   const [shiftEmployeeId, setShiftEmployeeId] = useState('');
   const [shiftSchedule, setShiftSchedule] = useState(() => createEmptySchedule());
@@ -126,53 +129,45 @@ export default function AdminDashboard() {
     return `${date}T${time}`;
   };
 
-  const { adminAuth, setAdminAuth } = useAuthContext();
-  const adminUsername = adminAuth?.username || '';
-  const adminPassword = adminAuth?.password || '';
+  const { adminSession, setAdminSession, clearAllSessions } = useAuthContext();
+  const logoutSession = trpc.publicApi.logoutSession.useMutation();
 
-  const getRestaurant = trpc.publicApi.getRestaurant.useQuery(
-    { username: adminUsername, password: adminPassword },
-    { enabled: Boolean(adminUsername && adminPassword) }
-  );
+  const getRestaurant = trpc.publicApi.getRestaurant.useQuery(emptyCreds, {
+    enabled: Boolean(adminSession),
+  });
   const upsertRestaurant = trpc.publicApi.upsertRestaurant.useMutation();
   const createEmployee = trpc.publicApi.createEmployee.useMutation();
   const listEmployees = trpc.publicApi.listEmployees.useQuery(
-    { username: adminUsername, password: adminPassword },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { ...emptyCreds },
+    { enabled: Boolean(adminSession) }
   );
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
     {
-      username: adminUsername,
-      password: adminPassword,
       employeeId: editingEmployeeId ?? 0,
     },
-    { enabled: Boolean(adminUsername && adminPassword && editingEmployeeId) }
+    { enabled: Boolean(adminSession && editingEmployeeId) }
   );
   const shiftScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
     {
-      username: adminUsername,
-      password: adminPassword,
       employeeId: shiftEmployeeId ? Number(shiftEmployeeId) : 0,
     },
-    { enabled: Boolean(adminUsername && adminPassword && shiftEmployeeId) }
+    { enabled: Boolean(adminSession && shiftEmployeeId) }
   );
   const updateEmployee = trpc.publicApi.updateEmployee.useMutation();
   const updateEmployeeSchedule = trpc.publicApi.updateEmployeeSchedule.useMutation();
   const listIncidents = trpc.publicApi.listIncidents.useQuery(
-    { username: adminUsername, password: adminPassword },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { ...emptyCreds },
+    { enabled: Boolean(adminSession) }
   );
   const timeclocksQuery = trpc.publicApi.listTimeclocks.useQuery(
-    { username: adminUsername, password: adminPassword },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { ...emptyCreds },
+    { enabled: Boolean(adminSession) }
   );
   const notificationLogsQuery = trpc.publicApi.listNotificationLogs.useQuery(
     {
-      username: adminUsername,
-      password: adminPassword,
       employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
     },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { enabled: Boolean(adminSession) }
   );
   const updateTimeclock = trpc.publicApi.updateTimeclock.useMutation();
   const deleteTimeclock = trpc.publicApi.deleteTimeclock.useMutation();
@@ -180,21 +175,20 @@ export default function AdminDashboard() {
   const clearAllTimeclocks = trpc.publicApi.clearAllTimeclocks.useMutation();
   const clearAllIncidents = trpc.publicApi.clearAllIncidents.useMutation();
   const timeOffPendingQuery = trpc.publicApi.listTimeOffRequests.useQuery(
-    { username: adminUsername, password: adminPassword, status: 'pending' },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { ...emptyCreds, status: 'pending' },
+    { enabled: Boolean(adminSession) }
   );
   const timeOffAllQuery = trpc.publicApi.listTimeOffRequests.useQuery(
-    { username: adminUsername, password: adminPassword, status: 'all' },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { ...emptyCreds, status: 'all' },
+    { enabled: Boolean(adminSession) }
   );
   const timeOffCalendarQuery = trpc.publicApi.getTimeOffCalendarMonth.useQuery(
     {
-      username: adminUsername,
-      password: adminPassword,
+      ...emptyCreds,
       year: timeOffCalMonth.getFullYear(),
       month: timeOffCalMonth.getMonth() + 1,
     },
-    { enabled: Boolean(adminUsername && adminPassword) }
+    { enabled: Boolean(adminSession) }
   );
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
     onSuccess: () => {
@@ -586,8 +580,7 @@ export default function AdminDashboard() {
     }
     updateEmployeeSchedule
       .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
+        ...emptyCreds,
         employeeId: Number(shiftEmployeeId),
         schedule: shiftSchedule,
       })
@@ -619,6 +612,10 @@ export default function AdminDashboard() {
       toast.error('La hora de entrada es obligatoria');
       return;
     }
+    if (!editingCorrectionReason || editingCorrectionReason.trim().length < 3) {
+      toast.error('Indica el motivo de la corrección (mínimo 3 caracteres)');
+      return;
+    }
     if (editingExitTime) {
       const entryDate = new Date(editingEntryTime);
       const exitDate = new Date(editingExitTime);
@@ -633,45 +630,49 @@ export default function AdminDashboard() {
     }
     updateTimeclock
       .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
+        ...emptyCreds,
         timeclockId: editingTimeclockId,
         entryTime: editingEntryTime ? new Date(editingEntryTime).toISOString() : undefined,
         exitTime: editingExitTime ? new Date(editingExitTime).toISOString() : null,
+        correctionReason: editingCorrectionReason.trim(),
       })
       .then(() => {
-        toast.success('Fichaje actualizado');
+        toast.success('Fichaje corregido (queda registrado en auditoría)');
         handleCancelTimeclockEdit();
+        setEditingCorrectionReason('');
         timeclocksQuery.refetch();
       })
       .catch((error) => {
-        toast.error('No se pudo actualizar el fichaje');
+        toast.error(error?.message || 'No se pudo actualizar el fichaje');
         console.error(error);
       });
   };
 
   const handleDeleteTimeclock = (entry: { id: number; entryTime?: string | Date | null }) => {
     const when = entry.entryTime ? new Date(entry.entryTime).toLocaleString("es-ES") : `#${entry.id}`;
-    const confirmed = window.confirm(
-      `¿Seguro que quieres borrar este fichaje (${when})? Esta acción no se puede deshacer.`
+    const voidReason = window.prompt(
+      `Motivo de anulación del fichaje (${when}). El registro no se borra, queda anulado con trazabilidad:`
     );
-    if (!confirmed) return;
+    if (!voidReason || voidReason.trim().length < 3) {
+      if (voidReason !== null) toast.error('Debes indicar un motivo de al menos 3 caracteres');
+      return;
+    }
 
     deleteTimeclock
       .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
+        ...emptyCreds,
         timeclockId: entry.id,
+        voidReason: voidReason.trim(),
       })
       .then(async () => {
         if (editingTimeclockId === entry.id) {
           handleCancelTimeclockEdit();
         }
         await timeclocksQuery.refetch();
-        toast.success('Fichaje borrado');
+        toast.success('Fichaje anulado (conservado para auditoría)');
       })
       .catch((error) => {
-        toast.error(error?.message || 'No se pudo borrar el fichaje');
+        toast.error(error?.message || 'No se pudo anular el fichaje');
         console.error(error);
       });
   };
@@ -683,8 +684,7 @@ export default function AdminDashboard() {
     }
     sendTestNotification
       .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
+        ...emptyCreds,
         employeeId: Number(selectedEmployeeId),
       })
       .then((result) => {
@@ -697,38 +697,42 @@ export default function AdminDashboard() {
   };
 
   const handleClearAllTimeclocks = () => {
-    const confirmed = window.confirm(
-      'Esto borrará TODOS los fichajes guardados de tus empleados. ¿Quieres continuar?'
+    const voidReason = window.prompt(
+      'Motivo de anulación masiva de fichajes (obligatorio). Los registros no se borran físicamente:'
     );
-    if (!confirmed) return;
+    if (!voidReason || voidReason.trim().length < 10) {
+      if (voidReason !== null) toast.error('Indica un motivo de al menos 10 caracteres');
+      return;
+    }
 
     clearAllTimeclocks
       .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
+        ...emptyCreds,
         employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
         rangeStart: rangeStart || undefined,
         rangeEnd: rangeEnd || undefined,
+        voidReason: voidReason.trim(),
       })
       .then(async (result) => {
         const refetchResult = await timeclocksQuery.refetch();
         if (refetchResult.error) {
           throw refetchResult.error;
         }
-        const deleted = typeof result?.deleted === 'number' ? result.deleted : null;
-        if (deleted === 0) {
-          toast.info('No había horas para borrar');
+        const voided = typeof result?.voided === 'number' ? result.voided : null;
+        if (voided === 0) {
+          toast.info('No había fichajes para anular');
         } else {
           toast.success(
-            deleted ? `Se borraron ${deleted} registros de horas` : 'Todas las horas guardadas se han borrado'
+            voided ? `Se anularon ${voided} registros (conservados en auditoría)` : 'Fichajes anulados'
           );
         }
         setEditingTimeclockId(null);
         setEditingEntryTime('');
         setEditingExitTime('');
+        setEditingCorrectionReason('');
       })
       .catch((error) => {
-        toast.error('No se pudieron borrar las horas');
+        toast.error(error?.message || 'No se pudieron anular las horas');
         console.error(error);
       });
   };
@@ -740,10 +744,7 @@ export default function AdminDashboard() {
     if (!confirmed) return;
 
     clearAllIncidents
-      .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
-      })
+      .mutateAsync({ ...emptyCreds })
       .then(() => {
         toast.success('Todas las incidencias se han borrado');
         listIncidents.refetch();
@@ -754,8 +755,14 @@ export default function AdminDashboard() {
       });
   };
 
-  const handleLogout = () => {
-    setAdminAuth(null);
+  const handleLogout = async () => {
+    try {
+      await logoutSession.mutateAsync();
+    } catch {
+      // ignore
+    }
+    clearAllSessions();
+    setAdminSession(null);
     setLocation('/');
   };
 
@@ -766,8 +773,7 @@ export default function AdminDashboard() {
     }
     upsertRestaurant
       .mutateAsync({
-        username: adminUsername,
-        password: adminPassword,
+        ...emptyCreds,
         name: restaurantName,
         address: restaurantAddress,
         latitude,
@@ -799,8 +805,7 @@ export default function AdminDashboard() {
       : 5;
     const action = editingEmployeeId
       ? updateEmployee.mutateAsync({
-          username: adminUsername,
-          password: adminPassword,
+          ...emptyCreds,
           employeeId: editingEmployeeId,
           employeeName,
           employeeUsername,
@@ -810,8 +815,7 @@ export default function AdminDashboard() {
           schedule: employeeSchedule,
         })
       : createEmployee.mutateAsync({
-          username: adminUsername,
-          password: adminPassword,
+          ...emptyCreds,
           employeeName,
           employeeUsername,
           employeePassword,
@@ -886,10 +890,10 @@ export default function AdminDashboard() {
   }, [getRestaurant.data]);
 
   useEffect(() => {
-    if (!adminAuth) {
+    if (!adminSession) {
       setLocation('/admin-login');
     }
-  }, [adminAuth, setLocation]);
+  }, [adminSession, setLocation]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -965,6 +969,14 @@ export default function AdminDashboard() {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Incidencias</span>
                 <span className="sm:hidden">Avisos</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="legal"
+                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
+              >
+                <Scale className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Legal / RGPD</span>
+                <span className="sm:hidden">Legal</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1557,6 +1569,18 @@ export default function AdminDashboard() {
                                 Deja vacío si no hay salida registrada.
                               </p>
                             </div>
+                            <div>
+                              <label className="block text-xs font-medium text-foreground mb-1">
+                                Motivo de la corrección (obligatorio)
+                              </label>
+                              <input
+                                type="text"
+                                value={editingCorrectionReason}
+                                onChange={(event) => setEditingCorrectionReason(event.target.value)}
+                                placeholder="Ej.: olvidó fichar salida, error de sistema..."
+                                className="input-elegant w-full"
+                              />
+                            </div>
                             <div className="flex flex-wrap gap-2">
                               <Button size="sm" onClick={handleSaveTimeclock}>
                                 Guardar cambios
@@ -1710,8 +1734,7 @@ export default function AdminDashboard() {
                             disabled={decideTimeOff.isPending}
                             onClick={() =>
                               decideTimeOff.mutate({
-                                username: adminUsername,
-                                password: adminPassword,
+                                ...emptyCreds,
                                 requestId: row.id,
                                 decision: 'approved',
                               })
@@ -1725,8 +1748,7 @@ export default function AdminDashboard() {
                             disabled={decideTimeOff.isPending}
                             onClick={() =>
                               decideTimeOff.mutate({
-                                username: adminUsername,
-                                password: adminPassword,
+                                ...emptyCreds,
                                 requestId: row.id,
                                 decision: 'rejected',
                               })
@@ -1844,8 +1866,7 @@ export default function AdminDashboard() {
                                   : `¿Eliminar la solicitud pendiente de ${row.employeeName}?`;
                               if (!window.confirm(msg)) return;
                               adminDeleteTimeOff.mutate({
-                                username: adminUsername,
-                                password: adminPassword,
+                                ...emptyCreds,
                                 requestId: row.id,
                               });
                             }}
@@ -1930,6 +1951,10 @@ export default function AdminDashboard() {
                 )}
               </div>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="legal" className="space-y-6">
+            <AdminLegalPanel />
           </TabsContent>
         </Tabs>
       </main>

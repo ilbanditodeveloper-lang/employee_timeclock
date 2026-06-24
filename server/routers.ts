@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
@@ -17,15 +17,31 @@ import {
   getIncidentById,
   getEmployeeByUsername,
   getCompanyBySlug,
+  getCompanyById,
   getLocalAdminByCompany,
   createLocalAdminForCompany,
-  normalizeCompanySlug,
   getTimeclockById,
   getTodayTimeclocksByEmployee,
-  getLatestOpenTimeclockByEmployee
+  getLatestOpenTimeclockByEmployee,
+  getLegalAcceptance,
+  listAuditLogsByCompany,
+  listEmployeePrivacyAcceptances,
+  listTimeclocksForEmployeeIds,
+  listIncidentsForEmployeeIds,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
-import { hashPassword, verifyPassword } from "./_core/password";
+import { hashPassword } from "./_core/password";
+import {
+  parseScopedUsername,
+  requireSuperAdminCredentials,
+  resolveAdminAuth,
+  resolveEmployeeAuth,
+  resolveSuperAdminAuth,
+  assertEmployeeBelongsToAdminCompany,
+  normalizeCompanySlug,
+} from "./_core/authResolve";
+import { setSessionCookie, clearSessionCookie } from "./_core/session";
+import { writeAuditLog } from "./_core/audit";
 import {
   restaurants,
   employees,
@@ -37,9 +53,16 @@ import {
   pushSubscriptions,
   notificationLogs,
   timeOffRequests,
+  legalAcceptances,
+  auditLogs,
 } from "../drizzle/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { format } from "date-fns";
+
+const optionalCreds = z.object({
+  username: z.string().min(1).optional(),
+  password: z.string().min(1).optional(),
+});
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -76,105 +99,6 @@ function todayYmdInTimeZone(timeZone: string): string {
   return new Date().toLocaleDateString("en-CA", { timeZone });
 }
 
-function parseScopedUsername(rawValue: string): { companySlug: string; username: string } {
-  const raw = rawValue.trim();
-  const parts = raw.split("::");
-  if (parts.length > 1) {
-    return {
-      companySlug: normalizeCompanySlug(parts[0]),
-      username: parts.slice(1).join("::").trim(),
-    };
-  }
-  return { companySlug: "default", username: raw };
-}
-
-function requireSuperAdminCredentials(params: { username: string; password: string }) {
-  const expectedUsername = process.env.SUPERADMIN_USERNAME;
-  const expectedPassword = process.env.SUPERADMIN_PASSWORD;
-  if (!expectedUsername || !expectedPassword) {
-    throw new Error(
-      "Superadmin no configurado. Define SUPERADMIN_USERNAME y SUPERADMIN_PASSWORD en el entorno."
-    );
-  }
-  if (params.username !== expectedUsername || params.password !== expectedPassword) {
-    throw new Error("Credenciales de superadmin inválidas");
-  }
-}
-
-async function requireAdminUser(params: {
-  username: string;
-  password: string;
-}) {
-  const scoped = parseScopedUsername(params.username);
-  const company = await getCompanyBySlug(scoped.companySlug);
-  if (!company || !company.isActive) {
-    throw new Error("Empresa no disponible");
-  }
-
-  const existingAdmin = await getLocalAdminByCompany(company.id);
-  if (!existingAdmin) {
-    throw new Error(
-      "Administrador de empresa no configurado. Solicita al superadmin la creación de la cuenta."
-    );
-  }
-
-  if ((existingAdmin.name ?? "") !== scoped.username) {
-    throw new Error("Invalid admin credentials");
-  }
-
-  const check = verifyPassword(params.password, existingAdmin.password);
-  if (!check.isValid) {
-    throw new Error("Invalid admin credentials");
-  }
-
-  if (check.needsUpgrade) {
-    const db = await getDb();
-    if (db) {
-      await db
-        .update(users)
-        .set({ password: hashPassword(params.password) })
-        .where(eq(users.id, existingAdmin.id));
-    }
-  }
-
-  return { company, admin: existingAdmin };
-}
-
-async function validateEmployeeCredentials(params: {
-  companySlug?: string;
-  username: string;
-  password: string;
-  expectedEmployeeId?: number;
-}) {
-  const scoped = parseScopedUsername(params.username);
-  const company = await getCompanyBySlug(params.companySlug ?? scoped.companySlug ?? "default");
-  if (!company || !company.isActive) {
-    throw new Error("Empresa no disponible");
-  }
-
-  const employee = await getEmployeeByUsername(scoped.username, company.id);
-  if (!employee || (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId)) {
-    throw new Error("Empleado no encontrado");
-  }
-
-  const check = verifyPassword(params.password, employee.password);
-  if (!check.isValid) {
-    throw new Error("Credenciales inválidas");
-  }
-
-  if (check.needsUpgrade) {
-    const db = await getDb();
-    if (db) {
-      await db
-        .update(employees)
-        .set({ password: hashPassword(params.password) })
-        .where(and(eq(employees.id, employee.id), eq(employees.companyId, company.id)));
-    }
-  }
-
-  return employee;
-}
-
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== 'admin') {
     throw new Error('Unauthorized: Admin access required');
@@ -188,8 +112,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      clearSessionCookie(ctx.res, ctx.req);
       return { success: true } as const;
     }),
   }),
@@ -202,11 +125,12 @@ export const appRouter = router({
           password: z.string().min(1),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         requireSuperAdminCredentials({
           username: input.username,
           password: input.password,
         });
+        await setSessionCookie(ctx.res, ctx.req, { type: "superadmin" });
         return { success: true };
       }),
 
@@ -217,7 +141,7 @@ export const appRouter = router({
           password: z.string().min(1),
         })
       )
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         requireSuperAdminCredentials({
           username: input.username,
           password: input.password,
@@ -251,7 +175,7 @@ export const appRouter = router({
           adminPassword: z.string().min(6),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         requireSuperAdminCredentials({
           username: input.username,
           password: input.password,
@@ -292,7 +216,7 @@ export const appRouter = router({
           isActive: z.boolean(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         requireSuperAdminCredentials({
           username: input.username,
           password: input.password,
@@ -322,7 +246,7 @@ export const appRouter = router({
           adminPassword: z.string().min(6),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         requireSuperAdminCredentials({
           username: input.username,
           password: input.password,
@@ -363,44 +287,42 @@ export const appRouter = router({
         username: z.string().min(1),
         password: z.string().min(1),
       })
-    ).mutation(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
+      await setSessionCookie(ctx.res, ctx.req, {
+        type: "admin",
+        companyId: company.id,
+        companySlug: company.slug,
+        userId: admin.id,
+        displayName: admin.name ?? undefined,
       });
       return { success: true, adminId: admin.id, companySlug: company.slug };
     }),
 
     getRestaurant: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
       })
-    ).query(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).query(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       return (await getRestaurantByAdmin(admin.id, company.id)) ?? null;
     }),
 
     upsertRestaurant: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         name: z.string().min(1),
         address: z.string(),
         latitude: z.number(),
         longitude: z.number(),
         radiusMeters: z.number().default(100),
       })
-    ).mutation(async ({ input }) => {
+    ).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const existing = await getRestaurantByAdmin(admin.id, company.id);
       if (existing) {
         await db.update(restaurants).set({
@@ -427,8 +349,8 @@ export const appRouter = router({
 
     createEmployee: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeName: z.string().min(1),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().min(6),
@@ -446,13 +368,10 @@ export const appRouter = router({
           ])
         ),
       })
-    ).mutation(async ({ input }) => {
+    ).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
       const result = await db.insert(employees).values({
@@ -524,8 +443,8 @@ export const appRouter = router({
 
     updateEmployee: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
         employeeName: z.string().min(1),
         employeeUsername: z.string().min(3),
@@ -544,15 +463,17 @@ export const appRouter = router({
           ])
         ),
       })
-    ).mutation(async ({ input }) => {
-      await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const employee = await getEmployeeById(input.employeeId);
-      if (!employee) throw new Error("Empleado no encontrado");
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      if (!restaurant) throw new Error("Negocio no encontrado");
+      const employee = await assertEmployeeBelongsToAdminCompany(
+        input.employeeId,
+        company.id,
+        restaurant.id
+      );
 
       const updateData: Record<string, unknown> = {
         name: input.employeeName,
@@ -623,14 +544,11 @@ export const appRouter = router({
 
     listEmployees: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
       })
-    ).query(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).query(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
       return await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -638,16 +556,12 @@ export const appRouter = router({
 
     getEmployeeRestaurant: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
       })
-    ).query(async ({ input }) => {
-      const employee = await validateEmployeeCredentials({
-        username: input.username,
-        password: input.password,
-        expectedEmployeeId: input.employeeId,
-      });
+    ).query(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
       const restaurant = await getRestaurantById(employee.restaurantId);
       if (!restaurant) throw new Error("Restaurant not found");
       return restaurant;
@@ -655,28 +569,22 @@ export const appRouter = router({
 
     getTimeclocksByEmployee: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
       })
-    ).query(async ({ input }) => {
-      const { company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).query(async ({ ctx, input }) => {
+      const { company } = await resolveAdminAuth(ctx, input);
       return await getTimeclocksByEmployee(input.employeeId, company.id);
     }),
 
     listIncidents: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
       })
-    ).query(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).query(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -684,20 +592,16 @@ export const appRouter = router({
       if (employeeIds.length === 0) return [];
       const db = await getDb();
       if (!db) return [];
-      const allIncidents = await db.select().from(incidents);
-      return allIncidents.filter((incident) => employeeIds.includes(incident.employeeId));
+      return listIncidentsForEmployeeIds(employeeIds, company.id);
     }),
 
     clearAllIncidents: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
       })
-    ).mutation(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -713,14 +617,11 @@ export const appRouter = router({
 
     listTimeclocks: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
       })
-    ).query(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).query(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -728,77 +629,91 @@ export const appRouter = router({
       if (employeeIds.length === 0) return [];
       const db = await getDb();
       if (!db) return [];
-      const allTimeclocks = await db.select().from(timeclocks);
-      return allTimeclocks.filter((entry) => employeeIds.includes(entry.employeeId));
+      return listTimeclocksForEmployeeIds(employeeIds, company.id);
     }),
 
     clearAllTimeclocks: publicProcedure.input(
-      z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+      optionalCreds.extend({
         employeeId: z.number().optional(),
         rangeStart: z.string().optional(),
         rangeEnd: z.string().optional(),
+        voidReason: z.string().min(10),
       })
-    ).mutation(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
-      if (!restaurant) throw new Error("Restaurant not found");
+      if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       let employeeIds = restaurantEmployees.map((employee) => employee.id);
       if (input.employeeId) {
         employeeIds = employeeIds.filter((id) => id === input.employeeId);
       }
-      if (employeeIds.length === 0) return { success: true };
+      if (employeeIds.length === 0) return { success: true, voided: 0 };
 
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const targetTimeclocks = await db
-        .select({
-          id: timeclocks.id,
-          entryTime: timeclocks.entryTime,
-          createdAt: timeclocks.createdAt,
-        })
+        .select()
         .from(timeclocks)
-        .where(inArray(timeclocks.employeeId, employeeIds));
+        .where(
+          and(
+            eq(timeclocks.companyId, company.id),
+            inArray(timeclocks.employeeId, employeeIds),
+            sql`${timeclocks.status} != 'voided'`
+          )
+        );
 
-      const timeclockIds = targetTimeclocks
-        .filter((item) => {
-          const entryDate = new Date(item.entryTime || item.createdAt);
-          if (input.rangeStart) {
-            const start = new Date(input.rangeStart);
-            start.setHours(0, 0, 0, 0);
-            if (entryDate < start) return false;
-          }
-          if (input.rangeEnd) {
-            const end = new Date(input.rangeEnd);
-            end.setHours(23, 59, 59, 999);
-            if (entryDate > end) return false;
-          }
-          return true;
-        })
-        .map((item) => item.id);
-      if (timeclockIds.length === 0) return { success: true, deleted: 0 };
+      const toVoid = targetTimeclocks.filter((item) => {
+        const entryDate = new Date(item.entryTime || item.createdAt);
+        if (input.rangeStart) {
+          const start = new Date(input.rangeStart);
+          start.setHours(0, 0, 0, 0);
+          if (entryDate < start) return false;
+        }
+        if (input.rangeEnd) {
+          const end = new Date(input.rangeEnd);
+          end.setHours(23, 59, 59, 999);
+          if (entryDate > end) return false;
+        }
+        return true;
+      });
+      if (toVoid.length === 0) return { success: true, voided: 0 };
 
-      await db.delete(timeclocks).where(inArray(timeclocks.id, timeclockIds));
+      const now = new Date();
+      for (const row of toVoid) {
+        await db
+          .update(timeclocks)
+          .set({
+            status: "voided",
+            voidReason: input.voidReason.trim(),
+            voidedByUserId: admin.id,
+            voidedAt: now,
+          })
+          .where(eq(timeclocks.id, row.id));
+        await writeAuditLog({
+          companyId: company.id,
+          entityType: "timeclock",
+          entityId: row.id,
+          action: "void_bulk",
+          oldValue: row,
+          newValue: { status: "voided", voidReason: input.voidReason },
+          reason: input.voidReason,
+          performedByType: "admin",
+          performedById: admin.id,
+        });
+      }
 
-      return { success: true, deleted: timeclockIds.length };
+      return { success: true, voided: toVoid.length };
     }),
 
     listNotificationLogs: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number().optional(),
       })
-    ).query(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).query(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -824,26 +739,22 @@ export const appRouter = router({
     }),
 
     updateTimeclock: publicProcedure.input(
-      z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+      optionalCreds.extend({
         timeclockId: z.number(),
         entryTime: z.string().optional().nullable(),
         exitTime: z.string().optional().nullable(),
+        correctionReason: z.string().min(3),
       })
-    ).mutation(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
-      if (!restaurant) throw new Error("Restaurant not found");
+      if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
 
       const timeclock = await getTimeclockById(input.timeclockId, company.id);
-      if (!timeclock || !employeeIds.has(timeclock.employeeId)) {
-        throw new Error("Timeclock not found");
+      if (!timeclock || !employeeIds.has(timeclock.employeeId) || timeclock.status === "voided") {
+        throw new Error("Fichaje no encontrado");
       }
 
       const normalizeDate = (value: string | null | undefined) => {
@@ -860,99 +771,161 @@ export const appRouter = router({
       const exitTime = normalizeDate(input.exitTime);
 
       if (entryTime && exitTime && exitTime <= entryTime) {
-        throw new Error("Exit time must be after entry time");
+        throw new Error("La salida debe ser posterior a la entrada");
       }
 
-      const updateData: Record<string, unknown> = {};
-      if (entryTime !== undefined) {
-        updateData.entryTime = entryTime;
-      }
-      if (exitTime !== undefined) {
-        updateData.exitTime = exitTime;
-      }
-      if (Object.keys(updateData).length === 0) {
+      const updateData: Record<string, unknown> = {
+        status: "corrected",
+        correctionReason: input.correctionReason.trim(),
+        correctedByUserId: admin.id,
+        correctedAt: new Date(),
+      };
+      if (entryTime !== undefined) updateData.entryTime = entryTime;
+      if (exitTime !== undefined) updateData.exitTime = exitTime;
+      if (entryTime === undefined && exitTime === undefined) {
         return { success: true };
       }
 
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.update(timeclocks).set(updateData).where(eq(timeclocks.id, input.timeclockId));
+
+      await writeAuditLog({
+        companyId: company.id,
+        entityType: "timeclock",
+        entityId: input.timeclockId,
+        action: "correct",
+        oldValue: timeclock,
+        newValue: { ...timeclock, ...updateData },
+        reason: input.correctionReason,
+        performedByType: "admin",
+        performedById: admin.id,
+      });
+
       return { success: true };
     }),
 
-    deleteTimeclock: publicProcedure.input(
-      z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+    voidTimeclock: publicProcedure.input(
+      optionalCreds.extend({
         timeclockId: z.number(),
+        voidReason: z.string().min(3),
       })
-    ).mutation(async ({ input }) => {
-      const { admin, company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
-      if (!restaurant) throw new Error("Restaurant not found");
+      if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
 
       const timeclock = await getTimeclockById(input.timeclockId, company.id);
-      if (!timeclock || !employeeIds.has(timeclock.employeeId)) {
-        throw new Error("Timeclock not found");
+      if (!timeclock || !employeeIds.has(timeclock.employeeId) || timeclock.status === "voided") {
+        throw new Error("Fichaje no encontrado");
       }
 
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      await db.delete(timeclocks).where(eq(timeclocks.id, input.timeclockId));
+      const now = new Date();
+      await db
+        .update(timeclocks)
+        .set({
+          status: "voided",
+          voidReason: input.voidReason.trim(),
+          voidedByUserId: admin.id,
+          voidedAt: now,
+        })
+        .where(eq(timeclocks.id, input.timeclockId));
+
+      await writeAuditLog({
+        companyId: company.id,
+        entityType: "timeclock",
+        entityId: input.timeclockId,
+        action: "void",
+        oldValue: timeclock,
+        newValue: { status: "voided", voidReason: input.voidReason },
+        reason: input.voidReason,
+        performedByType: "admin",
+        performedById: admin.id,
+      });
+
+      return { success: true };
+    }),
+
+    /** @deprecated Usar voidTimeclock — mantiene compatibilidad sin borrado físico. */
+    deleteTimeclock: publicProcedure.input(
+      optionalCreds.extend({
+        timeclockId: z.number(),
+        voidReason: z.string().min(3).optional(),
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const reason = input.voidReason ?? "Anulación desde panel admin (legacy)";
+      const { admin, company } = await resolveAdminAuth(ctx, input);
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      if (!restaurant) throw new Error("Negocio no encontrado");
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
+      const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
+
+      const timeclock = await getTimeclockById(input.timeclockId, company.id);
+      if (!timeclock || !employeeIds.has(timeclock.employeeId) || timeclock.status === "voided") {
+        throw new Error("Fichaje no encontrado");
+      }
+
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db
+        .update(timeclocks)
+        .set({
+          status: "voided",
+          voidReason: reason,
+          voidedByUserId: admin.id,
+          voidedAt: new Date(),
+        })
+        .where(eq(timeclocks.id, input.timeclockId));
+
+      await writeAuditLog({
+        companyId: company.id,
+        entityType: "timeclock",
+        entityId: input.timeclockId,
+        action: "void",
+        oldValue: timeclock,
+        newValue: { status: "voided", voidReason: reason },
+        reason,
+        performedByType: "admin",
+        performedById: admin.id,
+      });
+
       return { success: true };
     }),
 
     getEmployeeTimeclocks: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
       })
-    ).query(async ({ input }) => {
-      await validateEmployeeCredentials({
-        username: input.username,
-        password: input.password,
-        expectedEmployeeId: input.employeeId,
-      });
-      const scoped = parseScopedUsername(input.username);
-      const company = await getCompanyBySlug(scoped.companySlug);
-      return await getTimeclocksByEmployee(input.employeeId, company?.id);
+    ).query(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
+      return await getTimeclocksByEmployee(input.employeeId, employee.companyId);
     }),
 
     getEmployeeSchedule: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
       })
-    ).query(async ({ input }) => {
-      const scoped = parseScopedUsername(input.username);
-      const company = await getCompanyBySlug(scoped.companySlug);
-      if (!company) throw new Error("Empresa no disponible");
-      let isAdmin = false;
-      try {
-        await requireAdminUser({ username: input.username, password: input.password });
-        isAdmin = true;
-      } catch {
-        isAdmin = false;
-      }
-
+    ).query(async ({ ctx, input }) => {
+      let companyId: number;
       let targetEmployeeId = input.employeeId;
-      if (!isAdmin) {
-        const employee = await validateEmployeeCredentials({
-          username: input.username,
-          password: input.password,
-          expectedEmployeeId: input.employeeId,
-        });
+      try {
+        const { company } = await resolveAdminAuth(ctx, input);
+        companyId = company.id;
+      } catch {
+        const employee = await resolveEmployeeAuth(ctx, input);
+        companyId = employee.companyId;
         targetEmployeeId = employee.id;
       }
 
-      const scheduleRows = await getSchedulesByEmployee(targetEmployeeId, company.id);
+      const scheduleRows = await getSchedulesByEmployee(targetEmployeeId, companyId);
       const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
       const scheduleMap: Record<string, { entry1: string; entry2: string; isActive: boolean }> = {};
       for (const row of scheduleRows) {
@@ -973,8 +946,8 @@ export const appRouter = router({
 
     updateEmployeeSchedule: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
         schedule: z.record(
           z.string(),
@@ -988,15 +961,17 @@ export const appRouter = router({
           ])
         ),
       })
-    ).mutation(async ({ input }) => {
-      await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const employee = await getEmployeeById(input.employeeId);
-      if (!employee) throw new Error("Empleado no encontrado");
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      if (!restaurant) throw new Error("Negocio no encontrado");
+      const employee = await assertEmployeeBelongsToAdminCompany(
+        input.employeeId,
+        company.id,
+        restaurant.id
+      );
 
       await db.delete(schedules).where(eq(schedules.employeeId, input.employeeId));
       const dayMap: Record<string, number> = {
@@ -1062,12 +1037,9 @@ export const appRouter = router({
         username: z.string().min(1),
         password: z.string().min(1),
       })
-    ).mutation(async ({ input }) => {
-      const employee = await validateEmployeeCredentials({
-        username: input.username,
-        password: input.password,
-      });
-      const scheduleRows = await getSchedulesByEmployee(employee.id);
+    ).mutation(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
+      const scheduleRows = await getSchedulesByEmployee(employee.id, employee.companyId);
       const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
       const scheduleMap: Record<string, { entry1: string; entry2: string; isActive: boolean }> = {};
       for (const row of scheduleRows) {
@@ -1083,41 +1055,59 @@ export const appRouter = router({
           scheduleMap[key].entry1 = row.entryTime;
         }
       }
+      const company = await getCompanyById(employee.companyId);
+      const acceptance = await getLegalAcceptance(
+        employee.id,
+        "employee_privacy_notice",
+        EMPLOYEE_PRIVACY_NOTICE_VERSION
+      );
+      await setSessionCookie(ctx.res, ctx.req, {
+        type: "employee",
+        companyId: employee.companyId,
+        companySlug: company?.slug,
+        employeeId: employee.id,
+        displayName: employee.name,
+      });
       return {
         success: true,
         employeeId: employee.id,
         restaurantId: employee.restaurantId,
+        companySlug: company?.slug ?? "default",
         schedule: scheduleMap,
         lateGraceMinutes: employee.lateGraceMinutes ?? 5,
+        locationEnabled: company?.locationEnabled ?? false,
+        needsPrivacyNotice: !acceptance,
+        privacyNoticeVersion: EMPLOYEE_PRIVACY_NOTICE_VERSION,
       };
     }),
 
     clockIn: publicProcedure.input(
-      z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+      optionalCreds.extend({
         employeeId: z.number(),
-        latitude: z.number(),
-        longitude: z.number(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
       })
-    ).mutation(async ({ input }) => {
-      const employee = await validateEmployeeCredentials({
-        username: input.username,
-        password: input.password,
-        expectedEmployeeId: input.employeeId,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const restaurant = await getRestaurantById(employee.restaurantId);
-      if (!restaurant) throw new Error("Restaurant not found");
-      const distance = calculateDistance(
-        parseFloat(restaurant.latitude.toString()),
-        parseFloat(restaurant.longitude.toString()),
-        input.latitude,
-        input.longitude
-      );
-      if (distance > restaurant.radiusMeters) {
-        throw new Error("You are not at the restaurant location");
+      const company = await getCompanyById(employee.companyId);
+      const restaurant = await getRestaurantById(employee.restaurantId, employee.companyId);
+      if (!restaurant) throw new Error("Negocio no encontrado");
+
+      if (company?.locationEnabled) {
+        if (input.latitude === undefined || input.longitude === undefined) {
+          throw new Error("Se requiere ubicación para fichar en este negocio");
+        }
+        const distance = calculateDistance(
+          parseFloat(restaurant.latitude.toString()),
+          parseFloat(restaurant.longitude.toString()),
+          input.latitude,
+          input.longitude
+        );
+        if (distance > restaurant.radiusMeters) {
+          throw new Error("No estás en la ubicación autorizada del negocio");
+        }
       }
       const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId);
       if (openRecord) throw new Error("You must clock out before clocking in again");
@@ -1149,63 +1139,68 @@ export const appRouter = router({
         employeeId: input.employeeId,
         entryTime: now,
         isLate,
-        latitude: input.latitude.toString(),
-        longitude: input.longitude.toString(),
+        status: "valid",
+        source: "mobile",
+        latitude:
+          input.latitude !== undefined ? input.latitude.toString() : null,
+        longitude:
+          input.longitude !== undefined ? input.longitude.toString() : null,
       });
       return { success: true, isLate };
     }),
 
     clockOut: publicProcedure.input(
-      z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+      optionalCreds.extend({
         employeeId: z.number(),
-        latitude: z.number(),
-        longitude: z.number(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
       })
-    ).mutation(async ({ input }) => {
-      const employee = await validateEmployeeCredentials({
-        username: input.username,
-        password: input.password,
-        expectedEmployeeId: input.employeeId,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const restaurant = await getRestaurantById(employee.restaurantId);
-      if (!restaurant) throw new Error("Restaurant not found");
-      const distance = calculateDistance(
-        parseFloat(restaurant.latitude.toString()),
-        parseFloat(restaurant.longitude.toString()),
-        input.latitude,
-        input.longitude
-      );
-      if (distance > restaurant.radiusMeters) {
-        throw new Error("You are not at the restaurant location");
+      const company = await getCompanyById(employee.companyId);
+      const restaurant = await getRestaurantById(employee.restaurantId, employee.companyId);
+      if (!restaurant) throw new Error("Negocio no encontrado");
+
+      if (company?.locationEnabled) {
+        if (input.latitude === undefined || input.longitude === undefined) {
+          throw new Error("Se requiere ubicación para fichar en este negocio");
+        }
+        const distance = calculateDistance(
+          parseFloat(restaurant.latitude.toString()),
+          parseFloat(restaurant.longitude.toString()),
+          input.latitude,
+          input.longitude
+        );
+        if (distance > restaurant.radiusMeters) {
+          throw new Error("No estás en la ubicación autorizada del negocio");
+        }
       }
-      const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId);
-      if (!openRecord) throw new Error("No active timeclock entry found");
+      const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId, employee.companyId);
+      if (!openRecord) throw new Error("No hay fichaje de entrada activo");
       const now = new Date();
       await db.update(timeclocks).set({
         exitTime: now,
+        exitLatitude:
+          input.latitude !== undefined ? input.latitude.toString() : null,
+        exitLongitude:
+          input.longitude !== undefined ? input.longitude.toString() : null,
       }).where(eq(timeclocks.id, openRecord.id));
       return { success: true };
     }),
 
     createIncident: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
         type: z.enum(["late_arrival", "early_exit", "other"]),
         reason: z.string().min(1),
         timeclockId: z.number().optional(),
       })
-    ).mutation(async ({ input }) => {
-      const employee = await validateEmployeeCredentials({
-        username: input.username,
-        password: input.password,
-        expectedEmployeeId: input.employeeId,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.insert(incidents).values({
@@ -1221,9 +1216,7 @@ export const appRouter = router({
 
     createTimeOffRequest: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           employeeId: z.number(),
           kind: z.enum(["vacation", "day_off"]),
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -1231,12 +1224,8 @@ export const appRouter = router({
           comment: z.string().min(1).max(2000),
         })
       )
-      .mutation(async ({ input }) => {
-        const employee = await validateEmployeeCredentials({
-          username: input.username,
-          password: input.password,
-          expectedEmployeeId: input.employeeId,
-        });
+      .mutation(async ({ ctx, input }) => {
+        const employee = await resolveEmployeeAuth(ctx, input);
         if (input.endDate < input.startDate) {
           throw new Error("La fecha fin debe ser igual o posterior a la de inicio");
         }
@@ -1299,19 +1288,13 @@ export const appRouter = router({
 
     deleteMyTimeOffRequest: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           employeeId: z.number(),
           requestId: z.number(),
         })
       )
-      .mutation(async ({ input }) => {
-        await validateEmployeeCredentials({
-          username: input.username,
-          password: input.password,
-          expectedEmployeeId: input.employeeId,
-        });
+      .mutation(async ({ ctx, input }) => {
+        await resolveEmployeeAuth(ctx, input);
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const [row] = await db
@@ -1330,18 +1313,9 @@ export const appRouter = router({
       }),
 
     adminDeleteTimeOffRequest: publicProcedure
-      .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
-          requestId: z.number(),
-        })
-      )
-      .mutation(async ({ input }) => {
-        const { admin, company } = await requireAdminUser({
-          username: input.username,
-          password: input.password,
-        });
+      .input(optionalCreds.extend({ requestId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) throw new Error("Restaurant not found");
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -1363,19 +1337,9 @@ export const appRouter = router({
       }),
 
     listMyTimeOffRequests: publicProcedure
-      .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
-          employeeId: z.number(),
-        })
-      )
-      .query(async ({ input }) => {
-        const employee = await validateEmployeeCredentials({
-          username: input.username,
-          password: input.password,
-          expectedEmployeeId: input.employeeId,
-        });
+      .input(optionalCreds.extend({ employeeId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const employee = await resolveEmployeeAuth(ctx, input);
         const db = await getDb();
         if (!db) return [];
         return await db
@@ -1392,17 +1356,12 @@ export const appRouter = router({
 
     listTimeOffRequests: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           status: z.enum(["pending", "approved", "rejected", "all"]).optional().default("all"),
         })
       )
-      .query(async ({ input }) => {
-        const { admin, company } = await requireAdminUser({
-          username: input.username,
-          password: input.password,
-        });
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) return [];
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -1431,18 +1390,13 @@ export const appRouter = router({
 
     decideTimeOffRequest: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           requestId: z.number(),
           decision: z.enum(["approved", "rejected"]),
         })
       )
-      .mutation(async ({ input }) => {
-        const { admin, company } = await requireAdminUser({
-          username: input.username,
-          password: input.password,
-        });
+      .mutation(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) throw new Error("Restaurant not found");
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -1474,18 +1428,13 @@ export const appRouter = router({
 
     getTimeOffCalendarMonth: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           year: z.number().int().min(2020).max(2100),
           month: z.number().int().min(1).max(12),
         })
       )
-      .query(async ({ input }) => {
-        const { admin, company } = await requireAdminUser({
-          username: input.username,
-          password: input.password,
-        });
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) {
           return {
@@ -1549,9 +1498,7 @@ export const appRouter = router({
       }),
 
       subscribe: publicProcedure.input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           employeeId: z.number(),
           subscription: z.object({
             endpoint: z.string().url(),
@@ -1561,15 +1508,11 @@ export const appRouter = router({
             }),
           }),
         })
-      ).mutation(async ({ input }) => {
+      ).mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        const employee = await validateEmployeeCredentials({
-          username: input.username,
-          password: input.password,
-          expectedEmployeeId: input.employeeId,
-        });
+        const employee = await resolveEmployeeAuth(ctx, input);
 
         const existing = await db
           .select()
@@ -1605,9 +1548,21 @@ export const appRouter = router({
         z.object({
           endpoint: z.string().url(),
         })
-      ).mutation(async ({ input }) => {
+      ).mutation(async ({ ctx, input }) => {
+        if (ctx.session?.type !== "employee" || !ctx.session.employeeId) {
+          throw new Error("No autorizado");
+        }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
+
+        const [sub] = await db
+          .select()
+          .from(pushSubscriptions)
+          .where(eq(pushSubscriptions.endpoint, input.endpoint))
+          .limit(1);
+        if (!sub || sub.employeeId !== ctx.session.employeeId) {
+          throw new Error("Suscripción no encontrada");
+        }
 
         await db
           .delete(pushSubscriptions)
@@ -1619,15 +1574,12 @@ export const appRouter = router({
 
     sendTestNotification: publicProcedure.input(
       z.object({
-        username: z.string().min(1),
-        password: z.string().min(1),
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         employeeId: z.number(),
       })
-    ).mutation(async ({ input }) => {
-      const { company } = await requireAdminUser({
-        username: input.username,
-        password: input.password,
-      });
+    ).mutation(async ({ ctx, input }) => {
+      const { company } = await resolveAdminAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -1678,6 +1630,168 @@ export const appRouter = router({
 
       return { success: true, sent: successCount, failed: failCount };
     }),
+
+    getSession: publicProcedure.query(async ({ ctx }) => ({
+      session: ctx.session,
+    })),
+
+    logoutSession: publicProcedure.mutation(async ({ ctx }) => {
+      clearSessionCookie(ctx.res, ctx.req);
+      return { success: true };
+    }),
+
+    getCompanyLegal: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
+      const { company } = await resolveAdminAuth(ctx, input);
+      return company;
+    }),
+
+    listEmployeePrivacyAcceptances: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        if (!restaurant) return [];
+        return listEmployeePrivacyAcceptances(
+          company.id,
+          restaurant.id,
+          EMPLOYEE_PRIVACY_NOTICE_VERSION
+        );
+      }),
+
+    updateCompanyLegal: publicProcedure
+      .input(
+        optionalCreds.extend({
+          legalName: z.string().optional(),
+          taxId: z.string().optional(),
+          address: z.string().optional(),
+          privacyContactEmail: z.string().email().optional().or(z.literal("")),
+          country: z.string().length(2).optional(),
+          timezone: z.string().optional(),
+          locationEnabled: z.boolean().optional(),
+          dataRetentionYears: z.number().min(4).max(10).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { company, admin } = await resolveAdminAuth(ctx, input);
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const update: Record<string, unknown> = { updatedAt: new Date() };
+        if (input.legalName !== undefined) update.legalName = input.legalName.trim() || null;
+        if (input.taxId !== undefined) update.taxId = input.taxId.trim() || null;
+        if (input.address !== undefined) update.address = input.address.trim() || null;
+        if (input.privacyContactEmail !== undefined) {
+          update.privacyContactEmail = input.privacyContactEmail.trim() || null;
+        }
+        if (input.country !== undefined) update.country = input.country;
+        if (input.timezone !== undefined) update.timezone = input.timezone;
+        if (input.locationEnabled !== undefined) update.locationEnabled = input.locationEnabled;
+        if (input.dataRetentionYears !== undefined) {
+          update.dataRetentionYears = input.dataRetentionYears;
+        }
+        await db.update(companies).set(update).where(eq(companies.id, company.id));
+        await writeAuditLog({
+          companyId: company.id,
+          entityType: "company",
+          entityId: company.id,
+          action: "update_legal",
+          newValue: update,
+          performedByType: "admin",
+          performedById: admin.id,
+        });
+        return { success: true };
+      }),
+
+    getPublicCompanyLegal: publicProcedure
+      .input(z.object({ companySlug: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const company = await getCompanyBySlug(input.companySlug);
+        if (!company) return null;
+        return {
+          name: company.name,
+          slug: company.slug,
+          legalName: company.legalName,
+          taxId: company.taxId,
+          address: company.address,
+          privacyContactEmail: company.privacyContactEmail,
+          country: company.country,
+          timezone: company.timezone,
+          locationEnabled: company.locationEnabled,
+          dataRetentionYears: company.dataRetentionYears,
+        };
+      }),
+
+    acceptEmployeePrivacyNotice: publicProcedure
+      .input(
+        optionalCreds.extend({
+          documentVersion: z.string().default(EMPLOYEE_PRIVACY_NOTICE_VERSION),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const employee = await resolveEmployeeAuth(ctx, input);
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const existing = await getLegalAcceptance(
+          employee.id,
+          "employee_privacy_notice",
+          input.documentVersion
+        );
+        if (existing) return { success: true, alreadyAccepted: true };
+        const ip =
+          (ctx.req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
+          ctx.req.socket.remoteAddress ??
+          null;
+        await db.insert(legalAcceptances).values({
+          companyId: employee.companyId,
+          employeeId: employee.id,
+          documentType: "employee_privacy_notice",
+          documentVersion: input.documentVersion,
+          ipAddress: ip,
+        });
+        return { success: true, alreadyAccepted: false };
+      }),
+
+    listAuditLogs: publicProcedure
+      .input(optionalCreds.extend({ limit: z.number().min(1).max(500).optional() }))
+      .query(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        return listAuditLogsByCompany(company.id, input.limit ?? 100);
+      }),
+
+    deactivateEmployee: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number(),
+          reason: z.string().min(3).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        if (!restaurant) throw new Error("Negocio no encontrado");
+        const employee = await assertEmployeeBelongsToAdminCompany(
+          input.employeeId,
+          company.id,
+          restaurant.id
+        );
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        await db
+          .update(employees)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(eq(employees.id, employee.id));
+        await writeAuditLog({
+          companyId: company.id,
+          entityType: "employee",
+          entityId: employee.id,
+          action: "deactivate",
+          oldValue: { isActive: true },
+          newValue: { isActive: false },
+          reason: input.reason,
+          performedByType: "admin",
+          performedById: admin.id,
+        });
+        return { success: true };
+      }),
   }),
 
   // Restaurant management
@@ -1770,14 +1884,14 @@ export const appRouter = router({
       return { success: true };
     }),
 
-    getById: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    getById: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       return await getEmployeeById(input);
     }),
   }),
 
   // Schedule management
   schedule: router({
-    getByEmployee: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    getByEmployee: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       return await getSchedulesByEmployee(input);
     }),
 
@@ -1814,7 +1928,7 @@ export const appRouter = router({
 
   // Timeclock management
   timeclock: router({
-    getByEmployee: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    getByEmployee: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       return await getTimeclocksByEmployee(input);
     }),
 
@@ -1933,7 +2047,7 @@ export const appRouter = router({
 
   // Incident management
   incident: router({
-    getByEmployee: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    getByEmployee: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       return await getIncidentsByEmployee(input);
     }),
 
