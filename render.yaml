@@ -6,7 +6,7 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    buildCommand: pnpm install && pnpm build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm start
     healthCheckPath: /healthz
     envVars:
