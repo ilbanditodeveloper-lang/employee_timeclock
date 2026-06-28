@@ -270,6 +270,41 @@ export async function getAdminUserByEmail(email: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function findAdminsByLoginName(loginName: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const normalized = loginName.trim().toLowerCase();
+  return db
+    .select({ user: users, company: companies })
+    .from(users)
+    .innerJoin(companies, eq(users.companyId, companies.id))
+    .where(
+      and(
+        eq(users.role, "admin"),
+        sql`lower(${users.name}) = ${normalized}`,
+        sql`${users.openId} LIKE 'local-admin-%'`,
+        eq(companies.isActive, true)
+      )
+    );
+}
+
+export async function findEmployeesByLoginUsername(username: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const normalized = username.trim().toLowerCase();
+  return db
+    .select({ employee: employees, company: companies })
+    .from(employees)
+    .innerJoin(companies, eq(employees.companyId, companies.id))
+    .where(
+      and(
+        sql`lower(${employees.username}) = ${normalized}`,
+        eq(employees.isActive, true),
+        eq(companies.isActive, true)
+      )
+    );
+}
+
 async function slugExistsInDb(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   slug: string

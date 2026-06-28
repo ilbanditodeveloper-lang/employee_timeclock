@@ -114,35 +114,7 @@ export default function RegisterBusiness() {
 
             <div className="space-y-3 p-4 bg-muted/50 rounded-lg border border-border text-sm">
               <div>
-                <p className="text-muted-foreground mb-1">Slug de la empresa</p>
-                <div className="flex items-center justify-between gap-2">
-                  <code className="font-mono text-foreground">{success.companySlug}</code>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyToClipboard(success.companySlug, "Slug")}
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <p className="text-muted-foreground mb-1">Usuario (formato slug::usuario)</p>
-                <div className="flex items-center justify-between gap-2">
-                  <code className="font-mono text-foreground break-all">{success.scopedLogin}</code>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyToClipboard(success.scopedLogin, "Usuario")}
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <p className="text-muted-foreground mb-1">Email de acceso</p>
+                <p className="text-muted-foreground mb-1">Email de acceso (recomendado)</p>
                 <div className="flex items-center justify-between gap-2">
                   <code className="font-mono text-foreground break-all">{success.adminEmail}</code>
                   <Button
@@ -155,12 +127,26 @@ export default function RegisterBusiness() {
                   </Button>
                 </div>
               </div>
+              <div>
+                <p className="text-muted-foreground mb-1">Usuario alternativo</p>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="font-mono text-foreground break-all">{success.adminUsername}</code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => copyToClipboard(success.adminUsername, "Usuario")}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
               <p className="text-sm text-amber-900 dark:text-amber-200">
-                <strong>Importante:</strong> anota estos datos. Los necesitarás para volver a entrar como
-                administrador. Puedes usar el email o el formato <code>slug::usuario</code>.
+                <strong>Importante:</strong> para entrar usa tu <strong>email</strong> y la contraseña que
+                elegiste. No necesitas recordar el slug de la empresa.
               </p>
             </div>
 

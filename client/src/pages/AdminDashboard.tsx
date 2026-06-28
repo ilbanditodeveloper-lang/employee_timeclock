@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList } from 'lucide-react';
+import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -25,16 +25,28 @@ import {
   downloadLaborReportCsv,
   downloadOfficialLaborReportPdf,
 } from '@/lib/laborReportExport';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
+  createEmptySchedule,
+  createDefaultEmployeeSchedule,
+  loadDefaultSchedule,
+  saveDefaultSchedule,
+  type WeekSchedule,
+} from '@shared/scheduleDefaults';
 
-const createEmptySchedule = () => ({
-  monday: { entry1: '', entry2: '', isActive: true },
-  tuesday: { entry1: '', entry2: '', isActive: true },
-  wednesday: { entry1: '', entry2: '', isActive: true },
-  thursday: { entry1: '', entry2: '', isActive: true },
-  friday: { entry1: '', entry2: '', isActive: true },
-  saturday: { entry1: '', entry2: '', isActive: true },
-  sunday: { entry1: '', entry2: '', isActive: true },
-});
+const scheduleDays = [
+  { key: 'monday', label: 'Lunes' },
+  { key: 'tuesday', label: 'Martes' },
+  { key: 'wednesday', label: 'Miércoles' },
+  { key: 'thursday', label: 'Jueves' },
+  { key: 'friday', label: 'Viernes' },
+  { key: 'saturday', label: 'Sábado' },
+  { key: 'sunday', label: 'Domingo' },
+] as const;
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -69,18 +81,10 @@ export default function AdminDashboard() {
   const [exportBusy, setExportBusy] = useState(false);
 
   const trpcUtils = trpc.useUtils();
-  const [employeeSchedule, setEmployeeSchedule] = useState(() => createEmptySchedule());
+  const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule>(() => createDefaultEmployeeSchedule());
   const [shiftEmployeeId, setShiftEmployeeId] = useState('');
-  const [shiftSchedule, setShiftSchedule] = useState(() => createEmptySchedule());
-  const scheduleDays = [
-    { key: 'monday', label: 'Lunes' },
-    { key: 'tuesday', label: 'Martes' },
-    { key: 'wednesday', label: 'Miércoles' },
-    { key: 'thursday', label: 'Jueves' },
-    { key: 'friday', label: 'Viernes' },
-    { key: 'saturday', label: 'Sábado' },
-    { key: 'sunday', label: 'Domingo' },
-  ] as const;
+  const [shiftSchedule, setShiftSchedule] = useState<WeekSchedule>(() => createEmptySchedule());
+  const [scheduleSectionOpen, setScheduleSectionOpen] = useState(false);
 
   const hourOptions = Array.from({ length: 24 }, (_, i) =>
     String(i).padStart(2, '0')
@@ -835,13 +839,20 @@ export default function AdminDashboard() {
             ? `Empleado ${employeeName} actualizado correctamente`
             : `Empleado ${employeeName} creado correctamente`
         );
+        if (adminSession?.companySlug) {
+          saveDefaultSchedule(adminSession.companySlug, employeeSchedule);
+        }
+        const nextSchedule = adminSession?.companySlug
+          ? loadDefaultSchedule(adminSession.companySlug)
+          : createDefaultEmployeeSchedule();
         setEmployeeName('');
         setEmployeeUsername('');
         setEmployeePassword('');
         setEmployeePhone('');
         setLateGraceMinutes('5');
         setEditingEmployeeId(null);
-        setEmployeeSchedule(createEmptySchedule());
+        setEmployeeSchedule(nextSchedule);
+        setScheduleSectionOpen(false);
         listEmployees.refetch();
       })
       .catch((error) => {
@@ -861,6 +872,7 @@ export default function AdminDashboard() {
     setEmployeePassword('');
     setEmployeePhone(employee.phone || '');
     setLateGraceMinutes(String(employee.lateGraceMinutes ?? 5));
+    setScheduleSectionOpen(true);
   };
 
   useEffect(() => {
@@ -904,6 +916,11 @@ export default function AdminDashboard() {
       setLocation('/admin/onboarding');
     }
   }, [adminSession, onboardingQuery.data, setLocation]);
+
+  useEffect(() => {
+    if (!adminSession?.companySlug || editingEmployeeId) return;
+    setEmployeeSchedule(loadDefaultSchedule(adminSession.companySlug));
+  }, [adminSession?.companySlug, editingEmployeeId]);
 
   const showOnboardingBanner =
     Boolean(onboardingQuery.data) &&
@@ -1155,19 +1172,31 @@ export default function AdminDashboard() {
                     className="input-elegant"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Permite fichar después de la hora sin marcar retraso.
+                    Tras estos minutos desde la hora de entrada, el botón de fichar se bloquea.
                   </p>
                 </div>
 
-                <div className="border border-border rounded-lg p-4 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Horario de entrada
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Puedes definir hasta dos horas de entrada por día.
-                    </p>
-                  </div>
+                <Collapsible
+                  open={scheduleSectionOpen}
+                  onOpenChange={setScheduleSectionOpen}
+                  className="border border-border rounded-lg"
+                >
+                  <CollapsibleTrigger className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 rounded-lg">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Horario de entrada
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Se aplica al crear empleado y rellena turnos automáticamente (L–V 09:00 por defecto).
+                      </p>
+                    </div>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                        scheduleSectionOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-4 pb-4 space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     {scheduleDays.map(day => (
                       <div
@@ -1280,7 +1309,8 @@ export default function AdminDashboard() {
                       </div>
                     ))}
                   </div>
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 <Button onClick={handleCreateEmployee} className="w-full btn-primary">
                   {editingEmployeeId ? "Guardar cambios" : "Crear Empleado"}

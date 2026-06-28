@@ -1251,7 +1251,6 @@ export const appRouter = router({
       const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId);
       if (openRecord) throw new Error("You must clock out before clocking in again");
       const now = new Date();
-      let isLate = false;
       const graceMinutes = employee.lateGraceMinutes ?? 5;
       const dayOfWeek = now.getDay();
       const todayTimeclocks = await getTodayTimeclocksByEmployee(input.employeeId, now);
@@ -1269,7 +1268,9 @@ export const appRouter = router({
           scheduleTime.setHours(parsed.hour, parsed.minute, 0, 0);
           const graceTime = new Date(scheduleTime.getTime() + graceMinutes * 60 * 1000);
           if (now > graceTime) {
-            isLate = true;
+            throw new Error(
+              `Fichaje no permitido: has superado los ${graceMinutes} minutos de gracia desde la hora de entrada.`
+            );
           }
         }
       }
@@ -1277,7 +1278,7 @@ export const appRouter = router({
         companyId: employee.companyId,
         employeeId: input.employeeId,
         entryTime: now,
-        isLate,
+        isLate: false,
         status: "valid",
         source: "mobile",
         latitude:
@@ -1285,7 +1286,7 @@ export const appRouter = router({
         longitude:
           input.longitude !== undefined ? input.longitude.toString() : null,
       });
-      return { success: true, isLate };
+      return { success: true, isLate: false };
     }),
 
     clockOut: publicProcedure.input(

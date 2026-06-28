@@ -478,6 +478,11 @@ export default function EmployeeDashboard() {
                   Día no laborable
                 </p>
               )}
+              {isLate && isWorkDay && !isClockedIn && (
+                <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                  Fichaje bloqueado: superaste los {employeeSession?.lateGraceMinutes ?? 5} min de gracia
+                </p>
+              )}
             </div>
             <div className={`w-4 h-4 rounded-full ${isAtRestaurant ? 'bg-green-500' : 'bg-red-500'}`}></div>
           </div>
@@ -488,12 +493,14 @@ export default function EmployeeDashboard() {
           {/* Entrada Button */}
           <Button
             onClick={handleClockIn}
-            disabled={!canClockByLocation || isClockedIn || loading}
+            disabled={!canClockByLocation || isClockedIn || loading || isLate}
             className="btn-primary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
           >
             <Clock className="w-6 h-6" />
-            Entrada
-            {isLate && <span className="text-xs">Retraso detectado</span>}
+            {isLate ? "Entrada bloqueada" : "Entrada"}
+            {isLate && (
+              <span className="text-xs font-normal">Retraso &gt; gracia permitida</span>
+            )}
           </Button>
 
           {/* Salida Button */}

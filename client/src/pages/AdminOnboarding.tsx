@@ -12,6 +12,7 @@ import RestaurantMap from "@/components/RestaurantMap";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { createDefaultEmployeeSchedule } from "@shared/scheduleDefaults";
 
 const COUNTRY_OPTIONS = [{ code: "ES", label: "España" }];
 const TIMEZONE_OPTIONS = [
@@ -26,13 +27,6 @@ const STEPS = [
   { id: 4, title: "Primer empleado", icon: Users },
   { id: 5, title: "Finalizar", icon: CheckCircle2 },
 ] as const;
-
-const emptySchedule = Object.fromEntries(
-  ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].map((d) => [
-    d,
-    { entry1: "", entry2: "", isActive: false },
-  ])
-);
 
 const MADRID_LAT = 40.4168;
 const MADRID_LNG = -3.7038;
@@ -182,7 +176,7 @@ export default function AdminOnboarding() {
       employeeUsername: employeeUsername.trim(),
       employeePassword,
       lateGraceMinutes: 5,
-      schedule: emptySchedule,
+      schedule: createDefaultEmployeeSchedule(),
     });
     return true;
   };

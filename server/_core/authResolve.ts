@@ -6,6 +6,8 @@ import {
   getEmployeeByUsername,
   getLocalAdminByCompany,
   getAdminUserByEmail,
+  findAdminsByLoginName,
+  findEmployeesByLoginUsername,
 } from "../db";
 import { hashPassword, verifyPassword } from "./password";
 import { getDb } from "../db";
@@ -93,6 +95,30 @@ export async function requireAdminUser(params: {
     return { company, admin: existingAdmin };
   }
 
+  if (!raw.includes("::")) {
+    const matches = await findAdminsByLoginName(raw);
+    if (matches.length > 1) {
+      throw new Error("Varias empresas usan ese usuario. Entra con tu email y contraseña.");
+    }
+    if (matches.length === 1) {
+      const { user: existingAdmin, company } = matches[0];
+      const check = verifyPassword(params.password, existingAdmin.password);
+      if (!check.isValid) {
+        throw new Error(GENERIC_AUTH_FAILURE_MSG);
+      }
+      if (check.needsUpgrade) {
+        const db = await getDb();
+        if (db) {
+          await db
+            .update(users)
+            .set({ password: hashPassword(params.password) })
+            .where(eq(users.id, existingAdmin.id));
+        }
+      }
+      return { company, admin: existingAdmin };
+    }
+  }
+
   const scoped = parseScopedUsername(params.username);
   const company = await getCompanyBySlug(scoped.companySlug);
   if (!company || !company.isActive) {
@@ -137,6 +163,37 @@ export async function validateEmployeeCredentials(params: {
 }) {
   const ip = params.clientIp ?? "unknown";
   checkRateLimitWithIp("employee-login", ip, params.username);
+  const raw = params.username.trim();
+
+  if (!raw.includes("::") && !params.companySlug) {
+    const matches = await findEmployeesByLoginUsername(raw);
+    if (matches.length > 1) {
+      throw new Error(
+        "Varios empleados usan ese usuario. Contacta con tu empresa o usa el acceso que te proporcionaron."
+      );
+    }
+    if (matches.length === 1) {
+      const employee = matches[0].employee;
+      if (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId) {
+        throw new Error("Empleado no encontrado");
+      }
+      const check = verifyPassword(params.password, employee.password);
+      if (!check.isValid) {
+        throw new Error("Credenciales inválidas");
+      }
+      if (check.needsUpgrade) {
+        const db = await getDb();
+        if (db) {
+          await db
+            .update(employees)
+            .set({ password: hashPassword(params.password) })
+            .where(and(eq(employees.id, employee.id), eq(employees.companyId, employee.companyId)));
+        }
+      }
+      return employee;
+    }
+  }
+
   const scoped = parseScopedUsername(params.username);
   const company = await getCompanyBySlug(params.companySlug ?? scoped.companySlug ?? "default");
   if (!company || !company.isActive) {

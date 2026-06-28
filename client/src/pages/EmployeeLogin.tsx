@@ -10,24 +10,22 @@ import { useAuthContext } from '@/contexts/AuthContext';
 
 export default function EmployeeLogin() {
   const [, setLocation] = useLocation();
-  const [companySlug, setCompanySlug] = useState('default');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const employeeLogin = trpc.publicApi.employeeLogin.useMutation();
-  const { setEmployeeSession, setAdminSession, clearAllSessions } = useAuthContext();
+  const { setEmployeeSession, setAdminSession } = useAuthContext();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const scopedUsername = `${companySlug.trim().toLowerCase()}::${username.trim()}`;
-      const result = await employeeLogin.mutateAsync({ username: scopedUsername, password });
+      const result = await employeeLogin.mutateAsync({ username: username.trim(), password });
       setEmployeeSession({
-        username: scopedUsername,
+        username: username.trim(),
         employeeId: result.employeeId,
-        companySlug: result.companySlug ?? companySlug.trim().toLowerCase(),
+        companySlug: result.companySlug ?? 'default',
         displayName: username.trim(),
         schedule: result.schedule,
         lateGraceMinutes: result.lateGraceMinutes,
@@ -39,7 +37,7 @@ export default function EmployeeLogin() {
       toast.success('¡Bienvenido!');
       setLocation('/employee');
     } catch (error) {
-      toast.error('Error al iniciar sesión');
+      toast.error(error instanceof Error ? error.message : 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -48,7 +46,6 @@ export default function EmployeeLogin() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4">
       <div className="max-w-md w-full">
-        {/* Back Button */}
         <button
           onClick={() => setLocation('/')}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
@@ -57,9 +54,7 @@ export default function EmployeeLogin() {
           Volver
         </button>
 
-        {/* Card */}
         <Card className="p-8 shadow-lg">
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-14 h-14 bg-accent rounded-2xl mb-4 shadow-lg">
               <Clock className="w-7 h-7 text-accent-foreground" />
@@ -68,21 +63,7 @@ export default function EmployeeLogin() {
             <p className="text-sm text-muted-foreground">Inicia sesión para fichar</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Empresa (slug)
-              </label>
-              <Input
-                type="text"
-                placeholder="mi-negocio"
-                value={companySlug}
-                onChange={(e) => setCompanySlug(e.target.value)}
-                required
-                className="input-elegant"
-              />
-            </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Usuario
@@ -120,10 +101,9 @@ export default function EmployeeLogin() {
             </Button>
           </form>
 
-          {/* Info */}
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-900 dark:text-blue-200">
-              Usa tu usuario y contraseña creados por el administrador.
+              Usa el usuario y contraseña que te dio tu administrador. No necesitas recordar el slug de la empresa.
             </p>
           </div>
         </Card>
