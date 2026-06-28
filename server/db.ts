@@ -15,6 +15,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
+import { addTrialDays } from "@shared/subscriptionPlans";
 import { isUniqueViolation } from "./_core/errors";
 import { isDemoRequestActive } from "./demo/mode";
 import {
@@ -204,6 +205,25 @@ export async function getCompanyById(companyId: number) {
   if (!db) return undefined;
   const result = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function countEmployeesByCompany(companyIds: number[]) {
+  if (companyIds.length === 0) return new Map<number, number>();
+  if (isDemoRequestActive()) {
+    const demoCount = getDemoEmployees().length;
+    return new Map(companyIds.map((id) => [id, id === 1 ? demoCount : 0]));
+  }
+  const db = await getDb();
+  if (!db) return new Map<number, number>();
+  const rows = await db
+    .select({
+      companyId: employees.companyId,
+      total: sql<number>`count(*)::int`,
+    })
+    .from(employees)
+    .where(inArray(employees.companyId, companyIds))
+    .groupBy(employees.companyId);
+  return new Map(rows.map((row) => [row.companyId, row.total]));
 }
 
 export async function getLocalAdminByCompany(companyId: number) {
@@ -402,6 +422,8 @@ export async function registerBusinessTenant(
         dataRetentionYears: 4,
         termsAcceptedAt: now,
         onboardingCompleted: false,
+        subscriptionPlan: "trial",
+        trialEndsAt: addTrialDays(now),
         isActive: true,
       })
       .returning();

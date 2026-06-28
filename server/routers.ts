@@ -30,6 +30,7 @@ import {
   listTimeclocksForEmployeeIds,
   listIncidentsForEmployeeIds,
   registerBusinessTenant,
+  countEmployeesByCompany,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
 import { hashPassword } from "./_core/password";
@@ -48,6 +49,12 @@ import { getClientIp } from "./_core/requestIp";
 import { isUniqueViolation } from "./_core/errors";
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
 import { writeAuditLog } from "./_core/audit";
+import { enrichSuperAdminCompany } from "./_core/superAdminCompanies";
+import {
+  SUBSCRIPTION_PLANS,
+  addTrialDays,
+  type SubscriptionPlan,
+} from "@shared/subscriptionPlans";
 import {
   buildEmployeeExportBundle,
   buildLaborReportBundle,
@@ -77,6 +84,7 @@ import {
   demoCreateSuperCompany,
   demoMutationSuccess,
   demoSetCompanyStatus,
+  demoSetCompanySubscription,
   demoUpdateCompanyLegal,
   demoUpsertRestaurant,
   getDemoScheduleMap,
@@ -269,11 +277,14 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         await resolveSuperAdminAuth(ctx, input);
         if (isDemoModeEnabled()) {
-          return getDemoSuperCompanies();
+          return getDemoSuperCompanies().map((company) =>
+            enrichSuperAdminCompany(company, company.employeeCount ?? 0)
+          );
         }
         const db = await getDb();
         if (!db) return [];
         const companyRows = await db.select().from(companies).orderBy(desc(companies.createdAt));
+        const employeeCounts = await countEmployeesByCompany(companyRows.map((c) => c.id));
         const adminRows = await db
           .select()
           .from(users)
@@ -283,10 +294,15 @@ export const appRouter = router({
             .filter((row) => row.companyId != null)
             .map((row) => [row.companyId as number, row])
         );
-        return companyRows.map((company) => ({
-          ...company,
-          adminUsername: adminByCompany.get(company.id)?.name ?? null,
-        }));
+        return companyRows.map((company) =>
+          enrichSuperAdminCompany(
+            {
+              ...company,
+              adminUsername: adminByCompany.get(company.id)?.name ?? null,
+            },
+            employeeCounts.get(company.id) ?? 0
+          )
+        );
       }),
 
     superAdminCreateCompany: publicProcedure
@@ -318,6 +334,8 @@ export const appRouter = router({
         await db.insert(companies).values({
           name: input.companyName.trim(),
           slug,
+          subscriptionPlan: "trial",
+          trialEndsAt: addTrialDays(new Date()),
           isActive: true,
         });
         const createdCompany = await getCompanyBySlug(slug);
@@ -363,6 +381,52 @@ export const appRouter = router({
         await db
           .update(companies)
           .set({ isActive: input.isActive, updatedAt: new Date() })
+          .where(eq(companies.id, input.companyId));
+        return { success: true };
+      }),
+
+    superAdminSetCompanySubscription: publicProcedure
+      .input(
+        z.object({
+          username: z.string().min(1),
+          password: z.string().min(1),
+          companyId: z.number().int().positive(),
+          subscriptionPlan: z.enum(SUBSCRIPTION_PLANS),
+          trialEndsAt: z.string().datetime().optional().nullable(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        requireSuperAdminCredentials({
+          username: input.username,
+          password: input.password,
+        });
+        const plan = input.subscriptionPlan as SubscriptionPlan;
+        let trialEndsAt: Date | null = null;
+        if (plan === "trial") {
+          trialEndsAt = input.trialEndsAt
+            ? new Date(input.trialEndsAt)
+            : addTrialDays(new Date());
+        } else if (input.trialEndsAt) {
+          trialEndsAt = new Date(input.trialEndsAt);
+        }
+        if (isDemoModeEnabled()) {
+          return demoSetCompanySubscription(input.companyId, plan, trialEndsAt);
+        }
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const [company] = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.id, input.companyId))
+          .limit(1);
+        if (!company) throw new Error("Empresa no encontrada");
+        await db
+          .update(companies)
+          .set({
+            subscriptionPlan: plan,
+            trialEndsAt,
+            updatedAt: new Date(),
+          })
           .where(eq(companies.id, input.companyId));
         return { success: true };
       }),

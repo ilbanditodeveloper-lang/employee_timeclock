@@ -53,6 +53,8 @@ export const companies = pgTable("companies", {
   onboardingCompletedAt: timestamp("onboardingCompletedAt"),
   onboardingSkippedAt: timestamp("onboardingSkippedAt"),
   onboardingLegalAcknowledgedAt: timestamp("onboardingLegalAcknowledgedAt"),
+  subscriptionPlan: varchar("subscriptionPlan", { length: 32 }).default("trial").notNull(),
+  trialEndsAt: timestamp("trialEndsAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),

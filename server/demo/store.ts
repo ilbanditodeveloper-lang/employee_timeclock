@@ -1,4 +1,5 @@
 import { EMPLOYEE_PRIVACY_NOTICE_VERSION } from "@shared/const";
+import { addTrialDays, type SubscriptionPlan } from "@shared/subscriptionPlans";
 
 const now = new Date();
 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
@@ -21,6 +22,8 @@ export const demoCompany = {
   onboardingCompletedAt: now,
   onboardingSkippedAt: null,
   onboardingLegalAcknowledgedAt: now,
+  subscriptionPlan: "legacy",
+  trialEndsAt: null as Date | null,
   isActive: true,
   createdAt: now,
   updatedAt: now,
@@ -174,8 +177,35 @@ let privacyAcceptances: Array<{
   acceptedAt: Date;
   ipAddress: string | null;
 }> = [];
-let superCompanies = [
-  { ...demoCompany, adminUsername: "admin" },
+
+type DemoSuperCompany = {
+  id: number;
+  name: string;
+  slug: string;
+  legalName: string | null;
+  taxId: string | null;
+  address: string | null;
+  privacyContactEmail: string | null;
+  country: string;
+  timezone: string;
+  locationEnabled: boolean;
+  dataRetentionYears: number;
+  termsAcceptedAt: Date | null;
+  onboardingCompleted: boolean;
+  onboardingCompletedAt: Date | null;
+  onboardingSkippedAt: Date | null;
+  onboardingLegalAcknowledgedAt: Date | null;
+  subscriptionPlan: string;
+  trialEndsAt: Date | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  adminUsername: string;
+  employeeCount: number;
+};
+
+let superCompanies: DemoSuperCompany[] = [
+  { ...demoCompany, adminUsername: "admin", employeeCount: 2 },
   {
     id: 2,
     name: "Cafetería Sol",
@@ -189,10 +219,17 @@ let superCompanies = [
     locationEnabled: false,
     dataRetentionYears: 4,
     termsAcceptedAt: null,
+    onboardingCompleted: true,
+    onboardingCompletedAt: now,
+    onboardingSkippedAt: null,
+    onboardingLegalAcknowledgedAt: null,
+    subscriptionPlan: "trial",
+    trialEndsAt: addTrialDays(now, 7),
     isActive: true,
     createdAt: now,
     updatedAt: now,
     adminUsername: "sol.admin",
+    employeeCount: 0,
   },
 ];
 
@@ -370,10 +407,17 @@ export function demoCreateSuperCompany(input: {
     locationEnabled: false,
     dataRetentionYears: 4,
     termsAcceptedAt: null,
+    onboardingCompleted: false,
+    onboardingCompletedAt: null,
+    onboardingSkippedAt: null,
+    onboardingLegalAcknowledgedAt: null,
+    subscriptionPlan: "trial",
+    trialEndsAt: addTrialDays(new Date()),
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
     adminUsername: input.adminUsername.trim(),
+    employeeCount: 0,
   });
   return { success: true };
 }
@@ -382,6 +426,19 @@ export function demoSetCompanyStatus(companyId: number, isActive: boolean) {
   const row = superCompanies.find((c) => c.id === companyId);
   if (!row) throw new Error("Empresa no encontrada");
   row.isActive = isActive;
+  row.updatedAt = new Date();
+  return { success: true };
+}
+
+export function demoSetCompanySubscription(
+  companyId: number,
+  subscriptionPlan: SubscriptionPlan,
+  trialEndsAt: Date | null
+) {
+  const row = superCompanies.find((c) => c.id === companyId);
+  if (!row) throw new Error("Empresa no encontrada");
+  row.subscriptionPlan = subscriptionPlan;
+  row.trialEndsAt = trialEndsAt;
   row.updatedAt = new Date();
   return { success: true };
 }

@@ -71,6 +71,13 @@
       "when": 1782085000000,
       "tag": "0009_employee_email",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782086000000,
+      "tag": "0010_company_subscription",
+      "breakpoints": true
     }
   ]
 }
