@@ -1,5 +1,8 @@
 import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
+// En Render/producción usar solo variables del dashboard — no .env.local del disco
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: ".env.local" });
+}
 dotenv.config();
 import express from "express";
 import cors, { type CorsOptions } from "cors";
@@ -70,7 +73,10 @@ function validateProductionEnv(): void {
   const appEnv = process.env.APP_ENV?.trim().toLowerCase();
   const isStrictProduction = appEnv !== "staging";
   if (isStrictProduction && process.env.DEMO_MODE === "true") {
-    console.error("[startup] DEMO_MODE=true no permitido en producción (APP_ENV=production)");
+    const appEnvLabel = appEnv || "(unset — usa APP_ENV=staging en Render staging)";
+    console.error(
+      `[startup] DEMO_MODE=true no permitido sin APP_ENV=staging (actual: ${appEnvLabel})`
+    );
     process.exit(1);
   }
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
