@@ -19,6 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { checkRateLimit, checkRateLimitWithIp } from "./rateLimit";
 import { getClientIp } from "./requestIp";
 import { GENERIC_AUTH_FAILURE_MSG } from "@shared/const";
+import { assertSubscriptionAllowsAccess } from "@shared/subscriptionPlans";
 import {
   getDemoAdmin,
   getDemoCompany,
@@ -60,6 +61,14 @@ export function requireSuperAdminCredentials(params: { username: string; passwor
   }
 }
 
+function ensureCompanySubscriptionAccess(company: {
+  subscriptionPlan?: string | null;
+  trialEndsAt?: Date | null;
+}) {
+  if (isDemoRequestActive()) return;
+  assertSubscriptionAllowsAccess(company);
+}
+
 export async function requireAdminUser(params: {
   username: string;
   password: string;
@@ -95,6 +104,7 @@ export async function requireAdminUser(params: {
       }
     }
 
+    ensureCompanySubscriptionAccess(company);
     return { company, admin: existingAdmin };
   }
 
@@ -118,6 +128,7 @@ export async function requireAdminUser(params: {
             .where(eq(users.id, existingAdmin.id));
         }
       }
+      ensureCompanySubscriptionAccess(company);
       return { company, admin: existingAdmin };
     }
   }
@@ -154,6 +165,7 @@ export async function requireAdminUser(params: {
     }
   }
 
+  ensureCompanySubscriptionAccess(company);
   return { company, admin: existingAdmin };
 }
 
@@ -177,7 +189,7 @@ export async function validateEmployeeCredentials(params: {
         );
       }
       if (emailMatches.length === 1) {
-        const employee = emailMatches[0].employee;
+        const { employee, company } = emailMatches[0];
         if (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId) {
           throw new Error("Empleado no encontrado");
         }
@@ -194,6 +206,7 @@ export async function validateEmployeeCredentials(params: {
               .where(and(eq(employees.id, employee.id), eq(employees.companyId, employee.companyId)));
           }
         }
+        ensureCompanySubscriptionAccess(company);
         return employee;
       }
     }
@@ -205,7 +218,7 @@ export async function validateEmployeeCredentials(params: {
       );
     }
     if (matches.length === 1) {
-      const employee = matches[0].employee;
+      const { employee, company } = matches[0];
       if (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId) {
         throw new Error("Empleado no encontrado");
       }
@@ -222,6 +235,7 @@ export async function validateEmployeeCredentials(params: {
             .where(and(eq(employees.id, employee.id), eq(employees.companyId, employee.companyId)));
         }
       }
+      ensureCompanySubscriptionAccess(company);
       return employee;
     }
 
@@ -258,6 +272,7 @@ export async function validateEmployeeCredentials(params: {
       }
     }
 
+    ensureCompanySubscriptionAccess(company);
     return employee;
   }
 
@@ -276,6 +291,7 @@ export async function resolveAdminAuth(ctx: TrpcContext, input?: CredentialInput
     if (!company?.isActive || !admin) {
       throw new Error("Sesión inválida. Inicia sesión de nuevo.");
     }
+    ensureCompanySubscriptionAccess(company);
     return { company, admin };
   }
   if (input?.username && input?.password) {
@@ -322,6 +338,11 @@ export async function resolveEmployeeAuth(
     if (input.employeeId !== undefined && input.employeeId !== employee.id) {
       throw new Error("No autorizado para este empleado.");
     }
+    const company = await getCompanyById(ctx.session.companyId);
+    if (!company?.isActive) {
+      throw new Error("Empresa no disponible");
+    }
+    ensureCompanySubscriptionAccess(company);
     return employee;
   }
   if (input.username && input.password) {

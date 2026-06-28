@@ -46,3 +46,92 @@ export function isTrialExpired(
   if (!trialEndsAt) return false;
   return trialEndsAt.getTime() <= now.getTime();
 }
+
+export const SUBSCRIPTION_TRIAL_EXPIRED_MSG =
+  "Tu periodo de prueba ha terminado. Contacta con soporte para activar un plan.";
+
+export function subscriptionEmployeeLimitMessage(limit: number, plan: SubscriptionPlan): string {
+  return `Has alcanzado el límite de ${limit} empleados del plan ${SUBSCRIPTION_PLAN_LABELS[plan]}. Contacta con soporte para ampliarlo.`;
+}
+
+export type SubscriptionAccessStatus = {
+  plan: SubscriptionPlan;
+  planLabel: string;
+  employeeCount: number;
+  employeeLimit: number | null;
+  atEmployeeLimit: boolean;
+  trialDaysRemaining: number | null;
+  trialExpired: boolean;
+  accessBlocked: boolean;
+  showTrialBanner: boolean;
+  showLimitBanner: boolean;
+  bannerMessage: string | null;
+  blockMessage: string | null;
+};
+
+export function getSubscriptionAccessStatus(
+  company: { subscriptionPlan?: string | null; trialEndsAt?: Date | null },
+  employeeCount: number,
+  now = new Date()
+): SubscriptionAccessStatus {
+  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+  const employeeLimit = getPlanEmployeeLimit(plan);
+  const trialDaysRemaining =
+    plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt, now) : null;
+  const trialExpired = isTrialExpired(plan, company.trialEndsAt, now);
+  const atEmployeeLimit = employeeLimit != null && employeeCount >= employeeLimit;
+  const accessBlocked = trialExpired;
+
+  let bannerMessage: string | null = null;
+  if (plan === "trial" && !trialExpired && trialDaysRemaining != null) {
+    if (trialDaysRemaining === 0) {
+      bannerMessage = "Tu periodo de prueba termina hoy.";
+    } else if (trialDaysRemaining === 1) {
+      bannerMessage = "Te queda 1 día de prueba.";
+    } else {
+      bannerMessage = `Te quedan ${trialDaysRemaining} días de prueba.`;
+    }
+    if (employeeLimit != null) {
+      bannerMessage += ` Límite: ${employeeLimit} empleados.`;
+    }
+  } else if (atEmployeeLimit && !trialExpired) {
+    bannerMessage = `Has alcanzado el límite de ${employeeLimit} empleados de tu plan.`;
+  }
+
+  return {
+    plan,
+    planLabel: SUBSCRIPTION_PLAN_LABELS[plan],
+    employeeCount,
+    employeeLimit,
+    atEmployeeLimit,
+    trialDaysRemaining,
+    trialExpired,
+    accessBlocked,
+    showTrialBanner: plan === "trial" && !trialExpired && trialDaysRemaining != null,
+    showLimitBanner: atEmployeeLimit && !trialExpired,
+    bannerMessage,
+    blockMessage: trialExpired ? SUBSCRIPTION_TRIAL_EXPIRED_MSG : null,
+  };
+}
+
+export function assertSubscriptionAllowsAccess(company: {
+  subscriptionPlan?: string | null;
+  trialEndsAt?: Date | null;
+}) {
+  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+  if (isTrialExpired(plan, company.trialEndsAt)) {
+    throw new Error(SUBSCRIPTION_TRIAL_EXPIRED_MSG);
+  }
+}
+
+export function assertCanAddEmployee(
+  company: { subscriptionPlan?: string | null; trialEndsAt?: Date | null },
+  employeeCount: number
+) {
+  assertSubscriptionAllowsAccess(company);
+  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+  const limit = getPlanEmployeeLimit(plan);
+  if (limit != null && employeeCount >= limit) {
+    throw new Error(subscriptionEmployeeLimitMessage(limit, plan));
+  }
+}

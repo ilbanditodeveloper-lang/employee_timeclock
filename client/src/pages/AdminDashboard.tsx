@@ -16,6 +16,7 @@ import { format, subMonths } from 'date-fns';
 import AdminLegalPanel from '@/components/AdminLegalPanel';
 import AdminAuditLogPanel from '@/components/AdminAuditLogPanel';
 import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
+import SubscriptionBanner from '@/components/SubscriptionBanner';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
 import {
@@ -936,6 +937,11 @@ export default function AdminDashboard() {
     !onboardingQuery.data?.onboardingCompleted &&
     Boolean(onboardingQuery.data?.onboardingSkippedAt);
 
+  const subscription = onboardingQuery.data?.subscription;
+  const showTrialBanner = Boolean(subscription?.showTrialBanner && subscription.bannerMessage);
+  const showLimitBanner = Boolean(subscription?.showLimitBanner && subscription.bannerMessage);
+  const atEmployeeLimit = Boolean(subscription?.atEmployeeLimit);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
@@ -971,6 +977,12 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <main className="container py-8">
         {showOnboardingBanner && <OnboardingReminderBanner />}
+        {showTrialBanner && subscription?.bannerMessage ? (
+          <SubscriptionBanner message={subscription.bannerMessage} variant="trial" />
+        ) : null}
+        {showLimitBanner && subscription?.bannerMessage ? (
+          <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
+        ) : null}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="mb-8 -mx-4 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:thin]">
             <TabsList className="inline-flex h-auto min-h-10 w-max max-w-none flex-nowrap items-stretch justify-start gap-1 rounded-lg bg-muted p-1 text-muted-foreground sm:w-full sm:max-w-full sm:flex-wrap sm:justify-center md:flex-nowrap md:justify-center">
@@ -1338,9 +1350,18 @@ export default function AdminDashboard() {
                   </CollapsibleContent>
                 </Collapsible>
 
-                <Button onClick={handleCreateEmployee} className="w-full btn-primary">
+                <Button
+                  onClick={handleCreateEmployee}
+                  className="w-full btn-primary"
+                  disabled={!editingEmployeeId && atEmployeeLimit}
+                >
                   {editingEmployeeId ? "Guardar cambios" : "Crear Empleado"}
                 </Button>
+                {!editingEmployeeId && atEmployeeLimit ? (
+                  <p className="text-xs text-muted-foreground">
+                    Has alcanzado el límite de empleados de tu plan. Contacta con soporte para ampliarlo.
+                  </p>
+                ) : null}
               </div>
 
               {/* Employee List */}

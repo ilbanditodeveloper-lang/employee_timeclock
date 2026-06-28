@@ -53,6 +53,8 @@ import { enrichSuperAdminCompany } from "./_core/superAdminCompanies";
 import {
   SUBSCRIPTION_PLANS,
   addTrialDays,
+  assertCanAddEmployee,
+  getSubscriptionAccessStatus,
   type SubscriptionPlan,
 } from "@shared/subscriptionPlans";
 import {
@@ -574,6 +576,8 @@ export const appRouter = router({
       const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
+      const employeeCounts = await countEmployeesByCompany([company.id]);
+      assertCanAddEmployee(company, employeeCounts.get(company.id) ?? 0);
       const normalizedEmail = normalizeEmployeeEmail(input.employeeEmail);
       const existingEmail = await getEmployeeByEmail(normalizedEmail, restaurant.companyId);
       if (existingEmail) {
@@ -1972,15 +1976,17 @@ export const appRouter = router({
     getOnboardingStatus: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
       if (ctx.session?.isDemo && ctx.session.type === "admin") {
         const restaurant = getDemoRestaurant();
+        const demoEmployees = getDemoEmployees();
         return {
           onboardingCompleted: true,
           onboardingSkippedAt: null,
           onboardingCompletedAt: new Date(),
           onboardingLegalAcknowledgedAt: new Date(),
-          employeeCount: getDemoEmployees().length,
+          employeeCount: demoEmployees.length,
           hasRestaurant: true,
           company: getDemoCompany(),
           restaurant,
+          subscription: getSubscriptionAccessStatus(getDemoCompany(), demoEmployees.length),
         };
       }
       const { admin, company } = await resolveAdminAuth(ctx, input);
@@ -1997,6 +2003,7 @@ export const appRouter = router({
         hasRestaurant: Boolean(restaurant),
         company,
         restaurant: restaurant ?? null,
+        subscription: getSubscriptionAccessStatus(company, employeeList.length),
       };
     }),
 

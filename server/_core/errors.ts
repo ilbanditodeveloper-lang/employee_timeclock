@@ -12,6 +12,8 @@ const BUSINESS_MESSAGE_PATTERNS = [
   /^Credenciales inválidas$/,
   /^Invalid admin credentials$/,
   /^Empresa no disponible/,
+  /^Tu periodo de prueba ha terminado/,
+  /^Has alcanzado el límite de \d+ empleados/,
   /^Modo demo no disponible/,
   /^Superadmin no configurado/,
   /^No autorizado/,
