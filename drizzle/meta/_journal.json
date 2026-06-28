@@ -64,6 +64,13 @@
       "when": 1782084000000,
       "tag": "0008_admin_email_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782085000000,
+      "tag": "0009_employee_email",
+      "breakpoints": true
     }
   ]
 }

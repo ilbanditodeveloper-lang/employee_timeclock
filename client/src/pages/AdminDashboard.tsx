@@ -62,6 +62,7 @@ export default function AdminDashboard() {
 
   // Employee form state
   const [employeeName, setEmployeeName] = useState('');
+  const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeeUsername, setEmployeeUsername] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
@@ -799,8 +800,12 @@ export default function AdminDashboard() {
   };
 
   const handleCreateEmployee = () => {
-    if (!employeeName || !employeeUsername || (!editingEmployeeId && !employeePassword)) {
-      toast.error('Por favor completa todos los campos requeridos');
+    if (!employeeName || !employeeEmail || !employeeUsername || (!editingEmployeeId && !employeePassword)) {
+      toast.error('Por favor completa nombre, email, usuario y contraseña');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail.trim())) {
+      toast.error('Introduce un email válido para el empleado');
       return;
     }
     if (employeePassword && employeePassword.length < 6) {
@@ -816,6 +821,7 @@ export default function AdminDashboard() {
           ...emptyCreds,
           employeeId: editingEmployeeId,
           employeeName,
+          employeeEmail: employeeEmail.trim().toLowerCase(),
           employeeUsername,
           employeePassword: employeePassword || undefined,
           employeePhone,
@@ -825,6 +831,7 @@ export default function AdminDashboard() {
       : createEmployee.mutateAsync({
           ...emptyCreds,
           employeeName,
+          employeeEmail: employeeEmail.trim().toLowerCase(),
           employeeUsername,
           employeePassword,
           employeePhone,
@@ -846,6 +853,7 @@ export default function AdminDashboard() {
           ? loadDefaultSchedule(adminSession.companySlug)
           : createDefaultEmployeeSchedule();
         setEmployeeName('');
+        setEmployeeEmail('');
         setEmployeeUsername('');
         setEmployeePassword('');
         setEmployeePhone('');
@@ -868,6 +876,7 @@ export default function AdminDashboard() {
     if (!employee) return;
     setEditingEmployeeId(employeeId);
     setEmployeeName(employee.name);
+    setEmployeeEmail(employee.email ?? '');
     setEmployeeUsername(employee.username);
     setEmployeePassword('');
     setEmployeePhone(employee.phone || '');
@@ -1121,7 +1130,24 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Usuario
+                    Email de acceso
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="empleado@empresa.com"
+                    value={employeeEmail}
+                    onChange={(e) => setEmployeeEmail(e.target.value)}
+                    className="input-elegant"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    El empleado usará este email para fichar (junto con su contraseña).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Usuario (interno)
                   </label>
                   <input
                     type="text"
@@ -1337,7 +1363,9 @@ export default function AdminDashboard() {
                               <Badge variant="outline">Activo</Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">Usuario: {employee.username}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Email: {employee.email || "—"} · Usuario: {employee.username}
+                          </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button variant="ghost" size="sm" onClick={() => handleEditEmployee(employee.id)}>

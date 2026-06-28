@@ -22,6 +22,9 @@ export const LEGAL_TEMPLATES_VERSION = "2026-06";
 export const DUPLICATE_ADMIN_EMAIL_MSG =
   "Ya existe una cuenta de administrador con ese email. Inicia sesión o usa otro email.";
 
+export const DUPLICATE_EMPLOYEE_EMAIL_MSG =
+  "Ya existe un empleado con ese email en esta empresa.";
+
 export const GENERIC_AUTH_FAILURE_MSG = "Credenciales inválidas";
 
 export const RATE_LIMIT_MSG = "Demasiados intentos. Espera un minuto e inténtalo de nuevo.";

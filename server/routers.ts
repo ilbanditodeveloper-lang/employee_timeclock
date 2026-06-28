@@ -1,4 +1,4 @@
-import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION } from "@shared/const";
+import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION, DUPLICATE_EMPLOYEE_EMAIL_MSG } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, deprecatedProcedure } from "./_core/trpc";
@@ -16,6 +16,8 @@ import {
   getSchedulesByEmployee,
   getIncidentById,
   getEmployeeByUsername,
+  getEmployeeByEmail,
+  normalizeEmployeeEmail,
   getCompanyBySlug,
   getCompanyById,
   getLocalAdminByCompany,
@@ -485,6 +487,7 @@ export const appRouter = router({
         username: z.string().min(1).optional(),
         password: z.string().min(1).optional(),
         employeeName: z.string().min(1),
+        employeeEmail: z.string().email(),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().min(6),
         employeePhone: z.string().optional(),
@@ -507,16 +510,29 @@ export const appRouter = router({
       const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) throw new Error("Restaurant not found");
-      const result = await db.insert(employees).values({
-        companyId: restaurant.companyId,
-        restaurantId: restaurant.id,
-        name: input.employeeName,
-        username: input.employeeUsername,
-        password: hashPassword(input.employeePassword),
-        phone: input.employeePhone,
-        lateGraceMinutes: input.lateGraceMinutes,
-        isActive: true,
-      });
+      const normalizedEmail = normalizeEmployeeEmail(input.employeeEmail);
+      const existingEmail = await getEmployeeByEmail(normalizedEmail, restaurant.companyId);
+      if (existingEmail) {
+        throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+      }
+      try {
+        await db.insert(employees).values({
+          companyId: restaurant.companyId,
+          restaurantId: restaurant.id,
+          name: input.employeeName,
+          username: input.employeeUsername,
+          email: normalizedEmail,
+          password: hashPassword(input.employeePassword),
+          phone: input.employeePhone,
+          lateGraceMinutes: input.lateGraceMinutes,
+          isActive: true,
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+        }
+        throw error;
+      }
       const employee = await getEmployeeByUsername(input.employeeUsername, restaurant.companyId);
       if (!employee) return { success: true };
       const dayMap: Record<string, number> = {
@@ -580,6 +596,7 @@ export const appRouter = router({
         password: z.string().min(1).optional(),
         employeeId: z.number(),
         employeeName: z.string().min(1),
+        employeeEmail: z.string().email(),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().optional(),
         employeePhone: z.string().optional(),
@@ -611,9 +628,17 @@ export const appRouter = router({
       const updateData: Record<string, unknown> = {
         name: input.employeeName,
         username: input.employeeUsername,
+        email: normalizeEmployeeEmail(input.employeeEmail),
         phone: input.employeePhone ?? null,
         lateGraceMinutes: input.lateGraceMinutes,
       };
+      const existingEmail = await getEmployeeByEmail(
+        normalizeEmployeeEmail(input.employeeEmail),
+        company.id
+      );
+      if (existingEmail && existingEmail.id !== input.employeeId) {
+        throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+      }
       if (input.employeePassword) {
         updateData.password = hashPassword(input.employeePassword);
       }

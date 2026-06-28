@@ -10,7 +10,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 
 export default function EmployeeLogin() {
   const [, setLocation] = useLocation();
-  const [username, setUsername] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const employeeLogin = trpc.publicApi.employeeLogin.useMutation();
@@ -21,12 +21,14 @@ export default function EmployeeLogin() {
     setLoading(true);
 
     try {
-      const result = await employeeLogin.mutateAsync({ username: username.trim(), password });
+      const trimmed = loginId.trim();
+      const username = trimmed.includes('@') ? trimmed.toLowerCase() : trimmed;
+      const result = await employeeLogin.mutateAsync({ username, password });
       setEmployeeSession({
-        username: username.trim(),
+        username,
         employeeId: result.employeeId,
         companySlug: result.companySlug ?? 'default',
-        displayName: username.trim(),
+        displayName: trimmed,
         schedule: result.schedule,
         lateGraceMinutes: result.lateGraceMinutes,
         locationEnabled: result.locationEnabled,
@@ -66,13 +68,13 @@ export default function EmployeeLogin() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Usuario
+                Email o usuario
               </label>
               <Input
                 type="text"
-                placeholder="tu.usuario"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="email@empresa.com"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
                 required
                 className="input-elegant"
               />
@@ -103,7 +105,7 @@ export default function EmployeeLogin() {
 
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-900 dark:text-blue-200">
-              Usa el usuario y contraseña que te dio tu administrador. No necesitas recordar el slug de la empresa.
+              Usa el <strong>email</strong> que te dio tu administrador (recomendado) o tu nombre de usuario, más la contraseña.
             </p>
           </div>
         </Card>

@@ -63,6 +63,7 @@ export default function AdminOnboarding() {
   const [legalAcknowledged, setLegalAcknowledged] = useState(false);
 
   const [employeeName, setEmployeeName] = useState("");
+  const [employeeEmail, setEmployeeEmail] = useState("");
   const [employeeUsername, setEmployeeUsername] = useState("");
   const [employeePassword, setEmployeePassword] = useState("");
 
@@ -163,16 +164,23 @@ export default function AdminOnboarding() {
   };
 
   const saveStep4 = async () => {
-    if (!employeeName.trim() && !employeeUsername.trim()) {
+    if (!employeeName.trim() && !employeeUsername.trim() && !employeeEmail.trim()) {
       return true;
     }
-    if (!employeeName.trim() || employeeUsername.trim().length < 3 || employeePassword.length < 6) {
-      toast.error("Completa nombre, usuario (mín. 3) y contraseña (mín. 6) o usa «Crear después»");
+    if (
+      !employeeName.trim() ||
+      !employeeEmail.trim() ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail.trim()) ||
+      employeeUsername.trim().length < 3 ||
+      employeePassword.length < 6
+    ) {
+      toast.error("Completa nombre, email, usuario (mín. 3) y contraseña (mín. 6) o usa «Crear después»");
       return false;
     }
     await createEmployee.mutateAsync({
       ...emptyCreds,
       employeeName: employeeName.trim(),
+      employeeEmail: employeeEmail.trim().toLowerCase(),
       employeeUsername: employeeUsername.trim(),
       employeePassword,
       lateGraceMinutes: 5,
@@ -448,7 +456,17 @@ export default function AdminOnboarding() {
                   <Input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} className="mt-1" />
                 </div>
                 <div>
-                  <Label>Usuario</Label>
+                  <Label>Email de acceso</Label>
+                  <Input
+                    type="email"
+                    value={employeeEmail}
+                    onChange={(e) => setEmployeeEmail(e.target.value)}
+                    className="mt-1"
+                    placeholder="empleado@empresa.com"
+                  />
+                </div>
+                <div>
+                  <Label>Usuario (interno)</Label>
                   <Input value={employeeUsername} onChange={(e) => setEmployeeUsername(e.target.value)} className="mt-1" />
                 </div>
                 <div>

@@ -124,6 +124,7 @@ export const employees = pgTable(
     restaurantId: integer("restaurantId").notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     username: varchar("username", { length: 100 }).notNull(),
+    email: varchar("email", { length: 255 }),
     password: varchar("password", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 20 }),
     lateGraceMinutes: integer("lateGraceMinutes").default(5).notNull(),
@@ -135,6 +136,10 @@ export const employees = pgTable(
     companyUsernameIdx: uniqueIndex("employees_company_username_idx").on(
       table.companyId,
       table.username
+    ),
+    companyEmailLowerUniqueIdx: uniqueIndex("employees_company_email_lower_unique_idx").on(
+      table.companyId,
+      sql`lower(trim(${table.email}))`
     ),
     companyIdx: index("employees_company_idx").on(table.companyId),
   })

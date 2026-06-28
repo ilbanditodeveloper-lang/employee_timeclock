@@ -502,6 +502,44 @@ export async function getEmployeesByRestaurant(restaurantId: number, companyId?:
   return await db.select().from(employees).where(where);
 }
 
+export function normalizeEmployeeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export async function findEmployeesByLoginEmail(email: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const normalized = normalizeEmployeeEmail(email);
+  return db
+    .select({ employee: employees, company: companies })
+    .from(employees)
+    .innerJoin(companies, eq(employees.companyId, companies.id))
+    .where(
+      and(
+        sql`lower(trim(${employees.email})) = ${normalized}`,
+        eq(employees.isActive, true),
+        eq(companies.isActive, true)
+      )
+    );
+}
+
+export async function getEmployeeByEmail(email: string, companyId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalized = normalizeEmployeeEmail(email);
+  const result = await db
+    .select()
+    .from(employees)
+    .where(
+      and(
+        eq(employees.companyId, companyId),
+        sql`lower(trim(${employees.email})) = ${normalized}`
+      )
+    )
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
 export async function getEmployeeByUsername(username: string, companyId?: number) {
   const db = await getDb();
   if (!db) return undefined;

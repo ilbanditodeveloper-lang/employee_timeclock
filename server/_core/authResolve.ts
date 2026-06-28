@@ -8,6 +8,9 @@ import {
   getAdminUserByEmail,
   findAdminsByLoginName,
   findEmployeesByLoginUsername,
+  findEmployeesByLoginEmail,
+  normalizeEmployeeEmail,
+  getEmployeeByEmail,
 } from "../db";
 import { hashPassword, verifyPassword } from "./password";
 import { getDb } from "../db";
@@ -166,6 +169,35 @@ export async function validateEmployeeCredentials(params: {
   const raw = params.username.trim();
 
   if (!raw.includes("::") && !params.companySlug) {
+    if (raw.includes("@")) {
+      const emailMatches = await findEmployeesByLoginEmail(raw);
+      if (emailMatches.length > 1) {
+        throw new Error(
+          "Varios empleados usan ese email. Contacta con tu empresa."
+        );
+      }
+      if (emailMatches.length === 1) {
+        const employee = emailMatches[0].employee;
+        if (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId) {
+          throw new Error("Empleado no encontrado");
+        }
+        const check = verifyPassword(params.password, employee.password);
+        if (!check.isValid) {
+          throw new Error("Credenciales inválidas");
+        }
+        if (check.needsUpgrade) {
+          const db = await getDb();
+          if (db) {
+            await db
+              .update(employees)
+              .set({ password: hashPassword(params.password) })
+              .where(and(eq(employees.id, employee.id), eq(employees.companyId, employee.companyId)));
+          }
+        }
+        return employee;
+      }
+    }
+
     const matches = await findEmployeesByLoginUsername(raw);
     if (matches.length > 1) {
       throw new Error(
