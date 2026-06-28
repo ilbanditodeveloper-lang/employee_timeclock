@@ -50,6 +50,7 @@ import { isUniqueViolation } from "./_core/errors";
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
 import { writeAuditLog } from "./_core/audit";
 import { enrichSuperAdminCompany } from "./_core/superAdminCompanies";
+import { syncAllCompaniesSubscriptionEnforcement, deactivateCompanyIfSubscriptionViolated } from "./_core/subscriptionEnforcement";
 import {
   SUBSCRIPTION_PLANS,
   addTrialDays,
@@ -283,6 +284,7 @@ export const appRouter = router({
             enrichSuperAdminCompany(company, company.employeeCount ?? 0)
           );
         }
+        await syncAllCompaniesSubscriptionEnforcement();
         const db = await getDb();
         if (!db) return [];
         const companyRows = await db.select().from(companies).orderBy(desc(companies.createdAt));
@@ -655,6 +657,7 @@ export const appRouter = router({
           });
         }
       }
+      await deactivateCompanyIfSubscriptionViolated(company.id);
       return { success: true };
     }),
 

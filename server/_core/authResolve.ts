@@ -1,4 +1,5 @@
 import type { TrpcContext } from "./context";
+import type { Company } from "../../drizzle/schema";
 import {
   getCompanyById,
   getCompanyBySlug,
@@ -20,6 +21,7 @@ import { checkRateLimit, checkRateLimitWithIp } from "./rateLimit";
 import { getClientIp } from "./requestIp";
 import { GENERIC_AUTH_FAILURE_MSG } from "@shared/const";
 import { assertSubscriptionAllowsAccess } from "@shared/subscriptionPlans";
+import { loadCompanyAfterSubscriptionSync } from "./subscriptionEnforcement";
 import {
   getDemoAdmin,
   getDemoCompany,
@@ -61,12 +63,12 @@ export function requireSuperAdminCredentials(params: { username: string; passwor
   }
 }
 
-function ensureCompanySubscriptionAccess(company: {
-  subscriptionPlan?: string | null;
-  trialEndsAt?: Date | null;
-}) {
-  if (isDemoRequestActive()) return;
-  assertSubscriptionAllowsAccess(company);
+async function ensureCompanySubscriptionAccess(company: Company): Promise<Company> {
+  if (isDemoRequestActive()) return company;
+  const fresh = await loadCompanyAfterSubscriptionSync(company.id);
+  if (!fresh) throw new Error("Empresa no disponible");
+  assertSubscriptionAllowsAccess(fresh);
+  return fresh;
 }
 
 export async function requireAdminUser(params: {
@@ -104,8 +106,8 @@ export async function requireAdminUser(params: {
       }
     }
 
-    ensureCompanySubscriptionAccess(company);
-    return { company, admin: existingAdmin };
+    const syncedCompany = await ensureCompanySubscriptionAccess(company);
+    return { company: syncedCompany, admin: existingAdmin };
   }
 
   if (!raw.includes("::")) {
@@ -128,8 +130,8 @@ export async function requireAdminUser(params: {
             .where(eq(users.id, existingAdmin.id));
         }
       }
-      ensureCompanySubscriptionAccess(company);
-      return { company, admin: existingAdmin };
+      const syncedCompany = await ensureCompanySubscriptionAccess(company);
+      return { company: syncedCompany, admin: existingAdmin };
     }
   }
 
@@ -165,8 +167,8 @@ export async function requireAdminUser(params: {
     }
   }
 
-  ensureCompanySubscriptionAccess(company);
-  return { company, admin: existingAdmin };
+  const syncedCompany = await ensureCompanySubscriptionAccess(company);
+  return { company: syncedCompany, admin: existingAdmin };
 }
 
 export async function validateEmployeeCredentials(params: {
@@ -206,7 +208,7 @@ export async function validateEmployeeCredentials(params: {
               .where(and(eq(employees.id, employee.id), eq(employees.companyId, employee.companyId)));
           }
         }
-        ensureCompanySubscriptionAccess(company);
+        await ensureCompanySubscriptionAccess(company);
         return employee;
       }
     }
@@ -235,7 +237,7 @@ export async function validateEmployeeCredentials(params: {
             .where(and(eq(employees.id, employee.id), eq(employees.companyId, employee.companyId)));
         }
       }
-      ensureCompanySubscriptionAccess(company);
+      await ensureCompanySubscriptionAccess(company);
       return employee;
     }
 
@@ -272,7 +274,7 @@ export async function validateEmployeeCredentials(params: {
       }
     }
 
-    ensureCompanySubscriptionAccess(company);
+    await ensureCompanySubscriptionAccess(company);
     return employee;
   }
 
@@ -291,8 +293,8 @@ export async function resolveAdminAuth(ctx: TrpcContext, input?: CredentialInput
     if (!company?.isActive || !admin) {
       throw new Error("Sesión inválida. Inicia sesión de nuevo.");
     }
-    ensureCompanySubscriptionAccess(company);
-    return { company, admin };
+    const syncedCompany = await ensureCompanySubscriptionAccess(company);
+    return { company: syncedCompany, admin };
   }
   if (input?.username && input?.password) {
     return requireAdminUser({
@@ -342,7 +344,7 @@ export async function resolveEmployeeAuth(
     if (!company?.isActive) {
       throw new Error("Empresa no disponible");
     }
-    ensureCompanySubscriptionAccess(company);
+    await ensureCompanySubscriptionAccess(company);
     return employee;
   }
   if (input.username && input.password) {

@@ -51,7 +51,30 @@ export const SUBSCRIPTION_TRIAL_EXPIRED_MSG =
   "Tu periodo de prueba ha terminado. Contacta con soporte para activar un plan.";
 
 export function subscriptionEmployeeLimitMessage(limit: number, plan: SubscriptionPlan): string {
-  return `Has alcanzado el límite de ${limit} empleados del plan ${SUBSCRIPTION_PLAN_LABELS[plan]}. Contacta con soporte para ampliarlo.`;
+  return `Has alcanzado el límite de ${limit} empleados del plan ${SUBSCRIPTION_PLAN_LABELS[plan]}. La empresa ha sido dada de baja automáticamente.`;
+}
+
+export type SubscriptionViolationReason = "trial_expired" | "employee_limit";
+
+export function getSubscriptionViolationReason(
+  company: {
+    subscriptionPlan?: string | null;
+    trialEndsAt?: Date | null;
+    isActive?: boolean;
+  },
+  employeeCount: number,
+  now = new Date()
+): SubscriptionViolationReason | null {
+  if (company.isActive === false) return null;
+  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+  if (isTrialExpired(plan, company.trialEndsAt, now)) {
+    return "trial_expired";
+  }
+  const limit = getPlanEmployeeLimit(plan);
+  if (limit != null && employeeCount >= limit) {
+    return "employee_limit";
+  }
+  return null;
 }
 
 export type SubscriptionAccessStatus = {
@@ -80,7 +103,7 @@ export function getSubscriptionAccessStatus(
     plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt, now) : null;
   const trialExpired = isTrialExpired(plan, company.trialEndsAt, now);
   const atEmployeeLimit = employeeLimit != null && employeeCount >= employeeLimit;
-  const accessBlocked = trialExpired;
+  const accessBlocked = trialExpired || atEmployeeLimit;
 
   let bannerMessage: string | null = null;
   if (plan === "trial" && !trialExpired && trialDaysRemaining != null) {
@@ -95,7 +118,7 @@ export function getSubscriptionAccessStatus(
       bannerMessage += ` Límite: ${employeeLimit} empleados.`;
     }
   } else if (atEmployeeLimit && !trialExpired) {
-    bannerMessage = `Has alcanzado el límite de ${employeeLimit} empleados de tu plan.`;
+    bannerMessage = `Has alcanzado el límite de ${employeeLimit} empleados. La empresa será dada de baja automáticamente.`;
   }
 
   return {
@@ -110,14 +133,22 @@ export function getSubscriptionAccessStatus(
     showTrialBanner: plan === "trial" && !trialExpired && trialDaysRemaining != null,
     showLimitBanner: atEmployeeLimit && !trialExpired,
     bannerMessage,
-    blockMessage: trialExpired ? SUBSCRIPTION_TRIAL_EXPIRED_MSG : null,
+    blockMessage: trialExpired
+      ? SUBSCRIPTION_TRIAL_EXPIRED_MSG
+      : atEmployeeLimit
+        ? subscriptionEmployeeLimitMessage(employeeLimit as number, plan)
+        : null,
   };
 }
 
 export function assertSubscriptionAllowsAccess(company: {
   subscriptionPlan?: string | null;
   trialEndsAt?: Date | null;
+  isActive?: boolean;
 }) {
+  if (company.isActive === false) {
+    throw new Error("Empresa no disponible");
+  }
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
   if (isTrialExpired(plan, company.trialEndsAt)) {
     throw new Error(SUBSCRIPTION_TRIAL_EXPIRED_MSG);
@@ -125,13 +156,22 @@ export function assertSubscriptionAllowsAccess(company: {
 }
 
 export function assertCanAddEmployee(
-  company: { subscriptionPlan?: string | null; trialEndsAt?: Date | null },
+  company: {
+    subscriptionPlan?: string | null;
+    trialEndsAt?: Date | null;
+    isActive?: boolean;
+  },
   employeeCount: number
 ) {
-  assertSubscriptionAllowsAccess(company);
-  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
-  const limit = getPlanEmployeeLimit(plan);
-  if (limit != null && employeeCount >= limit) {
-    throw new Error(subscriptionEmployeeLimitMessage(limit, plan));
+  const violation = getSubscriptionViolationReason(company, employeeCount + 1);
+  if (violation === "trial_expired") {
+    throw new Error(SUBSCRIPTION_TRIAL_EXPIRED_MSG);
+  }
+  if (violation === "employee_limit") {
+    const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+    const limit = getPlanEmployeeLimit(plan);
+    if (limit != null) {
+      throw new Error(subscriptionEmployeeLimitMessage(limit, plan));
+    }
   }
 }

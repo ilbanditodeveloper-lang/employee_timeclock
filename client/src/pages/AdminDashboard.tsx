@@ -1359,7 +1359,7 @@ export default function AdminDashboard() {
                 </Button>
                 {!editingEmployeeId && atEmployeeLimit ? (
                   <p className="text-xs text-muted-foreground">
-                    Has alcanzado el límite de empleados de tu plan. Contacta con soporte para ampliarlo.
+                    Has alcanzado el límite de empleados de tu plan. La empresa será dada de baja automáticamente.
                   </p>
                 ) : null}
               </div>
