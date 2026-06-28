@@ -224,38 +224,44 @@ export async function validateEmployeeCredentials(params: {
       }
       return employee;
     }
+
+    throw new Error(GENERIC_AUTH_FAILURE_MSG);
   }
 
-  const scoped = parseScopedUsername(params.username);
-  const company = await getCompanyBySlug(params.companySlug ?? scoped.companySlug ?? "default");
-  if (!company || !company.isActive) {
-    throw new Error("Empresa no disponible");
-  }
-
-  const employee = await getEmployeeByUsername(scoped.username, company.id);
-  if (!employee || (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId)) {
-    throw new Error("Empleado no encontrado");
-  }
-  if (!employee.isActive) {
-    throw new Error("Cuenta de empleado desactivada. Contacta con tu empresa.");
-  }
-
-  const check = verifyPassword(params.password, employee.password);
-  if (!check.isValid) {
-    throw new Error("Credenciales inválidas");
-  }
-
-  if (check.needsUpgrade) {
-    const db = await getDb();
-    if (db) {
-      await db
-        .update(employees)
-        .set({ password: hashPassword(params.password) })
-        .where(and(eq(employees.id, employee.id), eq(employees.companyId, company.id)));
+  if (raw.includes("::") || params.companySlug) {
+    const scoped = parseScopedUsername(params.username);
+    const company = await getCompanyBySlug(params.companySlug ?? scoped.companySlug ?? "default");
+    if (!company || !company.isActive) {
+      throw new Error("Empresa no disponible");
     }
+
+    const employee = await getEmployeeByUsername(scoped.username, company.id);
+    if (!employee || (params.expectedEmployeeId !== undefined && employee.id !== params.expectedEmployeeId)) {
+      throw new Error("Empleado no encontrado");
+    }
+    if (!employee.isActive) {
+      throw new Error("Cuenta de empleado desactivada. Contacta con tu empresa.");
+    }
+
+    const check = verifyPassword(params.password, employee.password);
+    if (!check.isValid) {
+      throw new Error("Credenciales inválidas");
+    }
+
+    if (check.needsUpgrade) {
+      const db = await getDb();
+      if (db) {
+        await db
+          .update(employees)
+          .set({ password: hashPassword(params.password) })
+          .where(and(eq(employees.id, employee.id), eq(employees.companyId, company.id)));
+      }
+    }
+
+    return employee;
   }
 
-  return employee;
+  throw new Error(GENERIC_AUTH_FAILURE_MSG);
 }
 
 type CredentialInput = { username?: string; password?: string };

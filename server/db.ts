@@ -298,7 +298,7 @@ export async function findEmployeesByLoginUsername(username: string) {
     .innerJoin(companies, eq(employees.companyId, companies.id))
     .where(
       and(
-        sql`lower(${employees.username}) = ${normalized}`,
+        sql`lower(trim(${employees.username})) = ${normalized}`,
         eq(employees.isActive, true),
         eq(companies.isActive, true)
       )
