@@ -2,13 +2,40 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { demoRequestStorage } from "../demo/mode";
+import { sanitizeErrorMessage } from "./errors";
+import { ENV } from "./env";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter({ shape, error }) {
+    const message = sanitizeErrorMessage(shape.message);
+    return {
+      ...shape,
+      message,
+      data: {
+        ...shape.data,
+        stack: ENV.isProduction ? undefined : error.stack,
+      },
+    };
+  },
+});
+
+const demoMiddleware = t.middleware(async ({ ctx, next }) => {
+  if (ctx.isDemo && ctx.session) {
+    return demoRequestStorage.run({ session: ctx.session }, () => next({ ctx }));
+  }
+  return next({ ctx });
+});
+
+/** Legacy OAuth/Manus routers — blocked in Fase 3 (use publicApi instead). */
+const deprecatedMiddleware = t.middleware(() => {
+  throw new TRPCError({ code: "NOT_FOUND", message: "Endpoint no disponible" });
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+export const publicProcedure = t.procedure.use(demoMiddleware);
+export const deprecatedProcedure = publicProcedure.use(deprecatedMiddleware);
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;

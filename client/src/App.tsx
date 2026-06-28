@@ -18,15 +18,19 @@ import EmployeeCalculator from "./pages/EmployeeCalculator";
 import EmployeeSchedule from "./pages/EmployeeSchedule";
 import EmployeeTimeOff from "./pages/EmployeeTimeOff";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminOnboarding from "./pages/AdminOnboarding";
 import SuperAdmin from "./pages/SuperAdmin";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
+import PlatformDpa from "./pages/PlatformDpa";
 import EmployeePrivacyNotice from "./pages/EmployeePrivacyNotice";
+import RegisterBusiness from "./pages/RegisterBusiness";
 
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
+      <Route path={"/register-business"} component={RegisterBusiness} />
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/admin-login"} component={AdminLogin} />
       <Route path={"/superadmin"} component={SuperAdmin} />
@@ -38,7 +42,9 @@ function Router() {
       <Route path={"/employee/time-off"} component={EmployeeTimeOff} />
       <Route path={"/legal/privacy"} component={PrivacyPolicy} />
       <Route path={"/legal/terms"} component={TermsOfUse} />
+      <Route path={"/legal/dpa"} component={PlatformDpa} />
       <Route path={"/legal/employee-notice"} component={() => <EmployeePrivacyNotice />} />
+      <Route path={"/admin/onboarding"} component={AdminOnboarding} />
       <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

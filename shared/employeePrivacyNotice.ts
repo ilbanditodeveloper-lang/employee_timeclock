@@ -55,10 +55,12 @@ export function buildEmployeePrivacyNotice(
   const taxLine = company.taxId?.trim() ? `NIF/CIF: ${company.taxId.trim()}.` : "";
   const locationBullets = company.locationEnabled
     ? [
-        "Coordenadas GPS aproximadas en el momento del fichaje (entrada/salida), únicamente cuando utilice la aplicación móvil y solo en el instante del registro.",
+        "Coordenadas GPS aproximadas únicamente en el instante del fichaje (entrada/salida), cuando utilice la aplicación móvil.",
+        "No se realiza seguimiento continuo ni localización fuera del momento del registro.",
+        "La empresa ha activado esta función; puede consultar con su responsable si tiene dudas.",
       ]
     : [
-        "La geolocalización no está activada en su empresa. Si se activara en el futuro, se le informará previamente.",
+        "La geolocalización no está activada en su empresa. Si se activara en el futuro, se le informará previamente y solo se usaría al fichar, sin seguimiento continuo.",
       ];
 
   const employeeIntro = employee?.employeeName
@@ -91,9 +93,12 @@ export function buildEmployeePrivacyNotice(
       {
         heading: "2. Finalidad del tratamiento",
         paragraphs: [
-          `${responsible} utiliza la aplicación ${PLATFORM_NAME} para registrar de forma individualizada la jornada laboral ` +
-            "de sus trabajadores, gestionar horarios, incidencias, ausencias y vacaciones, y cumplir las obligaciones legales " +
-            "de registro horario, prevención de riesgos laborales e inspección de trabajo.",
+          `${responsible} utiliza la aplicación ${PLATFORM_NAME} exclusivamente para:`,
+        ],
+        bullets: [
+          "Registrar de forma individualizada la jornada laboral (entrada y salida).",
+          "Gestionar horarios, incidencias, ausencias y vacaciones.",
+          "Cumplir obligaciones legales de registro horario, prevención de riesgos e inspección de trabajo.",
         ],
       },
       {
@@ -114,22 +119,29 @@ export function buildEmployeePrivacyNotice(
         ],
       },
       {
-        heading: "5. Destinatarios y acceso",
+        heading: "5. Quién puede ver sus datos",
         paragraphs: [
-          "Los datos podrán ser consultados por personal autorizado de la empresa (dirección, recursos humanos, administración).",
-          "Podrán comunicarse a la Inspección de Trabajo y Seguridad Social, juzgados o administraciones públicas cuando exista obligación legal.",
+          "Sus datos de jornada pueden ser consultados por personal autorizado de su empresa (dirección, recursos humanos, administración) " +
+            "con fines de gestión laboral y cumplimiento legal.",
+          "No están disponibles para otros empleados salvo que su empresa configure informes específicos.",
+        ],
+      },
+      {
+        heading: "6. Destinatarios y comunicaciones",
+        paragraphs: [
+          "Los datos podrán comunicarse a la Inspección de Trabajo y Seguridad Social, juzgados o administraciones públicas cuando exista obligación legal.",
           `El encargado del tratamiento tecnológico (${PLATFORM_NAME}) trata los datos por cuenta del responsable con contrato de encargado del tratamiento (artículo 28 RGPD). Los datos se alojan en servidores de la Unión Europea o con garantías adecuadas conforme al RGPD.`,
         ],
       },
       {
-        heading: "6. Plazo de conservación",
+        heading: "7. Plazo de conservación",
         paragraphs: [
           `Los registros de jornada se conservarán durante un mínimo de ${retentionYears} años, conforme a la normativa laboral española.`,
           "Transcurrido el plazo, los datos serán suprimidos o anonimizados, salvo obligación legal distinta o reclamación pendiente.",
         ],
       },
       {
-        heading: "7. Derechos de las personas trabajadoras",
+        heading: "8. Derechos de las personas trabajadoras",
         paragraphs: [
           "Puede ejercer los derechos de acceso, rectificación, supresión (cuando proceda), limitación del tratamiento, portabilidad y oposición dirigiéndose al responsable en la dirección indicada.",
           "La supresión puede no ser procedente cuando exista obligación legal de conservar los registros horarios.",
@@ -137,13 +149,13 @@ export function buildEmployeePrivacyNotice(
         ],
       },
       {
-        heading: "8. Medidas de seguridad",
+        heading: "9. Medidas de seguridad",
         paragraphs: [
           "Se aplican medidas técnicas y organizativas apropiadas: acceso autenticado, cifrado en tránsito (HTTPS), registro de auditoría de cambios en fichajes y separación de datos por empresa.",
         ],
       },
       {
-        heading: "9. Acuse de recibo",
+        heading: "10. Acuse de recibo",
         paragraphs: [
           "La empresa debe poder acreditar que ha informado a la persona trabajadora. Puede hacerlo mediante:",
           "— Acuse electrónico en la aplicación (casilla «He leído la información…» al primer acceso), o",
@@ -152,7 +164,7 @@ export function buildEmployeePrivacyNotice(
       },
     ],
     acknowledgmentLabel:
-      "Declaro haber recibido y leído la información sobre el tratamiento de mis datos personales en relación con el sistema de registro de jornada.",
+      "He leído la información sobre el tratamiento de mis datos personales en relación con el sistema de registro de jornada.",
     signatureBlock: {
       employeeLabel: "Firma de la persona trabajadora",
       companyLabel: "Firma / sello de la empresa (opcional)",

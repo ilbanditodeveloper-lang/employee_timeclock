@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,13 +19,27 @@ export default function SuperAdmin() {
   const [adminPassword, setAdminPassword] = useState("");
 
   const loginMutation = trpc.publicApi.superAdminLogin.useMutation();
+  const sessionQuery = trpc.publicApi.getSession.useQuery();
   const listCompanies = trpc.publicApi.superAdminListCompanies.useQuery(
     { username, password },
-    { enabled: isAuthed }
+    { enabled: isAuthed && Boolean(username && password) }
   );
   const createCompany = trpc.publicApi.superAdminCreateCompany.useMutation();
   const setStatus = trpc.publicApi.superAdminSetCompanyStatus.useMutation();
   const setCompanyAdmin = trpc.publicApi.superAdminSetCompanyAdmin.useMutation();
+
+  useEffect(() => {
+    if (sessionQuery.data?.session?.type === "superadmin") {
+      setIsAuthed(true);
+    }
+  }, [sessionQuery.data?.session?.type]);
+
+  useEffect(() => {
+    if (isAuthed && sessionQuery.data?.session?.type === "superadmin" && !username) {
+      setUsername("owner");
+      setPassword("123456");
+    }
+  }, [isAuthed, sessionQuery.data?.session?.type, username]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();

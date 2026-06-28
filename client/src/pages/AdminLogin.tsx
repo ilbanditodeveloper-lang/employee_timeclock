@@ -22,8 +22,10 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      const scopedUsername = `${companySlug.trim().toLowerCase()}::${username.trim()}`;
-      const result = await adminLogin.mutateAsync({ username: scopedUsername, password });
+      const loginId = username.trim().includes("@")
+        ? username.trim().toLowerCase()
+        : `${companySlug.trim().toLowerCase()}::${username.trim()}`;
+      const result = await adminLogin.mutateAsync({ username: loginId, password });
       setAdminSession({
         companySlug: result.companySlug,
         displayName: username.trim(),
@@ -73,17 +75,17 @@ export default function AdminLogin() {
                 placeholder="mi-negocio"
                 value={companySlug}
                 onChange={(e) => setCompanySlug(e.target.value)}
-                required
+                required={!username.trim().includes("@")}
                 className="input-elegant"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Usuario
+                Usuario o email
               </label>
               <Input
                 type="text"
-                placeholder="admin.usuario"
+                placeholder="admin.usuario o email@empresa.com"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -115,9 +117,12 @@ export default function AdminLogin() {
           </form>
 
           {/* Info */}
-          <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+          <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800 space-y-2">
             <p className="text-sm text-yellow-900 dark:text-yellow-200">
               <strong>Acceso restringido:</strong> Solo administradores autorizados.
+            </p>
+            <p className="text-xs text-yellow-800 dark:text-yellow-300">
+              Puedes entrar con <code>slug::usuario</code> o con tu email y contraseña.
             </p>
           </div>
         </Card>

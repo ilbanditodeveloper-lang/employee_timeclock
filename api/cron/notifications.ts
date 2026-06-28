@@ -2,14 +2,21 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkAndSendNotifications } from "../../server/notificationService";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const secret = process.env.CRON_SECRET;
+  const isProduction = process.env.NODE_ENV === "production";
+  const secret = process.env.CRON_SECRET?.trim();
   const authHeader = req.headers.authorization;
   const customHeaderSecret = req.headers["x-cron-secret"];
   const isVercelCron = Boolean(req.headers["x-vercel-cron"]);
+
+  if (isProduction && !secret) {
+    return res.status(503).json({ error: "Cron not configured" });
+  }
+
   if (secret) {
     const authorizedByBearer = authHeader === `Bearer ${secret}`;
     const authorizedByCustomHeader = customHeaderSecret === secret;
-    if (!isVercelCron && !authorizedByBearer && !authorizedByCustomHeader) {
+    const authorizedByQuery = req.query.secret === secret;
+    if (!isVercelCron && !authorizedByBearer && !authorizedByCustomHeader && !authorizedByQuery) {
       return res.status(401).json({ error: "Unauthorized" });
     }
   }

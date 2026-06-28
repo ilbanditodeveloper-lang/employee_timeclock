@@ -1,0 +1,30 @@
+# Render Blueprint — TimeClock monolito (Opción A)
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: timeclock
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CRON_INTERNAL
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: SUPERADMIN_USERNAME
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: VITE_APP_URL
+        sync: false

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale } from 'lucide-react';
+import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -12,11 +12,19 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { emptyCreds } from '@/lib/authApi';
 import { Calendar as UiCalendar, CalendarDayButton } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { format, subMonths } from 'date-fns';
 import AdminLegalPanel from '@/components/AdminLegalPanel';
+import AdminAuditLogPanel from '@/components/AdminAuditLogPanel';
+import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
+import { Badge } from '@/components/ui/badge';
+import { calendarMonthRange } from '@shared/laborReport';
+import {
+  downloadEmployeeDataJson,
+  downloadEnhancedLaborReportExcel,
+  downloadEnhancedLaborReportPdf,
+  downloadLaborReportCsv,
+  downloadOfficialLaborReportPdf,
+} from '@/lib/laborReportExport';
 
 const createEmptySchedule = () => ({
   monday: { entry1: '', entry2: '', isActive: true },
@@ -57,6 +65,10 @@ export default function AdminDashboard() {
   const [editingEntryTime, setEditingEntryTime] = useState('');
   const [editingExitTime, setEditingExitTime] = useState('');
   const [editingCorrectionReason, setEditingCorrectionReason] = useState('');
+  const [includeAuditHistory, setIncludeAuditHistory] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+
+  const trpcUtils = trpc.useUtils();
   const [employeeSchedule, setEmployeeSchedule] = useState(() => createEmptySchedule());
   const [shiftEmployeeId, setShiftEmployeeId] = useState('');
   const [shiftSchedule, setShiftSchedule] = useState(() => createEmptySchedule());
@@ -132,6 +144,10 @@ export default function AdminDashboard() {
   const { adminSession, setAdminSession, clearAllSessions } = useAuthContext();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
 
+  const onboardingQuery = trpc.publicApi.getOnboardingStatus.useQuery(emptyCreds, {
+    enabled: Boolean(adminSession),
+  });
+
   const getRestaurant = trpc.publicApi.getRestaurant.useQuery(emptyCreds, {
     enabled: Boolean(adminSession),
   });
@@ -171,6 +187,7 @@ export default function AdminDashboard() {
   );
   const updateTimeclock = trpc.publicApi.updateTimeclock.useMutation();
   const deleteTimeclock = trpc.publicApi.deleteTimeclock.useMutation();
+  const deactivateEmployee = trpc.publicApi.deactivateEmployee.useMutation();
   const sendTestNotification = trpc.publicApi.sendTestNotification.useMutation();
   const clearAllTimeclocks = trpc.publicApi.clearAllTimeclocks.useMutation();
   const clearAllIncidents = trpc.publicApi.clearAllIncidents.useMutation();
@@ -321,29 +338,24 @@ export default function AdminDashboard() {
     return { employeeLabel, rangeLabel };
   };
 
-  const exportReportsToExcel = () => {
-    if (!hasReportData) {
-      toast.error('No hay datos para exportar con los filtros actuales');
-      return;
-    }
+  const getReportDateRange = () => {
+    const from = rangeStart || format(subMonths(new Date(), 1), 'yyyy-MM-dd');
+    const to = rangeEnd || format(new Date(), 'yyyy-MM-dd');
+    return { from, to };
+  };
 
-    const { employeeLabel, rangeLabel } = reportContextLabel();
-    const wb = XLSX.utils.book_new();
+  const fetchReportBundle = async (withAudit?: boolean) => {
+    const { from, to } = getReportDateRange();
+    return trpcUtils.publicApi.getLaborReportBundle.fetch({
+      ...emptyCreds,
+      employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
+      dateFrom: from,
+      dateTo: to,
+      includeAuditHistory: withAudit ?? includeAuditHistory,
+    });
+  };
 
-    const timeclockRows = filteredTimeclocks.map((entry) => ({
-      Empleado: employeeNameById.get(entry.employeeId) || `#${entry.employeeId}`,
-      Entrada: entry.entryTime ? new Date(entry.entryTime).toLocaleString('es-ES') : '',
-      Salida: entry.exitTime ? new Date(entry.exitTime).toLocaleString('es-ES') : 'Pendiente',
-      Horas:
-        entry.entryTime && entry.exitTime
-          ? (
-              (new Date(entry.exitTime).getTime() - new Date(entry.entryTime).getTime()) /
-              (1000 * 60 * 60)
-            ).toFixed(2)
-          : '',
-      Estado: entry.isLate ? 'Tarde' : 'OK',
-    }));
-
+  const buildReportExtras = () => {
     const timeOffRows = filteredTimeOffForReport.map((row) => ({
       Empleado: row.employeeName || employeeNameById.get(row.employeeId) || `#${row.employeeId}`,
       Tipo: row.kind === 'vacation' ? 'Vacaciones' : 'Día libre',
@@ -352,9 +364,7 @@ export default function AdminDashboard() {
       Estado:
         row.status === 'approved' ? 'Aprobada' : row.status === 'rejected' ? 'Denegada' : 'Pendiente',
       Comentario: row.comment || '',
-      Creada: row.createdAt ? new Date(row.createdAt).toLocaleString('es-ES') : '',
     }));
-
     const incidentRows = filteredIncidentsForReport.map((incident) => ({
       Empleado: employeeNameById.get(incident.employeeId) || `#${incident.employeeId}`,
       Tipo:
@@ -372,137 +382,131 @@ export default function AdminDashboard() {
       Motivo: incident.reason,
       Fecha: incident.createdAt ? new Date(incident.createdAt).toLocaleString('es-ES') : '',
     }));
-
-    const summarySheet = XLSX.utils.json_to_sheet([
-      {
-        Empleado: employeeLabel,
-        Rango: rangeLabel,
-        Fichajes: filteredTimeclocks.length,
-        Vacaciones_o_libres: filteredTimeOffForReport.length,
-        Incidencias: filteredIncidentsForReport.length,
-        Total_horas: totalHours.toFixed(2),
-      },
+    const timeOffPdf = filteredTimeOffForReport.map((row) => [
+      row.employeeName || employeeNameById.get(row.employeeId) || `#${row.employeeId}`,
+      row.kind === 'vacation' ? 'Vacaciones' : 'Día libre',
+      toYmd(row.startDate),
+      toYmd(row.endDate),
+      row.status === 'approved' ? 'Aprobada' : row.status === 'rejected' ? 'Denegada' : 'Pendiente',
+      row.comment || '',
     ]);
-    XLSX.utils.book_append_sheet(wb, summarySheet, 'Resumen');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(timeclockRows), 'Horas');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(timeOffRows), 'Vacaciones');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows), 'Incidencias');
-
-    const stamp = format(new Date(), 'yyyyMMdd_HHmm');
-    XLSX.writeFile(wb, `reporte_horas_vacaciones_incidencias_${stamp}.xlsx`);
-    toast.success('Reporte Excel descargado');
+    const incidentPdf = filteredIncidentsForReport.map((incident) => [
+      employeeNameById.get(incident.employeeId) || `#${incident.employeeId}`,
+      incident.type === 'late_arrival'
+        ? 'Retraso entrada'
+        : incident.type === 'early_exit'
+        ? 'Salida temprana'
+        : 'Otra',
+      incident.status === 'approved' ? 'Aprobada' : incident.status === 'rejected' ? 'Denegada' : 'Pendiente',
+      incident.reason || '',
+      incident.createdAt ? new Date(incident.createdAt).toLocaleString('es-ES') : '',
+    ]);
+    return { timeOffRows, incidentRows, timeOffPdf, incidentPdf };
   };
 
-  const exportReportsToPdf = () => {
-    if (!hasReportData) {
+  const runExport = async (kind: 'csv' | 'official-pdf' | 'excel' | 'pdf') => {
+    if (!hasReportData && kind !== 'csv') {
       toast.error('No hay datos para exportar con los filtros actuales');
       return;
     }
+    setExportBusy(true);
+    try {
+      const bundle = await fetchReportBundle(true);
+      if (bundle.rows.length === 0 && !filteredTimeOffForReport.length && !filteredIncidentsForReport.length) {
+        toast.error('No hay fichajes en el periodo seleccionado');
+        return;
+      }
+      const extras = buildReportExtras();
+      if (kind === 'csv') {
+        downloadLaborReportCsv(bundle);
+        toast.success('CSV descargado');
+      } else if (kind === 'official-pdf') {
+        downloadOfficialLaborReportPdf(bundle);
+        toast.success('Informe registro horario descargado');
+      } else if (kind === 'excel') {
+        downloadEnhancedLaborReportExcel(bundle, extras);
+        toast.success('Excel descargado');
+      } else {
+        downloadEnhancedLaborReportPdf(bundle, {
+          timeOffRows: extras.timeOffPdf,
+          incidentRows: extras.incidentPdf,
+        });
+        toast.success('PDF descargado');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al exportar');
+    } finally {
+      setExportBusy(false);
+    }
+  };
 
-    const { employeeLabel, rangeLabel } = reportContextLabel();
-    const doc = new jsPDF({ orientation: 'landscape' });
-    const generatedAt = new Date().toLocaleString('es-ES');
+  const exportReportsToExcel = () => runExport('excel');
+  const exportReportsToPdf = () => runExport('pdf');
+  const exportOfficialPdf = () => runExport('official-pdf');
+  const exportCsv = () => runExport('csv');
 
-    doc.setFontSize(14);
-    doc.text('Reporte de horas, vacaciones e incidencias', 14, 14);
-    doc.setFontSize(10);
-    doc.text(`Empleado: ${employeeLabel}`, 14, 21);
-    doc.text(`Rango: ${rangeLabel}`, 14, 27);
-    doc.text(`Generado: ${generatedAt}`, 14, 33);
+  const setMonthRange = (offsetMonths: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + offsetMonths);
+    const range = calendarMonthRange(d.getFullYear(), d.getMonth() + 1);
+    setRangeStart(range.from);
+    setRangeEnd(range.to);
+  };
 
-    autoTable(doc, {
-      startY: 38,
-      head: [['Fichajes', 'Total horas', 'Vacaciones/libres', 'Incidencias']],
-      body: [[
-        String(filteredTimeclocks.length),
-        totalHours.toFixed(2),
-        String(filteredTimeOffForReport.length),
-        String(filteredIncidentsForReport.length),
-      ]],
-      styles: { fontSize: 9 },
-    });
+  const handleExportEmployeeData = async (employeeId: number, employeeName: string) => {
+    try {
+      const data = await trpcUtils.publicApi.exportEmployeeData.fetch({
+        ...emptyCreds,
+        employeeId,
+      });
+      downloadEmployeeDataJson(data, employeeName);
+      toast.success('Exportación JSON descargada');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo exportar');
+    }
+  };
 
-    doc.addPage();
-    doc.setFontSize(12);
-    doc.text('Horas', 14, 14);
-    autoTable(doc, {
-      startY: 18,
-      head: [['Empleado', 'Entrada', 'Salida', 'Horas', 'Estado']],
-      body:
-        filteredTimeclocks.length > 0
-          ? filteredTimeclocks.map((entry) => [
-              employeeNameById.get(entry.employeeId) || `#${entry.employeeId}`,
-              entry.entryTime ? new Date(entry.entryTime).toLocaleString('es-ES') : '',
-              entry.exitTime ? new Date(entry.exitTime).toLocaleString('es-ES') : 'Pendiente',
-              entry.entryTime && entry.exitTime
-                ? (
-                    (new Date(entry.exitTime).getTime() - new Date(entry.entryTime).getTime()) /
-                    (1000 * 60 * 60)
-                  ).toFixed(2)
-                : '',
-              entry.isLate ? 'Tarde' : 'OK',
-            ])
-          : [['Sin datos', '', '', '', '']],
-      styles: { fontSize: 8 },
-    });
+  const handleDeactivateEmployee = (employee: { id: number; name: string; isActive?: boolean }) => {
+    if (employee.isActive === false) {
+      toast.info('Este empleado ya está inactivo');
+      return;
+    }
+    const reason = window.prompt(
+      `Motivo de desactivación de ${employee.name} (opcional, mín. 3 caracteres si se indica):`
+    );
+    if (reason === null) return;
+    if (reason.trim().length > 0 && reason.trim().length < 3) {
+      toast.error('El motivo debe tener al menos 3 caracteres');
+      return;
+    }
+    deactivateEmployee
+      .mutateAsync({
+        ...emptyCreds,
+        employeeId: employee.id,
+        reason: reason.trim() || undefined,
+      })
+      .then(() => {
+        toast.success('Empleado desactivado. Sus fichajes se conservan (mín. 4 años).');
+        listEmployees.refetch();
+      })
+      .catch((error) => toast.error(error?.message || 'No se pudo desactivar'));
+  };
 
-    doc.addPage();
-    doc.setFontSize(12);
-    doc.text('Vacaciones / días libres', 14, 14);
-    autoTable(doc, {
-      startY: 18,
-      head: [['Empleado', 'Tipo', 'Desde', 'Hasta', 'Estado', 'Comentario']],
-      body:
-        filteredTimeOffForReport.length > 0
-          ? filteredTimeOffForReport.map((row) => [
-              row.employeeName || employeeNameById.get(row.employeeId) || `#${row.employeeId}`,
-              row.kind === 'vacation' ? 'Vacaciones' : 'Día libre',
-              toYmd(row.startDate),
-              toYmd(row.endDate),
-              row.status === 'approved'
-                ? 'Aprobada'
-                : row.status === 'rejected'
-                ? 'Denegada'
-                : 'Pendiente',
-              row.comment || '',
-            ])
-          : [['Sin datos', '', '', '', '', '']],
-      styles: { fontSize: 8 },
-    });
-
-    doc.addPage();
-    doc.setFontSize(12);
-    doc.text('Incidencias', 14, 14);
-    autoTable(doc, {
-      startY: 18,
-      head: [['Empleado', 'Tipo', 'Estado', 'Motivo', 'Fecha']],
-      body:
-        filteredIncidentsForReport.length > 0
-          ? filteredIncidentsForReport.map((incident) => [
-              employeeNameById.get(incident.employeeId) || `#${incident.employeeId}`,
-              incident.type === 'late_arrival'
-                ? 'Retraso entrada'
-                : incident.type === 'early_exit'
-                ? 'Salida temprana'
-                : 'Otra',
-              incident.status === 'approved'
-                ? 'Aprobada'
-                : incident.status === 'rejected'
-                ? 'Denegada'
-                : 'Pendiente',
-              incident.reason || '',
-              incident.createdAt ? new Date(incident.createdAt).toLocaleString('es-ES') : '',
-            ])
-          : [['Sin datos', '', '', '', '']],
-      styles: { fontSize: 8 },
-    });
-
-    const stamp = format(new Date(), 'yyyyMMdd_HHmm');
-    doc.save(`reporte_horas_vacaciones_incidencias_${stamp}.pdf`);
-    toast.success('Reporte PDF descargado');
+  const timeclockStatusBadge = (entry: { status?: string; exitTime?: string | Date | null }) => {
+    if (entry.status === 'voided') {
+      return <Badge variant="destructive">Anulado</Badge>;
+    }
+    if (entry.status === 'corrected') {
+      return <Badge variant="secondary">Corregido</Badge>;
+    }
+    if (!entry.exitTime) {
+      return <Badge variant="outline">Incompleto</Badge>;
+    }
+    return null;
   };
 
   const totalHours = filteredTimeclocks.reduce((total, entry) => {
+    if (entry.status === 'voided') return total;
     if (!entry.entryTime || !entry.exitTime) return total;
     const start = new Date(entry.entryTime).getTime();
     const end = new Date(entry.exitTime).getTime();
@@ -892,8 +896,19 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!adminSession) {
       setLocation('/admin-login');
+      return;
     }
-  }, [adminSession, setLocation]);
+    const ob = onboardingQuery.data;
+    if (!ob || ob.onboardingCompleted) return;
+    if (!ob.onboardingSkippedAt) {
+      setLocation('/admin/onboarding');
+    }
+  }, [adminSession, onboardingQuery.data, setLocation]);
+
+  const showOnboardingBanner =
+    Boolean(onboardingQuery.data) &&
+    !onboardingQuery.data?.onboardingCompleted &&
+    Boolean(onboardingQuery.data?.onboardingSkippedAt);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -906,19 +921,30 @@ export default function AdminDashboard() {
             </div>
             <h1 className="text-xl font-bold text-foreground">Panel de Administrador</h1>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            className="flex items-center gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar Sesión
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation("/admin/onboarding")}
+            >
+              Configuración inicial
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              className="flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Cerrar Sesión
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="container py-8">
+        {showOnboardingBanner && <OnboardingReminderBanner />}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="mb-8 -mx-4 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:thin]">
             <TabsList className="inline-flex h-auto min-h-10 w-max max-w-none flex-nowrap items-stretch justify-start gap-1 rounded-lg bg-muted p-1 text-muted-foreground sm:w-full sm:max-w-full sm:flex-wrap sm:justify-center md:flex-nowrap md:justify-center">
@@ -969,6 +995,14 @@ export default function AdminDashboard() {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Incidencias</span>
                 <span className="sm:hidden">Avisos</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="audit"
+                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
+              >
+                <ClipboardList className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Auditoría</span>
+                <span className="sm:hidden">Audit</span>
               </TabsTrigger>
               <TabsTrigger
                 value="legal"
@@ -1255,22 +1289,48 @@ export default function AdminDashboard() {
 
               {/* Employee List */}
               <div className="border-t border-border pt-6">
-                <h3 className="font-semibold text-foreground mb-4">Empleados Registrados</h3>
+                <h3 className="font-semibold text-foreground mb-2">Empleados registrados</h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Desactivar un empleado impide su acceso, pero conserva fichajes e historial (mínimo 4
+                  años). Puede seguir exportando sus registros.
+                </p>
                 <div className="space-y-2">
                   {listEmployees.data?.length ? (
                     listEmployees.data.map((employee) => (
-                      <div key={employee.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div key={employee.id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-muted rounded-lg">
                         <div>
-                          <p className="font-medium text-foreground">{employee.name}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-foreground">{employee.name}</p>
+                            {employee.isActive === false ? (
+                              <Badge variant="secondary">Inactivo</Badge>
+                            ) : (
+                              <Badge variant="outline">Activo</Badge>
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground">Usuario: {employee.username}</p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditEmployee(employee.id)}
-                        >
-                          Editar
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditEmployee(employee.id)}>
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleExportEmployeeData(employee.id, employee.name)}
+                          >
+                            Exportar JSON
+                          </Button>
+                          {employee.isActive !== false && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeactivateEmployee(employee)}
+                              disabled={deactivateEmployee.isPending}
+                            >
+                              Desactivar
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (
@@ -1365,13 +1425,59 @@ export default function AdminDashboard() {
                   </select>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => setMonthRange(0)} disabled={exportBusy}>
+                    Mes actual
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setMonthRange(-1)} disabled={exportBusy}>
+                    Mes anterior
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={exportOfficialPdf}
+                    disabled={exportBusy || !hasReportData}
+                  >
+                    Informe registro horario (PDF)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={exportCsv}
+                    disabled={exportBusy}
+                  >
+                    CSV gestoría
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={exportReportsToExcel}
+                    disabled={exportBusy || !hasReportData}
+                  >
+                    Excel completo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={exportReportsToPdf}
+                    disabled={exportBusy || !hasReportData}
+                  >
+                    PDF completo
+                  </Button>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground px-2">
+                    <input
+                      type="checkbox"
+                      checked={includeAuditHistory}
+                      onChange={(e) => setIncludeAuditHistory(e.target.checked)}
+                    />
+                    Incluir historial de cambios
+                  </label>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleSendTestNotification}
                     disabled={!selectedEmployeeId || sendTestNotification.isPending}
                   >
-                    {sendTestNotification.isPending ? "Enviando..." : "Enviar notificación de prueba"}
+                    {sendTestNotification.isPending ? "Enviando..." : "Notificación de prueba"}
                   </Button>
                   <Button
                     type="button"
@@ -1379,23 +1485,7 @@ export default function AdminDashboard() {
                     onClick={handleClearAllTimeclocks}
                     disabled={clearAllTimeclocks.isPending}
                   >
-                    {clearAllTimeclocks.isPending ? "Borrando..." : "Borrar todas las horas"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={exportReportsToExcel}
-                    disabled={!hasReportData}
-                  >
-                    Exportar Excel (horas + vacaciones + incidencias)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={exportReportsToPdf}
-                    disabled={!hasReportData}
-                  >
-                    Exportar PDF (horas + vacaciones + incidencias)
+                    {clearAllTimeclocks.isPending ? "Anulando..." : "Anular fichajes (masivo)"}
                   </Button>
                 </div>
 
@@ -1429,17 +1519,31 @@ export default function AdminDashboard() {
               <Accordion type="single" collapsible defaultValue="hours-register">
                 <AccordionItem value="hours-register">
                   <AccordionTrigger className="text-sm font-semibold text-foreground">
-                    Registro de horas ({filteredTimeclocks.length} fichajes, {totalHours.toFixed(2)} h)
+                    Registro de horas ({filteredTimeclocks.length} fichajes, {totalHours.toFixed(2)} h sin anulados)
                   </AccordionTrigger>
                   <AccordionContent className="pt-2">
                     <div className="space-y-2">
                 {filteredTimeclocks.length ? (
                   filteredTimeclocks.map((entry) => (
-                    <div key={entry.id} className="flex items-start justify-between gap-4 p-3 border border-border rounded-lg">
+                    <div
+                      key={entry.id}
+                      className={cn(
+                        "flex items-start justify-between gap-4 p-3 border border-border rounded-lg",
+                        entry.status === "voided" && "opacity-70 bg-muted/40"
+                      )}
+                    >
                       <div className="flex-1">
-                        <p className="text-sm text-foreground">
-                          {employeeNameById.get(entry.employeeId) || `Empleado #${entry.employeeId}`}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm text-foreground">
+                            {employeeNameById.get(entry.employeeId) || `Empleado #${entry.employeeId}`}
+                          </p>
+                          {timeclockStatusBadge(entry)}
+                          {entry.isLate && entry.status !== "voided" ? (
+                            <Badge variant="outline" className="text-amber-700">
+                              Tarde
+                            </Badge>
+                          ) : null}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           Entrada:{" "}
                           {entry.entryTime
@@ -1465,7 +1569,12 @@ export default function AdminDashboard() {
                             ? ` · ${new Date(entry.exitTime).toLocaleDateString("es-ES")}`
                             : ""}
                         </p>
-                        {editingTimeclockId !== entry.id && (
+                        {(entry.correctionReason || entry.voidReason) && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Motivo: {entry.correctionReason || entry.voidReason}
+                          </p>
+                        )}
+                        {editingTimeclockId !== entry.id && entry.status !== "voided" && (
                           <div className="mt-2">
                             <div className="flex flex-wrap gap-2">
                               <Button
@@ -1473,7 +1582,7 @@ export default function AdminDashboard() {
                                 variant="outline"
                                 onClick={() => handleEditTimeclock(entry)}
                               >
-                                Editar fichaje
+                                Corregir fichaje
                               </Button>
                               <Button
                                 size="sm"
@@ -1481,7 +1590,7 @@ export default function AdminDashboard() {
                                 onClick={() => handleDeleteTimeclock(entry)}
                                 disabled={deleteTimeclock.isPending}
                               >
-                                Borrar fichaje
+                                Anular fichaje
                               </Button>
                             </div>
                           </div>
@@ -1593,9 +1702,9 @@ export default function AdminDashboard() {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          {entry.isLate ? "Tarde" : "OK"}
-                        </span>
+                        {entry.status === "voided" ? (
+                          <span className="text-xs text-muted-foreground">No suma en totales</span>
+                        ) : null}
                       </div>
                     </div>
                   ))
@@ -1955,6 +2064,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="legal" className="space-y-6">
             <AdminLegalPanel />
+          </TabsContent>
+
+          <TabsContent value="audit" className="space-y-6">
+            <AdminAuditLogPanel />
           </TabsContent>
         </Tabs>
       </main>

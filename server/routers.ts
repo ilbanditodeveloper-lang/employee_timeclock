@@ -1,7 +1,7 @@
 import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { publicProcedure, router, deprecatedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { getDb } from "./db";
 import {
@@ -24,10 +24,10 @@ import {
   getTodayTimeclocksByEmployee,
   getLatestOpenTimeclockByEmployee,
   getLegalAcceptance,
-  listAuditLogsByCompany,
   listEmployeePrivacyAcceptances,
   listTimeclocksForEmployeeIds,
   listIncidentsForEmployeeIds,
+  registerBusinessTenant,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
 import { hashPassword } from "./_core/password";
@@ -41,7 +41,16 @@ import {
   normalizeCompanySlug,
 } from "./_core/authResolve";
 import { setSessionCookie, clearSessionCookie } from "./_core/session";
+import { checkRateLimit, checkRateLimitWithIp } from "./_core/rateLimit";
+import { getClientIp } from "./_core/requestIp";
+import { isUniqueViolation } from "./_core/errors";
+import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
 import { writeAuditLog } from "./_core/audit";
+import {
+  buildEmployeeExportBundle,
+  buildLaborReportBundle,
+  listAuditLogsFiltered,
+} from "./_core/laborReportBundle";
 import {
   restaurants,
   employees,
@@ -58,6 +67,25 @@ import {
 } from "../drizzle/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { format } from "date-fns";
+import { isDemoModeEnabled, isDemoRequestActive, buildDemoSession } from "./demo/mode";
+import {
+  demoAcceptPrivacy,
+  demoClockIn,
+  demoClockOut,
+  demoCreateSuperCompany,
+  demoMutationSuccess,
+  demoSetCompanyStatus,
+  demoUpdateCompanyLegal,
+  demoUpsertRestaurant,
+  getDemoScheduleMap,
+  getDemoSuperCompanies,
+  getDemoTimeOff,
+  getDemoNotificationLogs,
+  demoHasPrivacyAcceptance,
+  getDemoCompany,
+  getDemoRestaurant,
+  getDemoEmployees,
+} from "./demo/store";
 
 const optionalCreds = z.object({
   username: z.string().min(1).optional(),
@@ -99,13 +127,6 @@ function todayYmdInTimeZone(timeZone: string): string {
   return new Date().toLocaleDateString("en-CA", { timeZone });
 }
 
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== 'admin') {
-    throw new Error('Unauthorized: Admin access required');
-  }
-  return next({ ctx });
-});
-
 export const appRouter = router({
   system: systemRouter,
   
@@ -118,6 +139,106 @@ export const appRouter = router({
   }),
 
   publicApi: router({
+    getAppConfig: publicProcedure.query(() => ({
+      demoMode: isDemoModeEnabled(),
+      registrationAvailable: Boolean(process.env.DATABASE_URL?.trim()),
+    })),
+
+    registerBusiness: publicProcedure
+      .input(
+        z
+          .object({
+            businessName: z.string().trim().min(2, "El nombre del negocio es obligatorio"),
+            adminName: z.string().trim().min(2, "El nombre del responsable es obligatorio"),
+            email: z.string().trim().email("Introduce un email válido"),
+            password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+            confirmPassword: z.string().min(8),
+            country: z.string().trim().min(2).default("ES"),
+            timezone: z.string().trim().min(1).default("Europe/Madrid"),
+            phone: z.string().trim().optional(),
+            address: z.string().trim().optional(),
+            acceptedTerms: z.boolean().refine((value) => value === true, {
+              message: "Debes aceptar los términos y la política de privacidad",
+            }),
+          })
+          .refine((data) => data.password === data.confirmPassword, {
+            message: "Las contraseñas no coinciden",
+            path: ["confirmPassword"],
+          })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (!process.env.DATABASE_URL?.trim()) {
+          throw new Error(
+            "El registro requiere base de datos configurada. Configura DATABASE_URL en tu entorno."
+          );
+        }
+        const emailKey = input.email.trim().toLowerCase();
+        checkRateLimit(`register-business:ip:${getClientIp(ctx.req)}`, 15, 60_000);
+        checkRateLimit(`register-business:${emailKey}`, 5, 3_600_000);
+
+        let result;
+        try {
+          result = await registerBusinessTenant({
+            businessName: input.businessName,
+            adminName: input.adminName,
+            email: input.email,
+            passwordHash: hashPassword(input.password),
+            country: input.country,
+            timezone: input.timezone,
+            address: input.address,
+          });
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            throw new Error(DUPLICATE_ADMIN_EMAIL_MSG);
+          }
+          throw error;
+        }
+
+        await setSessionCookie(ctx.res, ctx.req, {
+          type: "admin",
+          companyId: result.companyId,
+          companySlug: result.companySlug,
+          userId: result.adminId,
+          displayName: result.adminUsername,
+        });
+
+        return {
+          success: true as const,
+          companySlug: result.companySlug,
+          companyName: result.companyName,
+          adminUsername: result.adminUsername,
+          adminEmail: result.adminEmail,
+          scopedLogin: `${result.companySlug}::${result.adminUsername}`,
+          autoLoggedIn: true,
+        };
+      }),
+
+    enterDemo: publicProcedure
+      .input(z.object({ role: z.enum(["admin", "employee", "superadmin"]) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!isDemoModeEnabled()) {
+          throw new Error("Modo demo no disponible. Configura DEMO_MODE=true o DATABASE_URL vacío.");
+        }
+        const session = buildDemoSession(input.role);
+        await setSessionCookie(ctx.res, ctx.req, session);
+        if (input.role === "employee") {
+          return {
+            success: true,
+            role: input.role,
+            employeeId: 1,
+            companySlug: "demo",
+            schedule: getDemoScheduleMap(),
+            lateGraceMinutes: 5,
+            locationEnabled: false,
+            needsPrivacyNotice: !demoHasPrivacyAcceptance(1),
+          };
+        }
+        if (input.role === "admin") {
+          return { success: true, role: input.role, companySlug: "demo" };
+        }
+        return { success: true, role: input.role };
+      }),
+
     superAdminLogin: publicProcedure
       .input(
         z.object({
@@ -126,26 +247,28 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        checkRateLimit(`superadmin-login:ip:${getClientIp(ctx.req)}`, 5, 60_000);
         requireSuperAdminCredentials({
           username: input.username,
           password: input.password,
         });
-        await setSessionCookie(ctx.res, ctx.req, { type: "superadmin" });
+        await setSessionCookie(ctx.res, ctx.req, {
+          type: "superadmin",
+          isDemo: isDemoModeEnabled(),
+          displayName: "Superadmin",
+        });
         return { success: true };
       }),
 
     superAdminListCompanies: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
-        })
+        optionalCreds
       )
       .query(async ({ ctx, input }) => {
-        requireSuperAdminCredentials({
-          username: input.username,
-          password: input.password,
-        });
+        await resolveSuperAdminAuth(ctx, input);
+        if (isDemoModeEnabled()) {
+          return getDemoSuperCompanies();
+        }
         const db = await getDb();
         if (!db) return [];
         const companyRows = await db.select().from(companies).orderBy(desc(companies.createdAt));
@@ -180,6 +303,9 @@ export const appRouter = router({
           username: input.username,
           password: input.password,
         });
+        if (isDemoModeEnabled()) {
+          return demoCreateSuperCompany(input);
+        }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const slug = normalizeCompanySlug(input.companySlug);
@@ -221,6 +347,9 @@ export const appRouter = router({
           username: input.username,
           password: input.password,
         });
+        if (isDemoModeEnabled()) {
+          return demoSetCompanyStatus(input.companyId, input.isActive);
+        }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const [company] = await db
@@ -320,6 +449,10 @@ export const appRouter = router({
         radiusMeters: z.number().default(100),
       })
     ).mutation(async ({ ctx, input }) => {
+      if (isDemoRequestActive()) {
+        await resolveAdminAuth(ctx, input);
+        return demoUpsertRestaurant(input);
+      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { admin, company } = await resolveAdminAuth(ctx, input);
@@ -610,7 +743,9 @@ export const appRouter = router({
 
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      await db.delete(incidents).where(inArray(incidents.employeeId, employeeIds));
+      await db.delete(incidents).where(
+        and(inArray(incidents.employeeId, employeeIds), eq(incidents.companyId, company.id))
+      );
 
       return { success: true };
     }),
@@ -714,6 +849,7 @@ export const appRouter = router({
       })
     ).query(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
+      if (isDemoRequestActive()) return getDemoNotificationLogs();
       const restaurant = await getRestaurantByAdmin(admin.id, company.id);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -1089,6 +1225,9 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const employee = await resolveEmployeeAuth(ctx, input);
+      if (isDemoRequestActive()) {
+        return { ...demoClockIn(employee.id), isLate: false };
+      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const company = await getCompanyById(employee.companyId);
@@ -1157,6 +1296,9 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const employee = await resolveEmployeeAuth(ctx, input);
+      if (isDemoRequestActive()) {
+        return demoClockOut(employee.id);
+      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const company = await getCompanyById(employee.companyId);
@@ -1201,6 +1343,9 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const employee = await resolveEmployeeAuth(ctx, input);
+      if (isDemoRequestActive()) {
+        return { ...demoClockIn(employee.id), isLate: false };
+      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.insert(incidents).values({
@@ -1362,6 +1507,7 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
+        if (isDemoRequestActive()) return getDemoTimeOff(input.status);
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) return [];
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
@@ -1396,6 +1542,10 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        if (isDemoRequestActive()) {
+          await resolveAdminAuth(ctx, input);
+          return demoMutationSuccess();
+        }
         const { admin, company } = await resolveAdminAuth(ctx, input);
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) throw new Error("Restaurant not found");
@@ -1435,6 +1585,7 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
+        if (isDemoRequestActive()) return { days: [] };
         const restaurant = await getRestaurantByAdmin(admin.id, company.id);
         if (!restaurant) {
           return {
@@ -1514,6 +1665,7 @@ export const appRouter = router({
 
         const employee = await resolveEmployeeAuth(ctx, input);
 
+        // endpoint UNIQUE globally: same browser reassigns to latest employee on subscribe.
         const existing = await db
           .select()
           .from(pushSubscriptions)
@@ -1661,6 +1813,7 @@ export const appRouter = router({
     updateCompanyLegal: publicProcedure
       .input(
         optionalCreds.extend({
+          name: z.string().min(2).optional(),
           legalName: z.string().optional(),
           taxId: z.string().optional(),
           address: z.string().optional(),
@@ -1669,13 +1822,35 @@ export const appRouter = router({
           timezone: z.string().optional(),
           locationEnabled: z.boolean().optional(),
           dataRetentionYears: z.number().min(4).max(10).optional(),
+          legalOnboardingAcknowledged: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const { company, admin } = await resolveAdminAuth(ctx, input);
+        if (isDemoRequestActive()) {
+          const update: Record<string, unknown> = { updatedAt: new Date() };
+          if (input.name !== undefined) update.name = input.name.trim();
+          if (input.legalName !== undefined) update.legalName = input.legalName.trim() || null;
+          if (input.taxId !== undefined) update.taxId = input.taxId.trim() || null;
+          if (input.address !== undefined) update.address = input.address.trim() || null;
+          if (input.privacyContactEmail !== undefined) {
+            update.privacyContactEmail = input.privacyContactEmail.trim() || null;
+          }
+          if (input.country !== undefined) update.country = input.country;
+          if (input.timezone !== undefined) update.timezone = input.timezone;
+          if (input.locationEnabled !== undefined) update.locationEnabled = input.locationEnabled;
+          if (input.dataRetentionYears !== undefined) {
+            update.dataRetentionYears = input.dataRetentionYears;
+          }
+          if (input.legalOnboardingAcknowledged) {
+            update.onboardingLegalAcknowledgedAt = new Date();
+          }
+          return demoUpdateCompanyLegal(update);
+        }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const update: Record<string, unknown> = { updatedAt: new Date() };
+        if (input.name !== undefined) update.name = input.name.trim();
         if (input.legalName !== undefined) update.legalName = input.legalName.trim() || null;
         if (input.taxId !== undefined) update.taxId = input.taxId.trim() || null;
         if (input.address !== undefined) update.address = input.address.trim() || null;
@@ -1688,6 +1863,9 @@ export const appRouter = router({
         if (input.dataRetentionYears !== undefined) {
           update.dataRetentionYears = input.dataRetentionYears;
         }
+        if (input.legalOnboardingAcknowledged) {
+          update.onboardingLegalAcknowledgedAt = new Date();
+        }
         await db.update(companies).set(update).where(eq(companies.id, company.id));
         await writeAuditLog({
           companyId: company.id,
@@ -1699,6 +1877,93 @@ export const appRouter = router({
           performedById: admin.id,
         });
         return { success: true };
+      }),
+
+    getOnboardingStatus: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
+      if (ctx.session?.isDemo && ctx.session.type === "admin") {
+        const restaurant = getDemoRestaurant();
+        return {
+          onboardingCompleted: true,
+          onboardingSkippedAt: null,
+          onboardingCompletedAt: new Date(),
+          onboardingLegalAcknowledgedAt: new Date(),
+          employeeCount: getDemoEmployees().length,
+          hasRestaurant: true,
+          company: getDemoCompany(),
+          restaurant,
+        };
+      }
+      const { admin, company } = await resolveAdminAuth(ctx, input);
+      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const employeeList = restaurant
+        ? await getEmployeesByRestaurant(restaurant.id, company.id)
+        : [];
+      return {
+        onboardingCompleted: company.onboardingCompleted,
+        onboardingSkippedAt: company.onboardingSkippedAt,
+        onboardingCompletedAt: company.onboardingCompletedAt,
+        onboardingLegalAcknowledgedAt: company.onboardingLegalAcknowledgedAt,
+        employeeCount: employeeList.length,
+        hasRestaurant: Boolean(restaurant),
+        company,
+        restaurant: restaurant ?? null,
+      };
+    }),
+
+    skipOnboarding: publicProcedure.input(optionalCreds).mutation(async ({ ctx, input }) => {
+      if (ctx.session?.isDemo && ctx.session.type === "admin") {
+        return { success: true as const };
+      }
+      const { company } = await resolveAdminAuth(ctx, input);
+      if (company.onboardingCompleted) {
+        return { success: true as const };
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const now = new Date();
+      await db
+        .update(companies)
+        .set({ onboardingSkippedAt: now, updatedAt: now })
+        .where(eq(companies.id, company.id));
+      return { success: true as const };
+    }),
+
+    completeOnboarding: publicProcedure
+      .input(
+        optionalCreds.extend({
+          legalAcknowledged: z.boolean().refine((value) => value === true, {
+            message: "Debes confirmar la revisión de los textos legales",
+          }),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.session?.isDemo && ctx.session.type === "admin") {
+          return { success: true as const };
+        }
+        const { company, admin } = await resolveAdminAuth(ctx, input);
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const now = new Date();
+        await db
+          .update(companies)
+          .set({
+            onboardingCompleted: true,
+            onboardingCompletedAt: now,
+            onboardingSkippedAt: null,
+            onboardingLegalAcknowledgedAt: company.onboardingLegalAcknowledgedAt ?? now,
+            updatedAt: now,
+          })
+          .where(eq(companies.id, company.id));
+        await writeAuditLog({
+          companyId: company.id,
+          entityType: "company",
+          entityId: company.id,
+          action: "complete_onboarding",
+          newValue: { onboardingCompleted: true },
+          performedByType: "admin",
+          performedById: admin.id,
+        });
+        return { success: true as const };
       }),
 
     getPublicCompanyLegal: publicProcedure
@@ -1728,6 +1993,13 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const employee = await resolveEmployeeAuth(ctx, input);
+        if (isDemoRequestActive()) {
+          const ip =
+            (ctx.req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
+            ctx.req.socket.remoteAddress ??
+            null;
+          return demoAcceptPrivacy(employee.id, ip);
+        }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const existing = await getLegalAcceptance(
@@ -1751,10 +2023,65 @@ export const appRouter = router({
       }),
 
     listAuditLogs: publicProcedure
-      .input(optionalCreds.extend({ limit: z.number().min(1).max(500).optional() }))
+      .input(
+        optionalCreds.extend({
+          dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          entityType: z.enum(["timeclock", "employee", "company", "incident"]).optional(),
+          action: z.string().optional(),
+          employeeId: z.number().optional(),
+          limit: z.number().min(1).max(500).optional(),
+        })
+      )
       .query(async ({ ctx, input }) => {
         const { company } = await resolveAdminAuth(ctx, input);
-        return listAuditLogsByCompany(company.id, input.limit ?? 100);
+        const now = new Date();
+        const defaultFrom = new Date(now);
+        defaultFrom.setDate(defaultFrom.getDate() - 30);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const defaultFromStr = `${defaultFrom.getFullYear()}-${pad(defaultFrom.getMonth() + 1)}-${pad(defaultFrom.getDate())}`;
+        const defaultToStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        return listAuditLogsFiltered({
+          companyId: company.id,
+          dateFrom: input.dateFrom ?? defaultFromStr,
+          dateTo: input.dateTo ?? defaultToStr,
+          entityType: input.entityType,
+          action: input.action,
+          employeeId: input.employeeId,
+          limit: input.limit ?? 200,
+        });
+      }),
+
+    getLaborReportBundle: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number().optional(),
+          dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          includeAuditHistory: z.boolean().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        return buildLaborReportBundle({
+          companyId: company.id,
+          adminId: admin.id,
+          employeeId: input.employeeId,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+          includeAuditHistory: input.includeAuditHistory ?? false,
+        });
+      }),
+
+    exportEmployeeData: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        return buildEmployeeExportBundle(company.id, admin.id, input.employeeId);
       }),
 
     deactivateEmployee: publicProcedure
@@ -1794,316 +2121,98 @@ export const appRouter = router({
       }),
   }),
 
-  // Restaurant management
+  // Legacy routers (deprecated — blocked; use publicApi.*)
   restaurant: router({
-    getByAdmin: adminProcedure.query(async ({ ctx }) => {
-      return await getRestaurantByAdmin(ctx.user.id);
-    }),
-    
-    create: adminProcedure.input(z.object({
-      name: z.string().min(1),
-      address: z.string(),
-      latitude: z.number(),
-      longitude: z.number(),
-      radiusMeters: z.number().default(100),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const result = await db.insert(restaurants).values({
-        companyId: ctx.user.companyId ?? 1,
-        name: input.name,
-        address: input.address,
-        latitude: input.latitude.toString(),
-        longitude: input.longitude.toString(),
-        radiusMeters: input.radiusMeters,
-        adminId: ctx.user.id,
-      });
-      
-      return { success: true };
-    }),
-
-    update: adminProcedure.input(z.object({
-      id: z.number(),
-      name: z.string().optional(),
-      address: z.string().optional(),
-      latitude: z.number().optional(),
-      longitude: z.number().optional(),
-      radiusMeters: z.number().optional(),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const restaurant = await getRestaurantById(input.id);
-      if (!restaurant || restaurant.adminId !== ctx.user.id) {
-        throw new Error('Unauthorized');
-      }
-      
-      const updateData: any = {};
-      if (input.name) updateData.name = input.name;
-      if (input.address) updateData.address = input.address;
-      if (input.latitude) updateData.latitude = input.latitude.toString();
-      if (input.longitude) updateData.longitude = input.longitude.toString();
-      if (input.radiusMeters) updateData.radiusMeters = input.radiusMeters;
-      
-      await db.update(restaurants).set(updateData).where(eq(restaurants.id, input.id));
-      return { success: true };
-    }),
+    getByAdmin: deprecatedProcedure.query(() => null as never),
+    create: deprecatedProcedure
+      .input(
+        z.object({
+          name: z.string(),
+          address: z.string(),
+          latitude: z.number(),
+          longitude: z.number(),
+          radiusMeters: z.number().optional(),
+        })
+      )
+      .mutation(() => ({ success: true as const })),
+    update: deprecatedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(() => ({ success: true as const })),
   }),
 
-  // Employee management
   employee: router({
-    list: adminProcedure.query(async ({ ctx }) => {
-      const restaurant = await getRestaurantByAdmin(ctx.user.id);
-      if (!restaurant) return [];
-      return await getEmployeesByRestaurant(restaurant.id);
-    }),
-
-    create: adminProcedure.input(z.object({
-      name: z.string().min(1),
-      username: z.string().min(3),
-      password: z.string().min(6),
-      phone: z.string().optional(),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const restaurant = await getRestaurantByAdmin(ctx.user.id);
-      if (!restaurant) throw new Error('Restaurant not found');
-      
-      const result = await db.insert(employees).values({
-        companyId: restaurant.companyId,
-        restaurantId: restaurant.id,
-        name: input.name,
-        username: input.username,
-        password: hashPassword(input.password),
-        phone: input.phone,
-        isActive: true,
-      });
-      
-      return { success: true };
-    }),
-
-    getById: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-      return await getEmployeeById(input);
-    }),
+    list: deprecatedProcedure.query(() => [] as never),
+    create: deprecatedProcedure
+      .input(
+        z.object({
+          name: z.string(),
+          username: z.string(),
+          password: z.string(),
+          phone: z.string().optional(),
+        })
+      )
+      .mutation(() => ({ success: true as const })),
+    getById: deprecatedProcedure.input(z.number()).query(() => null as never),
   }),
 
-  // Schedule management
   schedule: router({
-    getByEmployee: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-      return await getSchedulesByEmployee(input);
-    }),
-
-    create: adminProcedure.input(z.object({
-      employeeId: z.number(),
-      dayOfWeek: z.number().min(0).max(6),
-      entryTime: z.string(),
-      exitTime: z.string().optional(),
-      isWorkDay: z.boolean().default(true),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const employee = await getEmployeeById(input.employeeId);
-      if (!employee) throw new Error('Employee not found');
-      
-      const restaurant = await getRestaurantById(employee.restaurantId);
-      if (!restaurant || restaurant.adminId !== ctx.user.id) {
-        throw new Error('Unauthorized');
-      }
-      
-      await db.insert(schedules).values({
-        companyId: employee.companyId,
-        employeeId: input.employeeId,
-        dayOfWeek: input.dayOfWeek,
-        entryTime: input.entryTime,
-        exitTime: input.exitTime,
-        isWorkDay: input.isWorkDay,
-      });
-      
-      return { success: true };
-    }),
+    getByEmployee: deprecatedProcedure.input(z.number()).query(() => [] as never),
+    create: deprecatedProcedure
+      .input(
+        z.object({
+          employeeId: z.number(),
+          dayOfWeek: z.number(),
+          entryTime: z.string(),
+          exitTime: z.string().optional(),
+          isWorkDay: z.boolean().optional(),
+        })
+      )
+      .mutation(() => ({ success: true as const })),
   }),
 
-  // Timeclock management
   timeclock: router({
-    getByEmployee: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-      return await getTimeclocksByEmployee(input);
-    }),
-
-    clockIn: protectedProcedure.input(z.object({
-      employeeId: z.number(),
-      latitude: z.number(),
-      longitude: z.number(),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const employee = await getEmployeeById(input.employeeId);
-      if (!employee) throw new Error('Employee not found');
-      
-      const restaurant = await getRestaurantById(employee.restaurantId);
-      if (!restaurant) throw new Error('Restaurant not found');
-      
-      // Validate location
-      const distance = calculateDistance(
-        parseFloat(restaurant.latitude.toString()),
-        parseFloat(restaurant.longitude.toString()),
-        input.latitude,
-        input.longitude
-      );
-      
-      if (distance > restaurant.radiusMeters) {
-        throw new Error('You are not at the restaurant location');
-      }
-      
-      // Check if there is any active open record
-      const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId);
-      if (openRecord) {
-        throw new Error('You must clock out before clocking in again');
-      }
-      
-      // Check if late
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const todayTimeclocks = await getTodayTimeclocksByEmployee(input.employeeId, now);
-      const completedShifts = todayTimeclocks.filter(tc => tc.exitTime).length;
-      const schedule =
-        completedShifts === 0
-          ? await getScheduleByEmployeeAndDay(input.employeeId, dayOfWeek)
-          : completedShifts === 1
-          ? await getScheduleByEmployeeDayAndSlot(input.employeeId, dayOfWeek, 2)
-          : undefined;
-      
-      let isLate = false;
-      const graceMinutes = employee.lateGraceMinutes ?? 5;
-      if (schedule) {
-        const parsed = parseScheduleTime(schedule.entryTime);
-        if (parsed) {
-          const scheduleTime = new Date();
-          scheduleTime.setHours(parsed.hour, parsed.minute, 0, 0);
-          const graceTime = new Date(scheduleTime.getTime() + graceMinutes * 60 * 1000);
-          
-          if (now > graceTime) {
-            isLate = true;
-          }
-        }
-      }
-      
-      await db.insert(timeclocks).values({
-        companyId: employee.companyId,
-        employeeId: input.employeeId,
-        entryTime: now,
-        isLate,
-        latitude: input.latitude.toString(),
-        longitude: input.longitude.toString(),
-      });
-      
-      return { success: true, isLate };
-    }),
-
-    clockOut: protectedProcedure.input(z.object({
-      employeeId: z.number(),
-      latitude: z.number(),
-      longitude: z.number(),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const employee = await getEmployeeById(input.employeeId);
-      if (!employee) throw new Error('Employee not found');
-      
-      const restaurant = await getRestaurantById(employee.restaurantId);
-      if (!restaurant) throw new Error('Restaurant not found');
-      
-      // Validate location
-      const distance = calculateDistance(
-        parseFloat(restaurant.latitude.toString()),
-        parseFloat(restaurant.longitude.toString()),
-        input.latitude,
-        input.longitude
-      );
-      
-      if (distance > restaurant.radiusMeters) {
-        throw new Error('You are not at the restaurant location');
-      }
-      
-      // Get latest active timeclock entry
-      const todayRecord = await getLatestOpenTimeclockByEmployee(input.employeeId);
-      
-      if (!todayRecord) {
-        throw new Error('No active timeclock entry found');
-      }
-      
-      const now = new Date();
-      await db.update(timeclocks).set({
-        exitTime: now,
-      }).where(eq(timeclocks.id, todayRecord.id));
-      
-      return { success: true };
-    }),
+    getByEmployee: deprecatedProcedure.input(z.number()).query(() => [] as never),
+    clockIn: deprecatedProcedure
+      .input(
+        z.object({
+          employeeId: z.number(),
+          latitude: z.number(),
+          longitude: z.number(),
+        })
+      )
+      .mutation(() => ({ success: true as const, isLate: false })),
+    clockOut: deprecatedProcedure
+      .input(
+        z.object({
+          employeeId: z.number(),
+          latitude: z.number(),
+          longitude: z.number(),
+        })
+      )
+      .mutation(() => ({ success: true as const })),
   }),
 
-  // Incident management
   incident: router({
-    getByEmployee: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
-      return await getIncidentsByEmployee(input);
-    }),
-
-    create: protectedProcedure.input(z.object({
-      employeeId: z.number(),
-      timeclockId: z.number().optional(),
-      type: z.enum(['late_arrival', 'early_exit', 'other']),
-      reason: z.string().min(1),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      await db.insert(incidents).values({
-        companyId: ctx.user.companyId ?? 1,
-        employeeId: input.employeeId,
-        timeclockId: input.timeclockId,
-        type: input.type,
-        reason: input.reason,
-        status: 'pending',
-      });
-      
-      return { success: true };
-    }),
-
-    list: adminProcedure.query(async ({ ctx }) => {
-      const db = await getDb();
-      if (!db) return [];
-      
-      const restaurant = await getRestaurantByAdmin(ctx.user.id);
-      if (!restaurant) return [];
-      
-      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id);
-      const employeeIds = restaurantEmployees.map(e => e.id);
-      
-      if (employeeIds.length === 0) return [];
-      
-      const allIncidents = await db.select().from(incidents);
-      return allIncidents.filter(inc => employeeIds.includes(inc.employeeId));
-    }),
-
-    updateStatus: adminProcedure.input(z.object({
-      id: z.number(),
-      status: z.enum(['pending', 'approved', 'rejected']),
-    })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
-      
-      const incident = await getIncidentById(input.id);
-      if (!incident) throw new Error('Incident not found');
-      
-      await db.update(incidents).set({
-        status: input.status,
-      }).where(eq(incidents.id, input.id));
-      
-      return { success: true };
-    }),
+    getByEmployee: deprecatedProcedure.input(z.number()).query(() => [] as never),
+    create: deprecatedProcedure
+      .input(
+        z.object({
+          employeeId: z.number(),
+          timeclockId: z.number().optional(),
+          type: z.enum(["late_arrival", "early_exit", "other"]),
+          reason: z.string(),
+        })
+      )
+      .mutation(() => ({ success: true as const })),
+    list: deprecatedProcedure.query(() => [] as never),
+    updateStatus: deprecatedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          status: z.enum(["pending", "approved", "rejected"]),
+        })
+      )
+      .mutation(() => ({ success: true as const })),
   }),
 
 });

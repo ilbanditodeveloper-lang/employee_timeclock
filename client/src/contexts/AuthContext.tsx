@@ -71,9 +71,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         needsPrivacyNotice: prev?.needsPrivacyNotice,
       }));
       setAdminSession(null);
+    } else {
+      setAdminSession(null);
+      setEmployeeSession(null);
     }
     setHydrated(true);
-  }, [sessionQuery.isFetched, sessionQuery.data]);
+  }, [sessionQuery.isFetched, sessionQuery.data, sessionQuery.isError]);
 
   const clearAllSessions = () => {
     setAdminSession(null);
@@ -87,9 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAdminSession,
       setEmployeeSession,
       clearAllSessions,
-      isAuthLoading: !hydrated && sessionQuery.isLoading,
+      isAuthLoading: !hydrated && (sessionQuery.isLoading || sessionQuery.isFetching),
     }),
-    [adminSession, employeeSession, hydrated, sessionQuery.isLoading]
+    [adminSession, employeeSession, hydrated, sessionQuery.isLoading, sessionQuery.isFetching]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

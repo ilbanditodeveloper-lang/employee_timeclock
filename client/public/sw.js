@@ -1,4 +1,4 @@
-const CACHE_NAME = "timeclock-v2";
+const CACHE_NAME = "timeclock-v3";
 const PRECACHE_URLS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", event => {
@@ -31,8 +31,13 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
 
-  // Never cache API calls.
-  if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) {
+  // Never cache API, tRPC, health or auth-related routes.
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith("/api/") ||
+      url.pathname.startsWith("/api/trpc") ||
+      url.pathname === "/healthz")
+  ) {
     event.respondWith(fetch(event.request));
     return;
   }

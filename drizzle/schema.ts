@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const userRoleEnum = pgEnum("user_role", ["employee", "admin"]);
 export const incidentTypeEnum = pgEnum("incident_type", ["late_arrival", "early_exit", "other"]);
@@ -49,6 +49,10 @@ export const companies = pgTable("companies", {
   locationEnabled: boolean("locationEnabled").default(false).notNull(),
   dataRetentionYears: integer("dataRetentionYears").default(4).notNull(),
   termsAcceptedAt: timestamp("termsAcceptedAt"),
+  onboardingCompleted: boolean("onboardingCompleted").default(false).notNull(),
+  onboardingCompletedAt: timestamp("onboardingCompletedAt"),
+  onboardingSkippedAt: timestamp("onboardingSkippedAt"),
+  onboardingLegalAcknowledgedAt: timestamp("onboardingLegalAcknowledgedAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -61,21 +65,31 @@ export type InsertCompany = typeof companies.$inferInsert;
  * Core user table backing auth flow.
  * Extended with employee-specific fields for the timeclock system.
  */
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  companyId: integer("companyId").default(1).notNull(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  password: varchar("password", { length: 255 }), // For employee login
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: userRoleEnum("role").default("employee").notNull(),
-  employeeId: integer("employeeId"), // Reference to employee table
-  restaurantId: integer("restaurantId"), // Reference to restaurant (for admin)
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").default(1).notNull(),
+    openId: varchar("openId", { length: 64 }).notNull().unique(),
+    name: text("name"),
+    email: varchar("email", { length: 320 }),
+    password: varchar("password", { length: 255 }), // For employee login
+    loginMethod: varchar("loginMethod", { length: 64 }),
+    role: userRoleEnum("role").default("employee").notNull(),
+    employeeId: integer("employeeId"), // Reference to employee table
+    restaurantId: integer("restaurantId"), // Reference to restaurant (for admin)
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+    lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  },
+  (table) => ({
+    adminEmailLowerUnique: uniqueIndex("users_admin_email_lower_unique_idx")
+      .on(sql`lower(trim(${table.email}))`)
+      .where(
+        sql`${table.email} IS NOT NULL AND trim(${table.email}) <> '' AND ${table.role} = 'admin' AND ${table.openId} LIKE 'local-admin-%'`
+      ),
+  })
+);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

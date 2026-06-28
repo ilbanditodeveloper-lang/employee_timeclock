@@ -1,140 +1,170 @@
-# Configuración de Supabase
+# Configuración de Supabase — TimeClock
 
-Esta guía te ayudará a configurar Supabase como base de datos para TimeClock.
+Guía para **local**, **staging** y **production**. Usa **proyectos Supabase separados** por entorno; nunca mezcles datos TEST con producción.
 
-## Paso 1: Crear Proyecto en Supabase
+## Entornos
 
-1. Accede a [supabase.com](https://supabase.com)
-2. Haz clic en "New Project"
-3. Selecciona tu organización
-4. Configura:
-   - **Project name**: `employee_timeclock`
-   - **Database password**: Crea una contraseña segura
-   - **Region**: Selecciona la más cercana a ti
-5. Haz clic en "Create new project"
+| Entorno | Proyecto Supabase | Datos TEST | DEMO_MODE |
+|---------|-------------------|------------|-----------|
+| Local/dev | Propio o staging | Permitido | Permitido |
+| Staging | `timeclock-staging` | Permitido | Permitido |
+| Production | `timeclock-production` | **Prohibido** | **Prohibido** |
 
-## Paso 2: Obtener Credenciales
+## Paso 1: Crear proyectos
 
-Una vez creado el proyecto:
+1. [supabase.com](https://supabase.com) → **New Project**
+2. Repetir para staging y production
+3. Configuración recomendada:
+   - **Region**: UE (Frankfurt `eu-central-1` o equivalente)
+   - **Database password**: contraseña fuerte, distinta por proyecto
+   - **Project name**: `timeclock-staging`, `timeclock-production`
 
-1. Ve a "Settings" → "Database"
-2. Copia la **Connection String** (URI)
-3. Reemplaza `[YOUR-PASSWORD]` con la contraseña que creaste
+## Paso 2: URLs de conexión
 
-La URL tendrá este formato:
+Settings → **Database** → Connection string.
+
+### App runtime (pooler) — usar en `DATABASE_URL`
+
+Para la aplicación en Render/Railway usa el **Transaction pooler** (puerto **6543**):
+
 ```
-postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
+postgresql://postgres.[ref]:[PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
 ```
 
-## Paso 3: Configurar Variables de Entorno
+Ventajas: más conexiones concurrentes, adecuado para serverless/long-running Node.
 
-Actualiza tu `.env.local`:
+### Migraciones (conexión directa) — solo CLI local/CI
+
+Para `pnpm db:migrate` usa conexión **directa** (puerto **5432**):
+
+```
+postgresql://postgres:[PASSWORD]@db.[ref].supabase.co:5432/postgres
+```
+
+Puedes exportar temporalmente:
+
+```bash
+# Windows PowerShell
+$env:DATABASE_URL="postgresql://postgres:...@db.xxxx.supabase.co:5432/postgres"
+pnpm db:migrate
+```
+
+En Render, ejecuta migraciones desde tu máquina o CI apuntando a la URL directa **antes** del deploy, no en cada start.
+
+## Paso 3: Variables de entorno
+
+Ver [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md).
 
 ```env
-DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
+# .env.local (dev) — pooler o directo según prefieras en local
+DATABASE_URL=postgresql://postgres.[ref]:[PASSWORD]@...pooler.supabase.com:6543/postgres
 ```
 
-## Paso 4: Crear Tablas
+**Nunca** commitear `.env.local` ni URLs con password.
 
-Ejecuta las migraciones:
+## Paso 4: Migraciones
+
+### Desarrollo (primera vez o cambio de esquema)
 
 ```bash
-pnpm db:push
+pnpm db:generate   # solo si cambiaste schema en código
+pnpm db:migrate
 ```
 
-Esto creará automáticamente todas las tablas necesarias.
+### Staging / Production
 
-## Paso 5: Verificar Conexión
-
-Accede al panel de Supabase y ve a "SQL Editor" para verificar que las tablas se crearon correctamente.
-
-## Configuración Adicional
-
-### Habilitar Row Level Security (RLS)
-
-Para mayor seguridad, habilita RLS en Supabase:
-
-1. Ve a "Authentication" → "Policies"
-2. Habilita RLS para cada tabla
-3. Crea políticas según tus necesidades
-
-### Backups Automáticos
-
-Supabase realiza backups automáticos. Para configurarlos:
-
-1. Ve a "Settings" → "Backups"
-2. Configura la frecuencia de backups
-3. Descarga backups cuando sea necesario
-
-### Monitoreo
-
-Para monitorear tu base de datos:
-
-1. Ve a "Reports" para ver estadísticas
-2. Ve a "Logs" para ver consultas
-3. Usa "Monitoring" para alertas
-
-## Despliegue en Vercel con Supabase
-
-### 1. Agregar Variables a Vercel
-
-En tu proyecto de Vercel:
-
-1. Ve a "Settings" → "Environment Variables"
-2. Agrega:
-   - `DATABASE_URL`: Tu URL de Supabase
-   - Todas las demás variables de `.env.example`
-
-### 2. Desplegar
+**Siempre** migraciones controladas, nunca `db:push` con generate sin revisar:
 
 ```bash
-git push origin main
+pnpm db:migrate
+node scripts/verify-production-db.mjs --production   # o --staging
 ```
 
-Vercel automáticamente desplegará con las nuevas variables.
+Migraciones actuales: `drizzle/0000` … `drizzle/0008` (incluye compliance, onboarding, índice email admin único).
+
+## Paso 5: Verificar esquema
+
+```bash
+node scripts/verify-production-db.mjs --staging
+node scripts/verify-production-db.mjs --production
+```
+
+Comprueba tablas clave, índice `users_admin_email_lower_unique_idx`, ausencia de datos TEST en prod.
+
+## Backups
+
+1. Settings → **Database** → **Backups**
+2. Activar backups diarios (plan Pro recomendado en production)
+3. Descargar backup manual antes de migraciones importantes
+
+Detalle: [docs/BACKUP_AND_RECOVERY.md](./docs/BACKUP_AND_RECOVERY.md)
+
+## Datos TEST — reglas
+
+| Patrón | Acción en prod |
+|--------|----------------|
+| Companies slug `test-*` | Preflight **falla** |
+| Users `@example.com` | Preflight **falla** |
+| Nombres con prefijo TEST | Preflight **falla** |
+
+Limpieza solo staging/dev:
+
+```bash
+node scripts/inventory-test-data.mjs
+node scripts/cleanup-test-data.mjs --confirm
+```
+
+## Deploy con Render (recomendado)
+
+No uses Vercel para el SaaS completo. Ver [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+
+En Render:
+
+1. `DATABASE_URL` = pooler (6543) del proyecto correcto (staging vs prod)
+2. Build incluye `VITE_*` del entorno
+3. Tras migraciones: `verify-production-db` + preflight
+
+## Row Level Security (RLS)
+
+La app usa Drizzle + JWT propio, no Supabase Auth. RLS es opcional; si lo activas, define políticas que no bloqueen la conexión `postgres` de la app.
 
 ## Troubleshooting
 
-### Error: "FATAL: password authentication failed"
+### `password authentication failed`
 
-- Verifica que la contraseña es correcta
-- Asegúrate de haber reemplazado `[YOUR-PASSWORD]`
-- Intenta resetear la contraseña en Supabase
+- Contraseña correcta en URL (URL-encode caracteres especiales)
+- Proyecto activo, región correcta
 
-### Error: "Connection refused"
+### `Connection refused` / timeout
 
-- Verifica que el proyecto está activo
-- Comprueba que la región es correcta
-- Intenta desde otro navegador
+- Usar pooler (6543) en runtime
+- Usar directo (5432) solo para migraciones
+- Comprobar IP allowlist si está configurada
 
-### Las tablas no se crearon
+### Tablas faltantes
 
 ```bash
-# Limpia y reinicia
-pnpm db:push --force
+pnpm db:migrate
+node scripts/verify-production-db.mjs --staging
 ```
 
-## Recursos Útiles
+### Emails admin duplicados
 
-- [Documentación de Supabase](https://supabase.com/docs)
-- [Drizzle ORM con PostgreSQL](https://orm.drizzle.team/docs/get-started-postgresql)
-- [Supabase SQL Editor](https://supabase.com/docs/guides/database/overview)
+```bash
+node scripts/check-admin-email-duplicates.mjs
+```
 
 ## Seguridad
 
-### Mejores Prácticas
+1. Proyectos **separados** staging / production
+2. Passwords y `DATABASE_URL` solo en variables de entorno
+3. Backups regulares en production
+4. No restaurar prod en máquinas de dev sin anonimizar
+5. Rotar password si hay sospecha de filtración → actualizar Render + redeploy
 
-1. **Nunca compartas tu DATABASE_URL** en repositorios públicos
-2. **Usa variables de entorno** en producción
-3. **Habilita RLS** para proteger datos
-4. **Crea backups regulares** de tu base de datos
-5. **Monitorea accesos** a través de los logs
+## Recursos
 
-### Cambiar Contraseña
-
-Si necesitas cambiar la contraseña:
-
-1. Ve a "Settings" → "Database"
-2. Haz clic en "Reset password"
-3. Actualiza tu `DATABASE_URL`
-4. Redeploy tu aplicación
+- [Supabase Docs](https://supabase.com/docs)
+- [Drizzle PostgreSQL](https://orm.drizzle.team/docs/get-started-postgresql)
+- [ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
+- [DEPLOYMENT.md](./docs/DEPLOYMENT.md)

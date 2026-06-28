@@ -5,12 +5,21 @@ import {
   getEmployeeById,
   getEmployeeByUsername,
   getLocalAdminByCompany,
+  getAdminUserByEmail,
 } from "../db";
 import { hashPassword, verifyPassword } from "./password";
 import { getDb } from "../db";
 import { employees, users } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
-import { checkRateLimit } from "./rateLimit";
+import { checkRateLimit, checkRateLimitWithIp } from "./rateLimit";
+import { getClientIp } from "./requestIp";
+import { GENERIC_AUTH_FAILURE_MSG } from "@shared/const";
+import {
+  getDemoAdmin,
+  getDemoCompany,
+  getDemoEmployeeById,
+} from "../demo/store";
+import { isDemoRequestActive } from "../demo/mode";
 
 export function parseScopedUsername(rawValue: string): { companySlug: string; username: string } {
   const raw = rawValue.trim();
@@ -42,15 +51,48 @@ export function requireSuperAdminCredentials(params: { username: string; passwor
     );
   }
   if (params.username !== expectedUsername || params.password !== expectedPassword) {
-    throw new Error("Credenciales de superadmin inválidas");
+    throw new Error(GENERIC_AUTH_FAILURE_MSG);
   }
 }
 
 export async function requireAdminUser(params: {
   username: string;
   password: string;
+  clientIp?: string;
 }) {
-  checkRateLimit(`admin-login:${params.username}`);
+  const ip = params.clientIp ?? "unknown";
+  checkRateLimitWithIp("admin-login", ip, params.username);
+  const raw = params.username.trim();
+
+  if (raw.includes("@") && !raw.includes("::")) {
+    const normalizedEmail = raw.toLowerCase();
+    const existingAdmin = await getAdminUserByEmail(normalizedEmail);
+    if (!existingAdmin) {
+      throw new Error(GENERIC_AUTH_FAILURE_MSG);
+    }
+    const company = await getCompanyById(existingAdmin.companyId);
+    if (!company || !company.isActive) {
+      throw new Error("Empresa no disponible");
+    }
+
+    const check = verifyPassword(params.password, existingAdmin.password);
+    if (!check.isValid) {
+      throw new Error(GENERIC_AUTH_FAILURE_MSG);
+    }
+
+    if (check.needsUpgrade) {
+      const db = await getDb();
+      if (db) {
+        await db
+          .update(users)
+          .set({ password: hashPassword(params.password) })
+          .where(eq(users.id, existingAdmin.id));
+      }
+    }
+
+    return { company, admin: existingAdmin };
+  }
+
   const scoped = parseScopedUsername(params.username);
   const company = await getCompanyBySlug(scoped.companySlug);
   if (!company || !company.isActive) {
@@ -65,12 +107,12 @@ export async function requireAdminUser(params: {
   }
 
   if ((existingAdmin.name ?? "") !== scoped.username) {
-    throw new Error("Invalid admin credentials");
+    throw new Error(GENERIC_AUTH_FAILURE_MSG);
   }
 
   const check = verifyPassword(params.password, existingAdmin.password);
   if (!check.isValid) {
-    throw new Error("Invalid admin credentials");
+    throw new Error(GENERIC_AUTH_FAILURE_MSG);
   }
 
   if (check.needsUpgrade) {
@@ -91,8 +133,10 @@ export async function validateEmployeeCredentials(params: {
   username: string;
   password: string;
   expectedEmployeeId?: number;
+  clientIp?: string;
 }) {
-  checkRateLimit(`employee-login:${params.username}`);
+  const ip = params.clientIp ?? "unknown";
+  checkRateLimitWithIp("employee-login", ip, params.username);
   const scoped = parseScopedUsername(params.username);
   const company = await getCompanyBySlug(params.companySlug ?? scoped.companySlug ?? "default");
   if (!company || !company.isActive) {
@@ -128,6 +172,9 @@ export async function validateEmployeeCredentials(params: {
 type CredentialInput = { username?: string; password?: string };
 
 export async function resolveAdminAuth(ctx: TrpcContext, input?: CredentialInput) {
+  if (ctx.session?.isDemo && ctx.session.type === "admin") {
+    return { company: getDemoCompany(), admin: getDemoAdmin() };
+  }
   if (ctx.session?.type === "admin" && ctx.session.companyId) {
     const company = await getCompanyById(ctx.session.companyId);
     const admin = await getLocalAdminByCompany(ctx.session.companyId);
@@ -137,12 +184,19 @@ export async function resolveAdminAuth(ctx: TrpcContext, input?: CredentialInput
     return { company, admin };
   }
   if (input?.username && input?.password) {
-    return requireAdminUser({ username: input.username, password: input.password });
+    return requireAdminUser({
+      username: input.username,
+      password: input.password,
+      clientIp: getClientIp(ctx.req),
+    });
   }
   throw new Error("No autorizado. Inicia sesión de nuevo.");
 }
 
 export async function resolveSuperAdminAuth(ctx: TrpcContext, input?: CredentialInput) {
+  if (ctx.session?.isDemo && ctx.session.type === "superadmin") {
+    return { success: true as const };
+  }
   if (ctx.session?.type === "superadmin") {
     return { success: true as const };
   }
@@ -157,6 +211,14 @@ export async function resolveEmployeeAuth(
   ctx: TrpcContext,
   input: CredentialInput & { employeeId?: number }
 ) {
+  if (ctx.session?.isDemo && ctx.session.type === "employee" && ctx.session.employeeId) {
+    const employee = getDemoEmployeeById(ctx.session.employeeId);
+    if (!employee?.isActive) throw new Error("Cuenta de empleado desactivada.");
+    if (input.employeeId !== undefined && input.employeeId !== employee.id) {
+      throw new Error("No autorizado para este empleado.");
+    }
+    return employee;
+  }
   if (ctx.session?.type === "employee" && ctx.session.employeeId && ctx.session.companyId) {
     const employee = await getEmployeeById(ctx.session.employeeId, ctx.session.companyId);
     if (!employee?.isActive) {
@@ -172,6 +234,7 @@ export async function resolveEmployeeAuth(
       username: input.username,
       password: input.password,
       expectedEmployeeId: input.employeeId,
+      clientIp: getClientIp(ctx.req),
     });
   }
   throw new Error("No autorizado. Inicia sesión de nuevo.");
@@ -182,6 +245,13 @@ export async function assertEmployeeBelongsToAdminCompany(
   companyId: number,
   restaurantId: number
 ) {
+  if (isDemoRequestActive()) {
+    const employee = getDemoEmployeeById(employeeId);
+    if (!employee || employee.restaurantId !== restaurantId) {
+      throw new Error("Empleado no encontrado en tu empresa");
+    }
+    return employee;
+  }
   const employee = await getEmployeeById(employeeId, companyId);
   if (!employee || employee.restaurantId !== restaurantId) {
     throw new Error("Empleado no encontrado en tu empresa");

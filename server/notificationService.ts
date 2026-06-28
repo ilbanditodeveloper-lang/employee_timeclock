@@ -63,8 +63,10 @@ export async function sendPushNotification(
 }
 
 /**
- * Check and send notifications for employees who need to clock in
- * This should be called periodically (e.g., every minute via cron)
+ * Check and send notifications for employees who need to clock in.
+ * Push: endpoint is globally unique per browser; same browser in another company
+ * reassigns the subscription to the latest employee (publicApi.pushNotifications.subscribe).
+ * This should be called periodically (e.g., every minute via cron).
  */
 type NotificationOptions = {
   timeZone?: string;
@@ -197,6 +199,7 @@ export async function checkAndSendNotifications(
       .from(timeclocks)
       .where(
         and(
+          eq(timeclocks.companyId, schedule.companyId),
           eq(timeclocks.employeeId, schedule.employeeId),
           gte(timeclocks.createdAt, todayStart),
           lt(timeclocks.createdAt, todayEnd)
@@ -222,6 +225,7 @@ export async function checkAndSendNotifications(
         .from(notificationLogs)
         .where(
           and(
+            eq(notificationLogs.companyId, schedule.companyId),
             eq(notificationLogs.employeeId, schedule.employeeId),
             eq(notificationLogs.entryTime, reminderTime),
             eq(notificationLogs.scheduleDate, todayDate),
@@ -236,7 +240,12 @@ export async function checkAndSendNotifications(
       const subscriptions = await db
         .select()
         .from(pushSubscriptions)
-        .where(eq(pushSubscriptions.employeeId, schedule.employeeId));
+        .where(
+          and(
+            eq(pushSubscriptions.companyId, schedule.companyId),
+            eq(pushSubscriptions.employeeId, schedule.employeeId)
+          )
+        );
 
       const isLeadReminder = reminderMinute !== scheduleTime;
       const body = isLeadReminder
@@ -264,6 +273,7 @@ export async function checkAndSendNotifications(
           );
 
           await db.insert(notificationLogs).values({
+            companyId: schedule.companyId,
             employeeId: schedule.employeeId,
             entryTime: reminderTime,
             scheduleDate: todayDate,
@@ -338,10 +348,19 @@ export async function checkAndSendNotifications(
 
     for (const employeeId of candidateEmployeeIds) {
       if (alreadyNotified.has(employeeId)) continue;
+      const clocks = openByEmployee.get(employeeId);
+      const companyId = clocks?.[0]?.companyId;
+      if (!companyId) continue;
+
       const subscriptions = await db
         .select()
         .from(pushSubscriptions)
-        .where(eq(pushSubscriptions.employeeId, employeeId));
+        .where(
+          and(
+            eq(pushSubscriptions.companyId, companyId),
+            eq(pushSubscriptions.employeeId, employeeId)
+          )
+        );
 
       if (subscriptions.length === 0) continue;
 
@@ -364,6 +383,7 @@ export async function checkAndSendNotifications(
           );
 
           await db.insert(notificationLogs).values({
+            companyId,
             employeeId,
             entryTime: reminderTime,
             scheduleDate: reminderDateKey,

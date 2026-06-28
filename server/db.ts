@@ -1,4 +1,4 @@
-import { eq, and, desc, gte, lt, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lt, isNull, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -14,6 +14,24 @@ import {
   auditLogs,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
+import { isUniqueViolation } from "./_core/errors";
+import { isDemoRequestActive } from "./demo/mode";
+import {
+  getDemoCompany,
+  getDemoAdmin,
+  getDemoRestaurant,
+  getDemoEmployees,
+  getDemoEmployeeById,
+  getDemoTimeclocks,
+  getDemoIncidents,
+  getDemoPrivacyAcceptances,
+  getDemoAuditLogs,
+  getDemoScheduleRows,
+  getDemoLatestOpenTimeclock,
+  getDemoTodayTimeclocks,
+  demoHasPrivacyAcceptance,
+} from "./demo/store";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _client: postgres.Sql | null = null;
@@ -145,6 +163,11 @@ export function normalizeCompanySlug(rawSlug: string | undefined | null): string
 }
 
 export async function getCompanyBySlug(rawSlug: string) {
+  if (isDemoRequestActive()) {
+    const slug = normalizeCompanySlug(rawSlug);
+    if (slug === "demo") return getDemoCompany();
+    return undefined;
+  }
   const db = await getDb();
   if (!db) return undefined;
   const slug = normalizeCompanySlug(rawSlug);
@@ -176,6 +199,7 @@ export async function getOrCreateCompanyBySlug(rawSlug: string) {
 }
 
 export async function getCompanyById(companyId: number) {
+  if (isDemoRequestActive() && companyId === 1) return getDemoCompany();
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
@@ -183,6 +207,7 @@ export async function getCompanyById(companyId: number) {
 }
 
 export async function getLocalAdminByCompany(companyId: number) {
+  if (isDemoRequestActive() && companyId === 1) return getDemoAdmin();
   const db = await getDb();
   if (!db) return undefined;
   const openId = `local-admin-${companyId}`;
@@ -194,6 +219,7 @@ export async function createLocalAdminForCompany(params: {
   companyId: number;
   name: string;
   password: string;
+  email?: string;
 }) {
   const db = await getDb();
   if (!db) return undefined;
@@ -202,6 +228,7 @@ export async function createLocalAdminForCompany(params: {
     companyId: params.companyId,
     openId,
     name: params.name,
+    email: params.email ? normalizeAdminEmail(params.email) : null,
     role: "admin",
     password: params.password,
     lastSignedIn: new Date(),
@@ -210,8 +237,212 @@ export async function createLocalAdminForCompany(params: {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export function sanitizeAdminUsernameFromEmail(email: string): string {
+  const localPart = email.split("@")[0] ?? "";
+  let username = localPart
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9._-]/g, "");
+  if (!username) username = "admin";
+  return username;
+}
+
+export function normalizeAdminEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export async function getAdminUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalized = normalizeAdminEmail(email);
+  const result = await db
+    .select()
+    .from(users)
+    .where(
+      and(
+        eq(users.role, "admin"),
+        sql`lower(${users.email}) = ${normalized}`,
+        sql`${users.openId} LIKE 'local-admin-%'`
+      )
+    )
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+async function slugExistsInDb(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  slug: string
+): Promise<boolean> {
+  const result = await db.select({ id: companies.id }).from(companies).where(eq(companies.slug, slug)).limit(1);
+  return result.length > 0;
+}
+
+export async function generateUniqueCompanySlug(businessName: string): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  let base = normalizeCompanySlug(businessName);
+  if (!base || base === "default") base = "negocio";
+  let candidate = base;
+  let suffix = 2;
+  while (await slugExistsInDb(db, candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+async function ensureUniqueAdminUsernameInCompany(
+  db: Pick<NonNullable<Awaited<ReturnType<typeof getDb>>>, "select">,
+  companyId: number,
+  baseUsername: string
+): Promise<string> {
+  let candidate = baseUsername;
+  let suffix = 2;
+  for (;;) {
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.companyId, companyId), eq(users.name, candidate)))
+      .limit(1);
+    if (existing.length === 0) return candidate;
+    candidate = `${baseUsername}${suffix}`;
+    suffix += 1;
+  }
+}
+
+const MADRID_LAT = "40.41680000";
+const MADRID_LNG = "-3.70380000";
+
+export type RegisterBusinessParams = {
+  businessName: string;
+  adminName: string;
+  email: string;
+  passwordHash: string;
+  country: string;
+  timezone: string;
+  address?: string;
+};
+
+export type RegisterBusinessResult = {
+  companyId: number;
+  companySlug: string;
+  companyName: string;
+  adminId: number;
+  adminUsername: string;
+  adminEmail: string;
+  restaurantId: number;
+};
+
+export async function registerBusinessTenant(
+  params: RegisterBusinessParams
+): Promise<RegisterBusinessResult> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const normalizedEmail = normalizeAdminEmail(params.email);
+  const existingEmail = await getAdminUserByEmail(normalizedEmail);
+  if (existingEmail) {
+    throw new Error(DUPLICATE_ADMIN_EMAIL_MSG);
+  }
+
+  const slug = await generateUniqueCompanySlug(params.businessName);
+  const baseUsername = sanitizeAdminUsernameFromEmail(normalizedEmail);
+  const restaurantAddress = params.address?.trim() || "Pendiente de configurar";
+  const now = new Date();
+
+  try {
+    return await db.transaction(async (tx) => {
+    const [company] = await tx
+      .insert(companies)
+      .values({
+        name: params.businessName.trim(),
+        slug,
+        legalName: params.adminName.trim(),
+        address: params.address?.trim() || null,
+        privacyContactEmail: normalizedEmail,
+        country: params.country.trim().toUpperCase().slice(0, 2) || "ES",
+        timezone: params.timezone.trim() || "Europe/Madrid",
+        locationEnabled: false,
+        dataRetentionYears: 4,
+        termsAcceptedAt: now,
+        onboardingCompleted: false,
+        isActive: true,
+      })
+      .returning();
+
+    if (!company) {
+      throw new Error("No se pudo crear la empresa");
+    }
+
+    const adminUsername = await ensureUniqueAdminUsernameInCompany(tx, company.id, baseUsername);
+    const openId = `local-admin-${company.id}`;
+
+    const [admin] = await tx
+      .insert(users)
+      .values({
+        companyId: company.id,
+        openId,
+        name: adminUsername,
+        email: normalizedEmail,
+        role: "admin",
+        password: params.passwordHash,
+        lastSignedIn: now,
+      })
+      .returning();
+
+    if (!admin) {
+      throw new Error("No se pudo crear el administrador");
+    }
+
+    const [restaurant] = await tx
+      .insert(restaurants)
+      .values({
+        companyId: company.id,
+        name: params.businessName.trim(),
+        address: restaurantAddress,
+        latitude: MADRID_LAT,
+        longitude: MADRID_LNG,
+        radiusMeters: 150,
+        adminId: admin.id,
+      })
+      .returning();
+
+    if (!restaurant) {
+      throw new Error("No se pudo crear el local inicial");
+    }
+
+    await tx
+      .update(users)
+      .set({ restaurantId: restaurant.id, updatedAt: now })
+      .where(eq(users.id, admin.id));
+
+    return {
+      companyId: company.id,
+      companySlug: company.slug,
+      companyName: company.name,
+      adminId: admin.id,
+      adminUsername,
+      adminEmail: normalizedEmail,
+      restaurantId: restaurant.id,
+    };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new Error(DUPLICATE_ADMIN_EMAIL_MSG);
+    }
+    throw error;
+  }
+}
+
 // Employee queries
 export async function getEmployeeById(id: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    const employee = getDemoEmployeeById(id);
+    if (!employee) return undefined;
+    if (companyId && employee.companyId !== companyId) return undefined;
+    return employee;
+  }
   const db = await getDb();
   if (!db) return undefined;
   const where = companyId
@@ -222,6 +453,12 @@ export async function getEmployeeById(id: number, companyId?: number) {
 }
 
 export async function getEmployeesByRestaurant(restaurantId: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    return getDemoEmployees().filter(
+      (e) =>
+        e.restaurantId === restaurantId && (!companyId || e.companyId === companyId)
+    );
+  }
   const db = await getDb();
   if (!db) return [];
   const where = companyId
@@ -242,6 +479,12 @@ export async function getEmployeeByUsername(username: string, companyId?: number
 
 // Restaurant queries
 export async function getRestaurantById(id: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    const r = getDemoRestaurant();
+    if (r.id !== id) return undefined;
+    if (companyId && r.companyId !== companyId) return undefined;
+    return r;
+  }
   const db = await getDb();
   if (!db) return undefined;
   const where = companyId
@@ -252,6 +495,12 @@ export async function getRestaurantById(id: number, companyId?: number) {
 }
 
 export async function getRestaurantByAdmin(adminId: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    const r = getDemoRestaurant();
+    if (r.adminId !== adminId) return undefined;
+    if (companyId && r.companyId !== companyId) return undefined;
+    return r;
+  }
   const db = await getDb();
   if (!db) return undefined;
   const where = companyId
@@ -263,6 +512,9 @@ export async function getRestaurantByAdmin(adminId: number, companyId?: number) 
 
 // Schedule queries
 export async function getSchedulesByEmployee(employeeId: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    return getDemoScheduleRows(employeeId);
+  }
   const db = await getDb();
   if (!db) return [];
   const where = companyId
@@ -322,6 +574,9 @@ export async function getScheduleByEmployeeDayAndSlot(
 
 // Timeclock queries
 export async function getTimeclocksByEmployee(employeeId: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    return getDemoTimeclocks([employeeId]);
+  }
   const db = await getDb();
   if (!db) return [];
   const where = companyId
@@ -335,6 +590,9 @@ export async function getTodayTimeclocksByEmployee(
   date = new Date(),
   companyId?: number
 ) {
+  if (isDemoRequestActive()) {
+    return getDemoTodayTimeclocks(employeeId);
+  }
   const db = await getDb();
   if (!db) return [];
 
@@ -358,6 +616,9 @@ export async function getTodayTimeclocksByEmployee(
 }
 
 export async function getLatestOpenTimeclockByEmployee(employeeId: number, companyId?: number) {
+  if (isDemoRequestActive()) {
+    return getDemoLatestOpenTimeclock(employeeId);
+  }
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
@@ -410,6 +671,18 @@ export async function getLegalAcceptance(
   documentType: "employee_privacy_notice" | "platform_terms",
   documentVersion: string
 ) {
+  if (isDemoRequestActive() && documentType === "employee_privacy_notice") {
+    if (!demoHasPrivacyAcceptance(employeeId)) return undefined;
+    return {
+      id: employeeId,
+      companyId: 1,
+      employeeId,
+      documentType,
+      documentVersion,
+      acceptedAt: new Date(),
+      ipAddress: "127.0.0.1",
+    };
+  }
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
@@ -431,6 +704,9 @@ export async function listEmployeePrivacyAcceptances(
   restaurantId: number,
   documentVersion: string
 ) {
+  if (isDemoRequestActive()) {
+    return getDemoPrivacyAcceptances();
+  }
   const db = await getDb();
   if (!db) return [];
   const emps = await getEmployeesByRestaurant(restaurantId, companyId);
@@ -455,6 +731,7 @@ export async function listEmployeePrivacyAcceptances(
 }
 
 export async function listAuditLogsByCompany(companyId: number, limit = 100) {
+  if (isDemoRequestActive()) return getDemoAuditLogs();
   const db = await getDb();
   if (!db) return [];
   return db
@@ -466,6 +743,7 @@ export async function listAuditLogsByCompany(companyId: number, limit = 100) {
 }
 
 export async function listTimeclocksForEmployeeIds(employeeIds: number[], companyId: number) {
+  if (isDemoRequestActive()) return getDemoTimeclocks(employeeIds);
   const db = await getDb();
   if (!db || employeeIds.length === 0) return [];
   return db
@@ -476,6 +754,7 @@ export async function listTimeclocksForEmployeeIds(employeeIds: number[], compan
 }
 
 export async function listIncidentsForEmployeeIds(employeeIds: number[], companyId: number) {
+  if (isDemoRequestActive()) return getDemoIncidents(employeeIds);
   const db = await getDb();
   if (!db || employeeIds.length === 0) return [];
   return db

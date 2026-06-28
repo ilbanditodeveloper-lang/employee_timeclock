@@ -13,7 +13,13 @@ import {
   buildEmployeePrivacyNotice,
   type CompanyLegalInfo,
 } from "@shared/employeePrivacyNotice";
+import {
+  buildBusinessPrivacyPolicy,
+  buildCompanyTerms,
+  buildDpaTemplate,
+} from "@shared/legalTemplates";
 import EmployeePrivacyNoticeDocument from "@/components/EmployeePrivacyNoticeDocument";
+import LegalDocumentSection from "@/components/LegalDocumentSection";
 import { downloadEmployeePrivacyNoticePdf } from "@/lib/employeePrivacyNoticePdf";
 import { format } from "date-fns";
 
@@ -68,6 +74,10 @@ export default function AdminLegalPanel() {
     [companyInfo]
   );
 
+  const businessPrivacyDoc = useMemo(() => buildBusinessPrivacyPolicy(companyInfo), [companyInfo]);
+  const companyTermsDoc = useMemo(() => buildCompanyTerms(companyInfo), [companyInfo]);
+  const dpaDoc = useMemo(() => buildDpaTemplate(companyInfo), [companyInfo]);
+
   const selectedEmployee = acceptancesQuery.data?.find(
     (e) => String(e.employeeId) === pdfEmployeeId
   );
@@ -110,17 +120,22 @@ export default function AdminLegalPanel() {
 
   return (
     <div className="space-y-6">
+      <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        TimeClock es una herramienta técnica de registro horario. La empresa cliente es responsable de
+        informar a sus trabajadores y cumplir la normativa aplicable. Los documentos siguientes son
+        plantillas orientativas.
+      </p>
+
       <Card className="p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="flex items-center gap-2 text-2xl font-bold text-foreground">
               <Scale className="h-6 w-6" />
-              Cláusula informativa RGPD
+              A) Información para empleados
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Documento exigido por el artículo 13 del RGPD y la AEPD para informar a los
-              trabajadores del registro horario. No es un consentimiento: es información legal.
-              Imprímalo, fírmelo en papel o use el acuse digital en la app del empleado.
+              Cláusula informativa RGPD (art. 13) para entregar al trabajador. Debe comunicarse antes
+              o al inicio del uso del sistema de registro horario.
             </p>
           </div>
           <span className="rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
@@ -300,6 +315,10 @@ export default function AdminLegalPanel() {
           )}
         </div>
       </Card>
+
+      <LegalDocumentSection document={businessPrivacyDoc} />
+      <LegalDocumentSection document={companyTermsDoc} />
+      <LegalDocumentSection document={dpaDoc} />
 
       <style>{`
         @media print {
