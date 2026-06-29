@@ -464,7 +464,8 @@ export default function EmployeeDashboard() {
     );
   }
 
-  const canClockByLocation = !locationEnabled || isAtRestaurant;
+  const canClockIn = !isClockedIn && !loading && !isLate && isWorkDay;
+  const canClockOut = isClockedIn && !loading;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -510,9 +511,9 @@ export default function EmployeeDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground mb-2">Estado de Ubicación</h2>
-              <p className={`text-sm ${locationEnabled ? (isAtRestaurant ? 'text-green-600 dark:text-green-400' : 'text-amber-600') : 'text-muted-foreground'}`}>
+              <p className={`text-sm ${locationEnabled ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
                 {locationEnabled
-                  ? (isAtRestaurant ? '✓ Ubicación validada al fichar' : 'Se validará ubicación al fichar')
+                  ? 'Se validará tu ubicación al pulsar Entrada o Salida'
                   : 'Fichaje sin geolocalización (configuración de tu empresa)'}
               </p>
               {!isWorkDay && (
@@ -531,7 +532,11 @@ export default function EmployeeDashboard() {
                 </p>
               )}
             </div>
-            <div className={`w-4 h-4 rounded-full ${isAtRestaurant ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <div
+              className={`w-4 h-4 rounded-full ${
+                locationEnabled ? 'bg-amber-500' : 'bg-green-500'
+              }`}
+            />
           </div>
         </Card>
 
@@ -539,7 +544,7 @@ export default function EmployeeDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Button
             onClick={handleClockIn}
-            disabled={!canClockByLocation || isClockedIn || loading || isLate}
+            disabled={!canClockIn}
             className="btn-primary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
           >
             <Clock className="w-6 h-6" />
@@ -561,7 +566,7 @@ export default function EmployeeDashboard() {
 
           <Button
             onClick={handleClockOut}
-            disabled={!canClockByLocation || !isClockedIn || loading}
+            disabled={!canClockOut}
             className="btn-secondary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
           >
             <Clock className="w-6 h-6" />
