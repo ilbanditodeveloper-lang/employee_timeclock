@@ -8,13 +8,22 @@ import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { employeeQueryInput } from '@/lib/authApi';
 import EmployeePrivacyNotice from '@/pages/EmployeePrivacyNotice';
-import { EARLY_CLOCK_MINUTES } from '@shared/const';
 import {
   formatScheduleTime,
   getClockWindowMinutes,
   parseScheduleEntryTime,
-} from '@shared/scheduleClockWindow';
+} from "@shared/scheduleClockWindow";
+import {
+  APP_TIMEZONE,
+  formatDateInTimeZone,
+  formatTimeInTimeZone,
+  getDayOfWeekInTimeZone,
+  getMinutesSinceMidnightInTimeZone,
+  resolveAppTimeZone,
+  todayYmdInTimeZone,
+} from "@shared/timezone";
 import EmployeeBottomMenu from '@/components/EmployeeBottomMenu';
+import { EARLY_CLOCK_MINUTES } from '@shared/const';
 
 const LATE_GRACE_MINUTES = 5;
 
@@ -107,6 +116,7 @@ export default function EmployeeDashboard() {
   const { employeeSession, setEmployeeSession, clearAllSessions } = useAuthContext();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
   const locationEnabled = employeeSession?.locationEnabled ?? false;
+  const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const [isAtRestaurant, setIsAtRestaurant] = useState(() => !locationEnabled);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -224,17 +234,16 @@ export default function EmployeeDashboard() {
     const timeclocks = employeeTimeclocks.data || [];
     const openRecord = timeclocks.find((entry) => entry.entryTime && !entry.exitTime);
     setIsClockedIn(Boolean(openRecord));
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayYmd = todayYmdInTimeZone(appTimeZone);
     const todayExit = timeclocks
       .filter((entry) => {
-        const entryDate = new Date(entry.createdAt);
-        entryDate.setHours(0, 0, 0, 0);
-        return entryDate.getTime() === today.getTime() && entry.exitTime;
+        if (!entry.exitTime) return false;
+        const exitYmd = todayYmdInTimeZone(appTimeZone, new Date(entry.exitTime));
+        return exitYmd === todayYmd;
       })
       .sort((a, b) => new Date(b.exitTime || 0).getTime() - new Date(a.exitTime || 0).getTime())[0];
     setLastClockOut(todayExit?.exitTime ? new Date(todayExit.exitTime) : null);
-  }, [employeeTimeclocks.data]);
+  }, [employeeTimeclocks.data, appTimeZone]);
 
   useEffect(() => {
     if (clockStatusQuery.data) {
@@ -250,7 +259,7 @@ export default function EmployeeDashboard() {
       return;
     }
 
-    const scheduleKey = weekdayKeys[currentTime.getDay()];
+    const scheduleKey = weekdayKeys[getDayOfWeekInTimeZone(currentTime, appTimeZone)];
     const daySchedule =
       employeeScheduleQuery.data?.[scheduleKey] ?? employeeSession?.schedule?.[scheduleKey];
     const entry1 = daySchedule?.entry1 || null;
@@ -295,7 +304,7 @@ export default function EmployeeDashboard() {
       graceMinutes,
       EARLY_CLOCK_MINUTES
     );
-    const currentTotalMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+    const currentTotalMinutes = getMinutesSinceMidnightInTimeZone(currentTime, appTimeZone);
     setIsTooEarly(currentTotalMinutes < earliest);
     setIsLate(currentTotalMinutes > latest);
   }, [
@@ -304,6 +313,7 @@ export default function EmployeeDashboard() {
     employeeSession?.schedule,
     employeeScheduleQuery.data,
     lastClockOut,
+    appTimeZone,
   ]);
 
   useEffect(() => {
@@ -501,16 +511,12 @@ export default function EmployeeDashboard() {
         {/* Time Display */}
         <div className="mb-8 text-center">
           <div className="text-5xl font-bold text-foreground mb-2">
-            {currentTime.toLocaleTimeString('es-ES')}
+            {formatTimeInTimeZone(currentTime, appTimeZone, { second: "2-digit" })}
           </div>
           <div className="text-lg text-muted-foreground">
-            {currentTime.toLocaleDateString('es-ES', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
+            {formatDateInTimeZone(currentTime, appTimeZone)}
           </div>
+          <p className="text-xs text-muted-foreground mt-1">Horario de Madrid ({APP_TIMEZONE})</p>
         </div>
 
         {/* Location Status */}

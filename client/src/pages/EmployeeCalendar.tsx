@@ -10,10 +10,12 @@ import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
+import { formatTimeInTimeZone, resolveAppTimeZone } from "@shared/timezone";
 
 export default function EmployeeCalendar() {
   const [, setLocation] = useLocation();
   const { employeeSession } = useAuthContext();
+  const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const [selectionMode, setSelectionMode] = useState<"single" | "range">("single");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
@@ -185,25 +187,19 @@ export default function EmployeeCalendar() {
                         <p className="text-sm text-foreground">
                           Entrada:{" "}
                           {entry.entryTime
-                            ? new Date(entry.entryTime).toLocaleTimeString("es-ES", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
+                            ? formatTimeInTimeZone(new Date(entry.entryTime), appTimeZone)
                             : "Sin entrada"}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Salida:{" "}
                           {entry.exitTime
-                            ? new Date(entry.exitTime).toLocaleTimeString("es-ES", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
+                            ? formatTimeInTimeZone(new Date(entry.exitTime), appTimeZone)
                             : "Pendiente"}
                         </p>
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {entry.entryTime
-                          ? new Date(entry.entryTime).toLocaleDateString("es-ES")
+                          ? new Date(entry.entryTime).toLocaleDateString("es-ES", { timeZone: appTimeZone })
                           : ""}
                       </span>
                     </div>

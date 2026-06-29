@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput, emptyCreds } from "@/lib/authApi";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
+import { resolveAppTimeZone, todayYmdInTimeZone, APP_TIMEZONE } from "@shared/timezone";
 
 const kindLabels: Record<string, string> = {
   vacation: "Vacaciones",
@@ -30,9 +31,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function todayYmdMadrid(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Madrid" });
-}
 
 function ymdRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return aStart <= bEnd && bStart <= aEnd;
@@ -41,9 +39,11 @@ function ymdRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: st
 export default function EmployeeTimeOff() {
   const [, setLocation] = useLocation();
   const { employeeSession } = useAuthContext();
+  const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
+  const todayYmd = () => todayYmdInTimeZone(appTimeZone);
   const [kind, setKind] = useState<"vacation" | "day_off">("vacation");
-  const [startDate, setStartDate] = useState(() => todayYmdMadrid());
-  const [endDate, setEndDate] = useState(() => todayYmdMadrid());
+  const [startDate, setStartDate] = useState(() => todayYmdInTimeZone(APP_TIMEZONE));
+  const [endDate, setEndDate] = useState(() => todayYmdInTimeZone(APP_TIMEZONE));
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -70,7 +70,7 @@ export default function EmployeeTimeOff() {
   }, [listQuery.data]);
 
   const rangeBlocks = useMemo(() => {
-    const minD = todayYmdMadrid();
+    const minD = todayYmd();
     const order = !startDate || !endDate || endDate < startDate;
     const past =
       Boolean(startDate && endDate) && (startDate < minD || endDate < minD);
@@ -79,7 +79,7 @@ export default function EmployeeTimeOff() {
       !order &&
       blockedRanges.some((b) => ymdRangesOverlap(startDate, endDate, b.start, b.end));
     return { past, order, overlap };
-  }, [startDate, endDate, blockedRanges]);
+  }, [startDate, endDate, blockedRanges, appTimeZone]);
 
   const rangeInvalid = rangeBlocks.past || rangeBlocks.order || rangeBlocks.overlap;
 
@@ -117,7 +117,7 @@ export default function EmployeeTimeOff() {
       });
       toast.success("Solicitud enviada. El administrador la revisará.");
       setComment("");
-      const next = todayYmdMadrid();
+      const next = todayYmd();
       setStartDate(next);
       setEndDate(next);
       await listQuery.refetch();
@@ -190,9 +190,9 @@ export default function EmployeeTimeOff() {
                 <input
                   type="date"
                   value={startDate}
-                  min={todayYmdMadrid()}
+                  min={todayYmd()}
                   onChange={(ev) => {
-                    const minD = todayYmdMadrid();
+                    const minD = todayYmd();
                     const raw = ev.target.value;
                     const nextStart = raw < minD ? minD : raw;
                     setStartDate(nextStart);
@@ -210,9 +210,9 @@ export default function EmployeeTimeOff() {
                 <input
                   type="date"
                   value={endDate}
-                  min={startDate < todayYmdMadrid() ? todayYmdMadrid() : startDate}
+                  min={startDate < todayYmd() ? todayYmd() : startDate}
                   onChange={(ev) => {
-                    const minD = todayYmdMadrid();
+                    const minD = todayYmd();
                     const minEnd = startDate < minD ? minD : startDate;
                     const raw = ev.target.value;
                     setEndDate(raw < minEnd ? minEnd : raw);

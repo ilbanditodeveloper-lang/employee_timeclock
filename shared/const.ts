@@ -33,3 +33,5 @@ export const GENERIC_SERVER_ERROR_MSG = "Ha ocurrido un error. Inténtalo de nue
 
 /** Minutos antes de la hora de entrada en los que el empleado ya puede fichar. */
 export const EARLY_CLOCK_MINUTES = 5;
+
+export { APP_TIMEZONE } from "./timezone";

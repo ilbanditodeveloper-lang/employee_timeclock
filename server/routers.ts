@@ -4,6 +4,11 @@ import {
   getClockWindowMinutes,
   parseScheduleEntryTime,
 } from "@shared/scheduleClockWindow";
+import {
+  getDayOfWeekInTimeZone,
+  getMinutesSinceMidnightInTimeZone,
+  todayYmdInTimeZone,
+} from "@shared/timezone";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, deprecatedProcedure } from "./_core/trpc";
@@ -147,11 +152,6 @@ function listDatesInclusive(start: string, end: string): string[] {
   return out;
 }
 
-/** Fecha calendario `YYYY-MM-DD` en una zona horaria (p. ej. Europa/Madrid para el negocio). */
-function todayYmdInTimeZone(timeZone: string): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone });
-}
-
 export const appRouter = router({
   system: systemRouter,
   
@@ -256,6 +256,7 @@ export const appRouter = router({
             lateGraceMinutes: 5,
             locationEnabled: false,
             needsPrivacyNotice: !demoHasPrivacyAcceptance(1),
+            timezone: "Europe/Madrid",
           };
         }
         if (input.role === "admin") {
@@ -1377,6 +1378,7 @@ export const appRouter = router({
         locationEnabled: company?.locationEnabled ?? false,
         needsPrivacyNotice: !acceptance,
         privacyNoticeVersion: EMPLOYEE_PRIVACY_NOTICE_VERSION,
+        timezone: company?.timezone ?? "Europe/Madrid",
       };
     }),
 
@@ -1422,11 +1424,13 @@ export const appRouter = router({
       }
       const now = new Date();
       const graceMinutes = employee.lateGraceMinutes ?? 5;
-      const dayOfWeek = now.getDay();
+      const tz = company?.timezone ?? "Europe/Madrid";
+      const dayOfWeek = getDayOfWeekInTimeZone(now, tz);
       const todayTimeclocks = await getTodayTimeclocksByEmployee(
         input.employeeId,
         now,
-        employee.companyId
+        employee.companyId,
+        tz
       );
       const completedShifts = todayTimeclocks.filter(tc => tc.exitTime).length;
       const schedule =
@@ -1449,7 +1453,7 @@ export const appRouter = router({
             graceMinutes,
             EARLY_CLOCK_MINUTES
           );
-          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          const nowMinutes = getMinutesSinceMidnightInTimeZone(now, tz);
           if (nowMinutes < earliest) {
             throwBusinessError(
               `Fichaje disponible desde ${EARLY_CLOCK_MINUTES} min antes de tu hora (${formatScheduleTime(parsed.hour, parsed.minute)}).`

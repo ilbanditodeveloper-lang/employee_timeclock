@@ -36,6 +36,7 @@ export default function Home() {
           lateGraceMinutes: result.lateGraceMinutes,
           locationEnabled: result.locationEnabled,
           needsPrivacyNotice: result.needsPrivacyNotice,
+          timezone: result.timezone ?? "Europe/Madrid",
         });
         setAdminSession(null);
         setLocation("/employee");

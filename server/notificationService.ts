@@ -1,7 +1,12 @@
 import webpush from "web-push";
+import {
+  getDayOfWeekInTimeZone,
+  getTimePartsInTimeZone,
+  todayYmdInTimeZone,
+} from "@shared/timezone";
 import { getDb } from "./db";
 import { pushSubscriptions, notificationLogs, schedules, timeclocks } from "../drizzle/schema";
-import { eq, and, gte, lt, inArray, isNull } from "drizzle-orm";
+import { eq, and, gte, lt, inArray, isNull, sql } from "drizzle-orm";
 
 // VAPID keys - these should be set as environment variables
 // Generate with: npx web-push generate-vapid-keys
@@ -83,33 +88,6 @@ const EXIT_REMINDER_STARTS = [
 ];
 const EXIT_REMINDER_SLOT = 0;
 
-function getTimePartsInTimeZone(date: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const lookup = (type: string) => parts.find(p => p.type === type)?.value ?? "00";
-  return {
-    year: Number(lookup("year")),
-    month: Number(lookup("month")),
-    day: Number(lookup("day")),
-    hour: Number(lookup("hour")),
-    minute: Number(lookup("minute")),
-  };
-}
-
-function getDateKeyInTimeZone(date: Date, timeZone: string) {
-  const { year, month, day } = getTimePartsInTimeZone(date, timeZone);
-  const pad = (num: number) => String(num).padStart(2, "0");
-  return `${year}-${pad(month)}-${pad(day)}`;
-}
-
 function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -163,13 +141,11 @@ export async function checkAndSendNotifications(
   const timeZone = options.timeZone || DEFAULT_TIME_ZONE;
   const leadMinutes = Math.max(0, options.leadMinutes ?? DEFAULT_ENTRY_LEAD_MINUTES);
   const lookbackMinutes = Math.max(1, options.lookbackMinutes ?? DEFAULT_LOOKBACK_MINUTES);
-  const { year, month, day, hour, minute } = getTimePartsInTimeZone(now, timeZone);
-  const currentDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-  const currentDay = currentDate.getDay(); // 0-6 (Sunday-Saturday)
-  const currentHour = currentDate.getHours();
-  const currentMinute = currentDate.getMinutes();
-  // Date-only value for schedule logging
-  const todayDate = getDateKeyInTimeZone(currentDate, timeZone);
+  const { hour, minute } = getTimePartsInTimeZone(now, timeZone);
+  const currentDay = getDayOfWeekInTimeZone(now, timeZone);
+  const currentHour = hour;
+  const currentMinute = minute;
+  const todayDate = todayYmdInTimeZone(timeZone, now);
 
   // Get all active employees with schedules for today
   const todaySchedules = await db
@@ -188,11 +164,7 @@ export async function checkAndSendNotifications(
     const currentTime = currentHour * 60 + currentMinute;
     const reminderSlots = buildEntryReminderSlots(scheduleTime, leadMinutes);
 
-    // Check if employee already clocked in today
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setHours(23, 59, 59, 999);
+    const todayYmd = todayYmdInTimeZone(timeZone, now);
 
     const todayTimeclocks = await db
       .select()
@@ -201,8 +173,7 @@ export async function checkAndSendNotifications(
         and(
           eq(timeclocks.companyId, schedule.companyId),
           eq(timeclocks.employeeId, schedule.employeeId),
-          gte(timeclocks.createdAt, todayStart),
-          lt(timeclocks.createdAt, todayEnd)
+          sql`${timeclocks.entryTime}::date = ${todayYmd}::date`
         )
       );
 
@@ -313,7 +284,7 @@ export async function checkAndSendNotifications(
     openByEmployee.set(clock.employeeId, list);
   }
 
-  const yesterdayDateKey = getDateKeyInTimeZone(new Date(now.getTime() - 86400000), timeZone);
+  const yesterdayDateKey = todayYmdInTimeZone(timeZone, new Date(now.getTime() - 86400000));
 
   for (const slot of matchingSlots) {
     const reminderDateKey = slot.scheduleDateOffset === 0 ? todayDate : yesterdayDateKey;
@@ -323,7 +294,7 @@ export async function checkAndSendNotifications(
     for (const [employeeId, clocks] of openByEmployee.entries()) {
       const hasOpenOnDate = clocks.some((clock) => {
         if (!clock.entryTime) return false;
-        const entryDateKey = getDateKeyInTimeZone(new Date(clock.entryTime), timeZone);
+        const entryDateKey = todayYmdInTimeZone(timeZone, new Date(clock.entryTime));
         return entryDateKey === reminderDateKey;
       });
       if (hasOpenOnDate) {

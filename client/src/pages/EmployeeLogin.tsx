@@ -33,6 +33,7 @@ export default function EmployeeLogin() {
         lateGraceMinutes: result.lateGraceMinutes,
         locationEnabled: result.locationEnabled,
         needsPrivacyNotice: result.needsPrivacyNotice,
+        timezone: result.timezone,
       });
       setAdminSession(null);
       

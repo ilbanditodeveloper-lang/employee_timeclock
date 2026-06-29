@@ -21,6 +21,7 @@ export type EmployeeSession = {
   lateGraceMinutes?: number;
   locationEnabled?: boolean;
   needsPrivacyNotice?: boolean;
+  timezone?: string;
 };
 
 type AuthContextValue = {
@@ -69,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lateGraceMinutes: prev?.lateGraceMinutes,
         locationEnabled: prev?.locationEnabled,
         needsPrivacyNotice: prev?.needsPrivacyNotice,
+        timezone: prev?.timezone,
       }));
       setAdminSession(null);
     } else {

@@ -17,6 +17,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
+import { APP_TIMEZONE, todayYmdInTimeZone } from "@shared/timezone";
 import { addTrialDays } from "@shared/subscriptionPlans";
 import { isUniqueViolation } from "./_core/errors";
 import { isDemoRequestActive } from "./demo/mode";
@@ -687,7 +688,8 @@ export async function getTimeclocksByEmployee(employeeId: number, companyId?: nu
 export async function getTodayTimeclocksByEmployee(
   employeeId: number,
   date = new Date(),
-  companyId?: number
+  companyId?: number,
+  timeZone = APP_TIMEZONE
 ) {
   if (isDemoRequestActive()) {
     return getDemoTodayTimeclocks(employeeId);
@@ -695,10 +697,7 @@ export async function getTodayTimeclocksByEmployee(
   const db = await getDb();
   if (!db) return [];
 
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+  const todayYmd = todayYmdInTimeZone(timeZone, date);
 
   return await db
     .select()
@@ -707,8 +706,7 @@ export async function getTodayTimeclocksByEmployee(
       and(
         eq(timeclocks.employeeId, employeeId),
         ...(companyId ? [eq(timeclocks.companyId, companyId)] : []),
-        gte(timeclocks.createdAt, dayStart),
-        lt(timeclocks.createdAt, dayEnd)
+        sql`${timeclocks.entryTime}::date = ${todayYmd}::date`
       )
     )
     .orderBy(desc(timeclocks.createdAt));

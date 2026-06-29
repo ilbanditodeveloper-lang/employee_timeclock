@@ -20,6 +20,12 @@ import SubscriptionBanner from '@/components/SubscriptionBanner';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
 import {
+  formatDateInTimeZone,
+  formatTimeInTimeZone,
+  getTimePartsInTimeZone,
+  resolveAppTimeZone,
+} from '@shared/timezone';
+import {
   downloadEmployeeDataJson,
   downloadEnhancedLaborReportExcel,
   downloadEnhancedLaborReportPdf,
@@ -124,16 +130,6 @@ export default function AdminDashboard() {
     return Math.max(hours, 0) * Math.max(rate, 0);
   })();
 
-  const formatDateTimeInput = (value?: string | Date | null) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    const pad = (num: number) => String(num).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-      date.getHours()
-    )}:${pad(date.getMinutes())}`;
-  };
-
   const splitDateTimeInput = (value: string) => {
     if (!value) return { date: '', time: '' };
     const [date = '', time = ''] = value.split('T');
@@ -153,6 +149,31 @@ export default function AdminDashboard() {
   const onboardingQuery = trpc.publicApi.getOnboardingStatus.useQuery(emptyCreds, {
     enabled: Boolean(adminSession),
   });
+  const appTimeZone = resolveAppTimeZone(onboardingQuery.data?.company?.timezone);
+
+  const formatDateTimeInput = (value?: string | Date | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const { year, month, day, hour, minute } = getTimePartsInTimeZone(date, appTimeZone);
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+  };
+
+  const formatClockTime = (iso: string | Date | null | undefined) => {
+    if (!iso) return '—';
+    return formatTimeInTimeZone(new Date(iso), appTimeZone);
+  };
+
+  const formatClockDateShort = (iso: string | Date | null | undefined) => {
+    if (!iso) return '';
+    return formatDateInTimeZone(new Date(iso), appTimeZone, {
+      weekday: undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
 
   const getRestaurant = trpc.publicApi.getRestaurant.useQuery(emptyCreds, {
     enabled: Boolean(adminSession),
@@ -281,11 +302,6 @@ export default function AdminDashboard() {
     }
     return m;
   }, [timeOffCalendarQuery.data?.days]);
-
-  const formatClockTime = (iso: string | null | undefined) => {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  };
 
   const getRangeBounds = () => {
     const start = rangeStart ? new Date(rangeStart) : null;
@@ -1667,28 +1683,14 @@ export default function AdminDashboard() {
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Entrada:{" "}
-                          {entry.entryTime
-                            ? new Date(entry.entryTime).toLocaleTimeString("es-ES", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "Sin entrada"}
+                          {entry.entryTime ? formatClockTime(entry.entryTime) : "Sin entrada"}
                           {" · "}
-                          {entry.entryTime
-                            ? new Date(entry.entryTime).toLocaleDateString("es-ES")
-                            : ""}
+                          {entry.entryTime ? formatClockDateShort(entry.entryTime) : ""}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Salida:{" "}
-                          {entry.exitTime
-                            ? new Date(entry.exitTime).toLocaleTimeString("es-ES", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "Pendiente"}
-                          {entry.exitTime
-                            ? ` · ${new Date(entry.exitTime).toLocaleDateString("es-ES")}`
-                            : ""}
+                          {entry.exitTime ? formatClockTime(entry.exitTime) : "Pendiente"}
+                          {entry.exitTime ? ` · ${formatClockDateShort(entry.exitTime)}` : ""}
                         </p>
                         {(entry.correctionReason || entry.voidReason) && (
                           <p className="text-xs text-muted-foreground mt-1">
@@ -1864,7 +1866,7 @@ export default function AdminDashboard() {
                                   <p className="text-xs text-muted-foreground">
                                     {label} · {log.entryTime} ·{" "}
                                     {log.scheduleDate
-                                      ? new Date(log.scheduleDate).toLocaleDateString("es-ES")
+                                      ? formatClockDateShort(log.scheduleDate)
                                       : ""}
                                   </p>
                                 </div>
@@ -2339,7 +2341,7 @@ export default function AdminDashboard() {
                             {incident.type === "late_arrival" ? "Retraso en la entrada" : "Incidencia"}
                           </h4>
                           <p className="text-sm text-muted-foreground">
-                            Empleado #{incident.employeeId} - {new Date(incident.createdAt).toLocaleDateString("es-ES")}
+                            Empleado #{incident.employeeId} - {formatClockDateShort(incident.createdAt)}
                           </p>
                         </div>
                         <span className={incident.status === "pending" ? "badge-warning" : incident.status === "approved" ? "badge-success" : "badge-error"}>
