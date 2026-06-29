@@ -1403,7 +1403,9 @@ export const appRouter = router({
           input.longitude
         );
         if (distance > restaurant.radiusMeters) {
-          throwBusinessError("No estás en la ubicación autorizada del negocio");
+          throwBusinessError(
+            `No estás dentro del radio permitido (${restaurant.radiusMeters} m). Acércate al local o pide al admin ampliar el radio en Restaurante.`
+          );
         }
       }
       const openRecord = await getLatestOpenTimeclockByEmployee(
@@ -1489,7 +1491,9 @@ export const appRouter = router({
           input.longitude
         );
         if (distance > restaurant.radiusMeters) {
-          throwBusinessError("No estás en la ubicación autorizada del negocio");
+          throwBusinessError(
+            `No estás dentro del radio permitido (${restaurant.radiusMeters} m). Acércate al local o pide al admin ampliar el radio en Restaurante.`
+          );
         }
       }
       const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId, employee.companyId);

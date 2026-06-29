@@ -6,7 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, Activity } from 'lucide-react';
 import { toast } from 'sonner';
-import RestaurantMap from '@/components/RestaurantMap';
+import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { emptyCreds } from '@/lib/authApi';
@@ -785,28 +785,52 @@ export default function AdminDashboard() {
     setLocation('/');
   };
 
-  const handleSaveRestaurant = () => {
+  const handleSaveRestaurant = async () => {
     if (!restaurantName || !restaurantAddress) {
       toast.error('Por favor completa todos los campos');
       return;
     }
-    upsertRestaurant
-      .mutateAsync({
+
+    let lat = latitude;
+    let lng = longitude;
+    let address = restaurantAddress;
+
+    try {
+      const geocoded = await geocodeAddressString(restaurantAddress);
+      if (geocoded) {
+        lat = geocoded.lat;
+        lng = geocoded.lng;
+        address = geocoded.formattedAddress;
+        setLatitude(lat);
+        setLongitude(lng);
+        setRestaurantAddress(address);
+      }
+    } catch {
+      toast.error('No se pudo geocodificar la dirección. Confirma el pin en el mapa.');
+      return;
+    }
+
+    const safeRadius = Math.max(radiusMeters, 50);
+    if (safeRadius !== radiusMeters) {
+      setRadiusMeters(safeRadius);
+      toast.message('Radio mínimo 50 m aplicado (GPS puede variar unos metros).');
+    }
+
+    try {
+      await upsertRestaurant.mutateAsync({
         ...emptyCreds,
         name: restaurantName,
-        address: restaurantAddress,
-        latitude,
-        longitude,
-        radiusMeters,
-      })
-      .then(() => {
-        toast.success('Restaurante guardado correctamente');
-        getRestaurant.refetch();
-      })
-      .catch((error) => {
-        toast.error('Error al guardar restaurante');
-        console.error(error);
+        address,
+        latitude: lat,
+        longitude: lng,
+        radiusMeters: safeRadius,
       });
+      toast.success('Restaurante guardado correctamente');
+      void getRestaurant.refetch();
+    } catch (error) {
+      toast.error('Error al guardar restaurante');
+      console.error(error);
+    }
   };
 
   const handleCreateEmployee = () => {
@@ -1104,10 +1128,14 @@ export default function AdminDashboard() {
                     <input
                       type="number"
                       placeholder="100"
+                      min={50}
                       value={radiusMeters}
                       onChange={(e) => setRadiusMeters(Number(e.target.value))}
                       className="input-elegant"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Recomendado 100–150 m. Con menos de 50 m el GPS del móvil suele fallar al fichar.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1118,6 +1146,7 @@ export default function AdminDashboard() {
                 <RestaurantMap
                   latitude={latitude}
                   longitude={longitude}
+                  initialAddress={restaurantAddress}
                   onLocationSelect={(lat, lng) => {
                     setLatitude(lat);
                     setLongitude(lng);

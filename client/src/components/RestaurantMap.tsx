@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 interface RestaurantMapProps {
   latitude: number;
   longitude: number;
+  initialAddress?: string;
   onLocationSelect: (lat: number, lng: number) => void;
   onAddressChange?: (address: string) => void;
 }
@@ -58,9 +59,32 @@ async function ensureGoogleMapsLoaded(): Promise<boolean> {
   return await waitForGoogleMaps();
 }
 
+/** Geocodifica una dirección escrita a mano (sin pin en el mapa). */
+export async function geocodeAddressString(
+  address: string
+): Promise<{ lat: number; lng: number; formattedAddress: string } | null> {
+  const trimmed = address.trim();
+  if (!trimmed) return null;
+  const loaded = await ensureGoogleMapsLoaded();
+  if (!loaded || !window.google?.maps) return null;
+
+  const geocoder = new window.google.maps.Geocoder();
+  const result = await geocoder.geocode({ address: trimmed });
+  const first = result.results?.[0];
+  const location = first?.geometry?.location;
+  if (!location) return null;
+
+  return {
+    lat: location.lat(),
+    lng: location.lng(),
+    formattedAddress: first.formatted_address || trimmed,
+  };
+}
+
 export default function RestaurantMap({
   latitude,
   longitude,
+  initialAddress,
   onLocationSelect,
   onAddressChange,
 }: RestaurantMapProps) {
@@ -151,6 +175,13 @@ export default function RestaurantMap({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (initialAddress) {
+      setSearchValue(initialAddress);
+      setLocationName(initialAddress);
+    }
+  }, [initialAddress]);
 
   const updateMarker = (lat: number, lng: number) => {
     if (!window.google?.maps || !map.current) return;
