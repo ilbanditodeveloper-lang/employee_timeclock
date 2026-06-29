@@ -210,6 +210,32 @@ export type Timeclock = typeof timeclocks.$inferSelect;
 export type InsertTimeclock = typeof timeclocks.$inferInsert;
 
 /**
+ * Pausas durante un fichaje abierto (descanso / comida).
+ */
+export const timeclockBreaks = pgTable(
+  "timeclock_breaks",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").notNull(),
+    employeeId: integer("employeeId").notNull(),
+    timeclockId: integer("timeclockId").notNull(),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    endedAt: timestamp("endedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    timeclockIdx: index("timeclock_breaks_timeclock_idx").on(table.timeclockId),
+    employeeOpenIdx: index("timeclock_breaks_employee_open_idx").on(
+      table.employeeId,
+      table.endedAt
+    ),
+  })
+);
+
+export type TimeclockBreak = typeof timeclockBreaks.$inferSelect;
+export type InsertTimeclockBreak = typeof timeclockBreaks.$inferInsert;
+
+/**
  * Incident table for storing employee incidents
  */
 export const incidents = pgTable("incidents", {

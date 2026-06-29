@@ -25,6 +25,9 @@ import {
   getTimeclockById,
   getTodayTimeclocksByEmployee,
   getLatestOpenTimeclockByEmployee,
+  getEmployeeClockPauseState,
+  getOpenBreakForTimeclock,
+  closeOpenBreakForTimeclock,
   getLegalAcceptance,
   listEmployeePrivacyAcceptances,
   listTimeclocksForEmployeeIds,
@@ -68,6 +71,7 @@ import {
   employees,
   schedules,
   timeclocks,
+  timeclockBreaks,
   incidents,
   users,
   companies,
@@ -84,6 +88,8 @@ import {
   demoAcceptPrivacy,
   demoClockIn,
   demoClockOut,
+  demoPauseClock,
+  demoResumeClock,
   demoCreateSuperCompany,
   demoMutationSuccess,
   demoSetCompanyStatus,
@@ -1139,6 +1145,61 @@ export const appRouter = router({
       return await getTimeclocksByEmployee(input.employeeId, employee.companyId);
     }),
 
+    getEmployeeClockStatus: publicProcedure.input(
+      optionalCreds.extend({
+        employeeId: z.number(),
+      })
+    ).query(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
+      return getEmployeeClockPauseState(employee.id, employee.companyId);
+    }),
+
+    pauseClock: publicProcedure.input(
+      optionalCreds.extend({
+        employeeId: z.number(),
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
+      if (isDemoRequestActive()) {
+        return demoPauseClock(employee.id);
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const openRecord = await getLatestOpenTimeclockByEmployee(employee.id, employee.companyId);
+      if (!openRecord) throw new Error("Debes fichar entrada antes de pausar");
+      const existingBreak = await getOpenBreakForTimeclock(openRecord.id, employee.companyId);
+      if (existingBreak) throw new Error("Ya estás en pausa");
+      await db.insert(timeclockBreaks).values({
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        timeclockId: openRecord.id,
+        startedAt: new Date(),
+      });
+      return { success: true as const, isPaused: true };
+    }),
+
+    resumeClock: publicProcedure.input(
+      optionalCreds.extend({
+        employeeId: z.number(),
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const employee = await resolveEmployeeAuth(ctx, input);
+      if (isDemoRequestActive()) {
+        return demoResumeClock(employee.id);
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const openRecord = await getLatestOpenTimeclockByEmployee(employee.id, employee.companyId);
+      if (!openRecord) throw new Error("No hay fichaje de entrada activo");
+      const existingBreak = await getOpenBreakForTimeclock(openRecord.id, employee.companyId);
+      if (!existingBreak) throw new Error("No estás en pausa");
+      await db
+        .update(timeclockBreaks)
+        .set({ endedAt: new Date() })
+        .where(eq(timeclockBreaks.id, existingBreak.id));
+      return { success: true as const, isPaused: false };
+    }),
+
     getEmployeeSchedule: publicProcedure.input(
       z.object({
         username: z.string().min(1).optional(),
@@ -1419,6 +1480,7 @@ export const appRouter = router({
       const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId, employee.companyId);
       if (!openRecord) throw new Error("No hay fichaje de entrada activo");
       const now = new Date();
+      await closeOpenBreakForTimeclock(openRecord.id, employee.companyId, now);
       await db.update(timeclocks).set({
         exitTime: now,
         exitLatitude:

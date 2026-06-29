@@ -78,6 +78,13 @@
       "when": 1782086000000,
       "tag": "0010_company_subscription",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782087000000,
+      "tag": "0011_timeclock_breaks",
+      "breakpoints": true
     }
   ]
 }

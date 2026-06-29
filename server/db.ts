@@ -12,6 +12,7 @@ import {
   companies,
   legalAcceptances,
   auditLogs,
+  timeclockBreaks,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
@@ -31,6 +32,8 @@ import {
   getDemoScheduleRows,
   getDemoLatestOpenTimeclock,
   getDemoTodayTimeclocks,
+  getDemoOpenBreak,
+  closeDemoOpenBreak,
   demoHasPrivacyAcceptance,
 } from "./demo/store";
 
@@ -739,6 +742,58 @@ export async function getTimeclockById(id: number, companyId?: number) {
     : eq(timeclocks.id, id);
   const result = await db.select().from(timeclocks).where(where).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getOpenBreakForTimeclock(timeclockId: number, companyId: number) {
+  if (isDemoRequestActive()) {
+    return getDemoOpenBreak(timeclockId);
+  }
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(timeclockBreaks)
+    .where(
+      and(
+        eq(timeclockBreaks.timeclockId, timeclockId),
+        eq(timeclockBreaks.companyId, companyId),
+        isNull(timeclockBreaks.endedAt)
+      )
+    )
+    .orderBy(desc(timeclockBreaks.startedAt))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function closeOpenBreakForTimeclock(timeclockId: number, companyId: number, endedAt = new Date()) {
+  if (isDemoRequestActive()) {
+    return closeDemoOpenBreak(timeclockId, endedAt);
+  }
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(timeclockBreaks)
+    .set({ endedAt })
+    .where(
+      and(
+        eq(timeclockBreaks.timeclockId, timeclockId),
+        eq(timeclockBreaks.companyId, companyId),
+        isNull(timeclockBreaks.endedAt)
+      )
+    );
+}
+
+export async function getEmployeeClockPauseState(employeeId: number, companyId: number) {
+  const openTimeclock = await getLatestOpenTimeclockByEmployee(employeeId, companyId);
+  if (!openTimeclock) {
+    return { isClockedIn: false, isPaused: false, openTimeclockId: null as number | null };
+  }
+  const openBreak = await getOpenBreakForTimeclock(openTimeclock.id, companyId);
+  return {
+    isClockedIn: true,
+    isPaused: Boolean(openBreak),
+    openTimeclockId: openTimeclock.id,
+  };
 }
 
 // Incident queries

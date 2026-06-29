@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Clock, LogOut, Calendar, AlertCircle, CalendarDays, Palmtree } from 'lucide-react';
+import { Clock, LogOut, Calendar, AlertCircle, CalendarDays, Palmtree, Pause, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -95,6 +95,8 @@ function wait(ms: number) {
 export default function EmployeeDashboard() {
   const clockInMutation = trpc.publicApi.clockIn.useMutation();
   const clockOutMutation = trpc.publicApi.clockOut.useMutation();
+  const pauseClockMutation = trpc.publicApi.pauseClock.useMutation();
+  const resumeClockMutation = trpc.publicApi.resumeClock.useMutation();
   const subscribePushMutation = trpc.publicApi.pushNotifications.subscribe.useMutation();
   const vapidKeyQuery = trpc.publicApi.pushNotifications.getVapidPublicKey.useQuery();
   const [, setLocation] = useLocation();
@@ -103,6 +105,7 @@ export default function EmployeeDashboard() {
   const locationEnabled = employeeSession?.locationEnabled ?? false;
   const [isAtRestaurant, setIsAtRestaurant] = useState(() => !locationEnabled);
   const [isClockedIn, setIsClockedIn] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isLate, setIsLate] = useState(false);
@@ -112,6 +115,10 @@ export default function EmployeeDashboard() {
   const pushSubscriptionAttempted = useRef(false);
 
   const employeeTimeclocks = trpc.publicApi.getEmployeeTimeclocks.useQuery(
+    employeeQueryInput(employeeSession?.employeeId ?? 0),
+    { enabled: Boolean(employeeSession?.employeeId) }
+  );
+  const clockStatusQuery = trpc.publicApi.getEmployeeClockStatus.useQuery(
     employeeQueryInput(employeeSession?.employeeId ?? 0),
     { enabled: Boolean(employeeSession?.employeeId) }
   );
@@ -222,6 +229,13 @@ export default function EmployeeDashboard() {
       .sort((a, b) => new Date(b.exitTime || 0).getTime() - new Date(a.exitTime || 0).getTime())[0];
     setLastClockOut(todayExit?.exitTime ? new Date(todayExit.exitTime) : null);
   }, [employeeTimeclocks.data]);
+
+  useEffect(() => {
+    if (clockStatusQuery.data) {
+      setIsClockedIn(clockStatusQuery.data.isClockedIn);
+      setIsPaused(clockStatusQuery.data.isPaused);
+    }
+  }, [clockStatusQuery.data]);
 
   useEffect(() => {
     if (isClockedIn) {
@@ -358,7 +372,8 @@ export default function EmployeeDashboard() {
       const payload = await buildClockPayload();
       await clockOutMutation.mutateAsync(payload);
       setIsClockedIn(false);
-      employeeTimeclocks.refetch().catch(() => {});
+      setIsPaused(false);
+      refreshClockState();
       toast.success('¡Salida registrada!');
     } catch (error) {
       if (!isNetworkFetchError(error)) {
@@ -394,6 +409,33 @@ export default function EmployeeDashboard() {
           }
         }
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshClockState = () => {
+    employeeTimeclocks.refetch().catch(() => {});
+    clockStatusQuery.refetch().catch(() => {});
+  };
+
+  const handleTogglePause = async () => {
+    if (loading || !isClockedIn) return;
+    setLoading(true);
+    try {
+      const input = employeeQueryInput(employeeSession!.employeeId);
+      if (isPaused) {
+        await resumeClockMutation.mutateAsync(input);
+        setIsPaused(false);
+        toast.success('Jornada reanudada');
+      } else {
+        await pauseClockMutation.mutateAsync(input);
+        setIsPaused(true);
+        toast.success('Pausa iniciada');
+      }
+      refreshClockState();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'No se pudo actualizar la pausa'));
     } finally {
       setLoading(false);
     }
@@ -483,14 +525,18 @@ export default function EmployeeDashboard() {
                   Fichaje bloqueado: superaste los {employeeSession?.lateGraceMinutes ?? 5} min de gracia
                 </p>
               )}
+              {isClockedIn && isPaused && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                  En pausa — pulsa Reanudar para seguir fichando
+                </p>
+              )}
             </div>
             <div className={`w-4 h-4 rounded-full ${isAtRestaurant ? 'bg-green-500' : 'bg-red-500'}`}></div>
           </div>
         </Card>
 
-        {/* Clock In/Out Buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Entrada Button */}
+        {/* Clock In / Pause / Out */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Button
             onClick={handleClockIn}
             disabled={!canClockByLocation || isClockedIn || loading || isLate}
@@ -503,7 +549,16 @@ export default function EmployeeDashboard() {
             )}
           </Button>
 
-          {/* Salida Button */}
+          <Button
+            onClick={handleTogglePause}
+            disabled={!isClockedIn || loading}
+            variant="outline"
+            className="h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2 border-2"
+          >
+            {isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
+            {isPaused ? "Reanudar" : "Pausa"}
+          </Button>
+
           <Button
             onClick={handleClockOut}
             disabled={!canClockByLocation || !isClockedIn || loading}

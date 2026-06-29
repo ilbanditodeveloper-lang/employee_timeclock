@@ -3,7 +3,7 @@ import {
   getPlanEmployeeLimit,
   getTrialDaysRemaining,
   isTrialExpired,
-  SUBSCRIPTION_PLAN_LABELS,
+  getSuperAdminSubscriptionLabel,
   type SubscriptionPlan,
 } from "@shared/subscriptionPlans";
 
@@ -25,7 +25,7 @@ export function enrichSuperAdminCompany(
     ...company,
     adminUsername: company.adminUsername ?? null,
     employeeCount,
-    planLabel: SUBSCRIPTION_PLAN_LABELS[plan] ?? plan,
+    planLabel: getSuperAdminSubscriptionLabel(plan),
     planEmployeeLimit: getPlanEmployeeLimit(plan),
     trialDaysRemaining: plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt) : null,
     trialExpired: isTrialExpired(plan, company.trialEndsAt),

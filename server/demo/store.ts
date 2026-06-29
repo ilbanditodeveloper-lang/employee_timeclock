@@ -238,6 +238,16 @@ let nextEmployeeId = 3;
 let nextIncidentId = 2;
 let nextTimeOffId = 2;
 let nextCompanyId = 3;
+let nextBreakId = 1;
+let timeclockBreaks: Array<{
+  id: number;
+  companyId: number;
+  employeeId: number;
+  timeclockId: number;
+  startedAt: Date;
+  endedAt: Date | null;
+  createdAt: Date;
+}> = [];
 
 export function getDemoCompany() {
   return { ...company };
@@ -360,6 +370,7 @@ export function demoClockIn(employeeId: number) {
 export function demoClockOut(employeeId: number) {
   const open = timeclocks.find((t) => t.employeeId === employeeId && !t.exitTime && t.status !== "voided");
   if (!open) throw new Error("No open clock-in found");
+  closeDemoOpenBreak(open.id);
   open.exitTime = new Date();
   open.updatedAt = new Date();
   return { success: true };
@@ -495,5 +506,41 @@ export function getDemoTodayTimeclocks(employeeId: number) {
   return timeclocks.filter(
     (t) => t.employeeId === employeeId && t.createdAt >= dayStart
   );
+}
+
+export function getDemoOpenBreak(timeclockId: number) {
+  return timeclockBreaks.find((b) => b.timeclockId === timeclockId && !b.endedAt);
+}
+
+export function closeDemoOpenBreak(timeclockId: number, endedAt = new Date()) {
+  const row = timeclockBreaks.find((b) => b.timeclockId === timeclockId && !b.endedAt);
+  if (row) row.endedAt = endedAt;
+}
+
+export function demoPauseClock(employeeId: number) {
+  const open = getDemoLatestOpenTimeclock(employeeId);
+  if (!open) throw new Error("Debes fichar entrada antes de pausar");
+  if (getDemoOpenBreak(open.id)) throw new Error("Ya estás en pausa");
+  const now = new Date();
+  const row = {
+    id: nextBreakId++,
+    companyId: open.companyId,
+    employeeId,
+    timeclockId: open.id,
+    startedAt: now,
+    endedAt: null as Date | null,
+    createdAt: now,
+  };
+  timeclockBreaks.push(row);
+  return { success: true as const, isPaused: true };
+}
+
+export function demoResumeClock(employeeId: number) {
+  const open = getDemoLatestOpenTimeclock(employeeId);
+  if (!open) throw new Error("No hay fichaje de entrada activo");
+  const activeBreak = getDemoOpenBreak(open.id);
+  if (!activeBreak) throw new Error("No estás en pausa");
+  activeBreak.endedAt = new Date();
+  return { success: true as const, isPaused: false };
 }
 

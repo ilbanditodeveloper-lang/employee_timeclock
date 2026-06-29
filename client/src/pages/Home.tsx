@@ -19,14 +19,14 @@ export default function Home() {
     else if (employeeSession) setLocation("/employee");
   }, [adminSession, employeeSession, isAuthLoading, setLocation]);
 
-  const handleDemo = async (role: "admin" | "employee" | "superadmin") => {
+  const handleDemo = async (role: "admin" | "employee") => {
     try {
       const result = await enterDemo.mutateAsync({ role });
       if (role === "admin") {
         setAdminSession({ companySlug: "demo", displayName: "Admin Demo" });
         setEmployeeSession(null);
         setLocation("/admin");
-      } else if (role === "employee") {
+      } else {
         setEmployeeSession({
           username: "demo::ana",
           employeeId: result.employeeId ?? 1,
@@ -39,10 +39,6 @@ export default function Home() {
         });
         setAdminSession(null);
         setLocation("/employee");
-      } else {
-        setAdminSession(null);
-        setEmployeeSession(null);
-        setLocation("/superadmin");
       }
       toast.success("Modo demo activado");
     } catch (e) {
@@ -133,15 +129,6 @@ export default function Home() {
               >
                 Demo administrador
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={enterDemo.isPending}
-                onClick={() => handleDemo("superadmin")}
-              >
-                Demo superadmin
-              </Button>
             </div>
           </div>
         )}
@@ -152,9 +139,6 @@ export default function Home() {
           </Button>
           <Button onClick={() => setLocation("/admin-login")} variant="outline" className="w-full text-base">
             Acceso Administrador
-          </Button>
-          <Button onClick={() => setLocation("/superadmin")} variant="ghost" className="w-full text-base">
-            Acceso Superadmin
           </Button>
         </div>
 

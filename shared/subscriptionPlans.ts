@@ -11,6 +11,14 @@ export const SUBSCRIPTION_PLAN_LABELS: Record<SubscriptionPlan, string> = {
   legacy: "Legacy (sin límite)",
 };
 
+/** Etiqueta corta para el panel superadmin (Trial / Mensual / Anual). */
+export function getSuperAdminSubscriptionLabel(plan: SubscriptionPlan): string {
+  if (plan === "trial") return "Trial";
+  if (plan === "starter" || plan === "pro") return "Mensual";
+  if (plan === "enterprise") return "Anual";
+  return "Legacy";
+}
+
 /** Límite de empleados activos por plan (null = sin límite práctico). */
 export const PLAN_EMPLOYEE_LIMITS: Record<SubscriptionPlan, number | null> = {
   trial: 5,
