@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown } from 'lucide-react';
+import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -213,6 +213,10 @@ export default function AdminDashboard() {
     },
     { enabled: Boolean(adminSession) }
   );
+  const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(emptyCreds, {
+    enabled: Boolean(adminSession),
+    refetchInterval: activeTab === 'tracking' ? 30_000 : false,
+  });
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
     onSuccess: () => {
       toast.success('Solicitud actualizada');
@@ -257,26 +261,31 @@ export default function AdminDashboard() {
   );
 
   const timeOffCellApproved = useMemo(() => {
-    const m = new Map<string, string>();
+    const m = new Map<string, string[]>();
     for (const day of timeOffCalendarQuery.data?.days ?? []) {
       const names = Array.from(
         new Set(day.entries.filter((e) => e.status === 'approved').map((e) => e.employeeName))
       );
-      if (names.length) m.set(day.date, names.join(', '));
+      if (names.length) m.set(day.date, names);
     }
     return m;
   }, [timeOffCalendarQuery.data?.days]);
 
   const timeOffCellPending = useMemo(() => {
-    const m = new Map<string, string>();
+    const m = new Map<string, string[]>();
     for (const day of timeOffCalendarQuery.data?.days ?? []) {
       const names = Array.from(
         new Set(day.entries.filter((e) => e.status === 'pending').map((e) => e.employeeName))
       );
-      if (names.length) m.set(day.date, names.join(', '));
+      if (names.length) m.set(day.date, names);
     }
     return m;
   }, [timeOffCalendarQuery.data?.days]);
+
+  const formatClockTime = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  };
 
   const getRangeBounds = () => {
     const start = rangeStart ? new Date(rangeStart) : null;
@@ -1017,6 +1026,14 @@ export default function AdminDashboard() {
                 <Clock3 className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Turnos</span>
                 <span className="sm:hidden">Turnos</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="tracking"
+                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
+              >
+                <Activity className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Seguimiento</span>
+                <span className="sm:hidden">Seguim.</span>
               </TabsTrigger>
               <TabsTrigger
                 value="timeoff"
@@ -1892,6 +1909,157 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="tracking" className="space-y-6">
+            <Card className="p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground">Seguimiento en vivo</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Estado del equipo hoy
+                    {workforceTodayQuery.data?.date
+                      ? ` · ${workforceTodayQuery.data.date.split('-').reverse().join('/')}`
+                      : ''}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void workforceTodayQuery.refetch()}
+                  disabled={workforceTodayQuery.isFetching}
+                >
+                  {workforceTodayQuery.isFetching ? 'Actualizando…' : 'Actualizar'}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <section className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-5">
+                  <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-3 flex items-center gap-2">
+                    <span className="inline-block size-2.5 rounded-full bg-emerald-500" />
+                    Trabajando ahora
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.working ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.working ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nadie fichado en este momento.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(workforceTodayQuery.data?.working ?? []).map((row) => (
+                        <li
+                          key={row.employeeId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-background/80 px-3 py-2"
+                        >
+                          <span className="font-medium text-foreground">{row.employeeName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            Entrada {formatClockTime(row.entryTime)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-5">
+                  <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
+                    <span className="inline-block size-2.5 rounded-full bg-amber-500" />
+                    En pausa
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.onBreak ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.onBreak ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nadie en pausa.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(workforceTodayQuery.data?.onBreak ?? []).map((row) => (
+                        <li
+                          key={row.employeeId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-background/80 px-3 py-2"
+                        >
+                          <span className="font-medium text-foreground">{row.employeeName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            Entrada {formatClockTime(row.entryTime)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-teal-200 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/20 p-5">
+                  <h3 className="text-lg font-semibold text-teal-800 dark:text-teal-200 mb-3 flex items-center gap-2">
+                    <Palmtree className="w-4 h-4" />
+                    Vacaciones / libre hoy
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.onTimeOff ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.onTimeOff ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nadie de baja hoy.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(workforceTodayQuery.data?.onTimeOff ?? []).map((row) => (
+                        <li
+                          key={row.employeeId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-teal-200/80 dark:border-teal-800/50 bg-background/80 px-3 py-2"
+                        >
+                          <span className="font-medium text-foreground">{row.employeeName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {row.kind === 'vacation' ? 'Vacaciones' : 'Día libre'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-border bg-muted/30 p-5">
+                  <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Sin fichar hoy
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.notClockedIn ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.notClockedIn ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Todos han fichado o están de baja.</p>
+                  ) : (
+                    <ul className="flex flex-wrap gap-2">
+                      {(workforceTodayQuery.data?.notClockedIn ?? []).map((row) => (
+                        <li key={row.employeeId}>
+                          <Badge variant="outline" className="text-sm py-1 px-2">
+                            {row.employeeName}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </div>
+
+              {(workforceTodayQuery.data?.finishedToday ?? []).length > 0 ? (
+                <section className="mt-6 rounded-xl border border-border p-5">
+                  <h3 className="text-lg font-semibold text-foreground mb-3">
+                    Ya han terminado jornada hoy
+                  </h3>
+                  <ul className="space-y-2">
+                    {(workforceTodayQuery.data?.finishedToday ?? []).map((row) => (
+                      <li
+                        key={row.employeeId}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium text-foreground">{row.employeeName}</span>
+                        <span className="text-muted-foreground">
+                          Salida {formatClockTime(row.exitTime)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </Card>
+          </TabsContent>
+
           <TabsContent value="timeoff" className="space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-2">Vacaciones y días libres</h2>
@@ -1955,17 +2123,30 @@ export default function AdminDashboard() {
               )}
 
               <h3 className="text-lg font-semibold text-foreground mb-2">Historial en calendario</h3>
-              <p className="text-xs text-muted-foreground mb-3">
+              <p className="text-xs text-muted-foreground mb-4">
                 Leyenda: verde = aprobado (día cogido) · ámbar = pendiente de revisar
               </p>
-              <div className="flex justify-center overflow-x-auto pb-4">
+              <div className="w-full overflow-x-auto pb-2">
                 <UiCalendar
                   mode="single"
                   selected={undefined}
                   onSelect={() => {}}
                   month={timeOffCalMonth}
                   onMonthChange={setTimeOffCalMonth}
-                  className="rounded-lg border border-border [--cell-size:2.75rem] sm:[--cell-size:3.25rem]"
+                  className={cn(
+                    'w-full max-w-none rounded-xl border border-border p-4 sm:p-6',
+                    '[--cell-size:3.25rem] sm:[--cell-size:4.25rem] md:[--cell-size:5rem] lg:[--cell-size:5.75rem]'
+                  )}
+                  classNames={{
+                    root: 'w-full',
+                    months: 'w-full',
+                    month: 'w-full gap-4',
+                    month_caption: 'text-lg sm:text-xl font-semibold mb-1',
+                    weekdays: 'w-full',
+                    weekday: 'flex-1 text-center text-xs sm:text-sm font-medium py-2',
+                    week: 'w-full mt-1',
+                    day: 'aspect-auto min-h-0 flex-1',
+                  }}
                   components={{
                     DayButton: (props) => {
                       const key = format(props.day.date, 'yyyy-MM-dd');
@@ -1976,6 +2157,7 @@ export default function AdminDashboard() {
                           {...props}
                           className={cn(
                             props.className,
+                            '!aspect-auto !min-h-[4.5rem] sm:!min-h-[5.5rem] md:!min-h-[6.5rem] !h-auto w-full py-1.5 px-0.5',
                             approved &&
                               '!bg-emerald-200 dark:!bg-emerald-900/55 hover:!bg-emerald-300 dark:hover:!bg-emerald-800/55',
                             !approved &&
@@ -1983,19 +2165,27 @@ export default function AdminDashboard() {
                               '!bg-amber-100 dark:!bg-amber-900/40 hover:!bg-amber-200 dark:hover:!bg-amber-800/40'
                           )}
                         >
-                          <span className="text-sm font-medium leading-none">
+                          <span className="text-sm sm:text-base font-semibold leading-none">
                             {props.day.date.getDate()}
                           </span>
-                          {approved ? (
-                            <span className="text-[0.55rem] leading-tight line-clamp-3 w-full px-0.5 font-medium text-emerald-950 dark:text-emerald-50">
-                              {approved}
+                          {approved?.map((name) => (
+                            <span
+                              key={`${key}-${name}`}
+                              className="text-[0.6rem] sm:text-[0.7rem] md:text-xs leading-tight w-full px-0.5 font-semibold text-emerald-950 dark:text-emerald-50 truncate"
+                              title={name}
+                            >
+                              {name}
                             </span>
-                          ) : pending ? (
-                            <span className="text-[0.55rem] leading-tight line-clamp-2 w-full px-0.5 text-amber-950 dark:text-amber-50">
-                              {pending}
-                              <span className="block opacity-80">(pend.)</span>
+                          ))}
+                          {!approved?.length && pending?.map((name) => (
+                            <span
+                              key={`${key}-${name}-p`}
+                              className="text-[0.6rem] sm:text-[0.7rem] md:text-xs leading-tight w-full px-0.5 font-medium text-amber-950 dark:text-amber-50 truncate"
+                              title={`${name} (pendiente)`}
+                            >
+                              {name}
                             </span>
-                          ) : null}
+                          ))}
                         </CalendarDayButton>
                       );
                     },

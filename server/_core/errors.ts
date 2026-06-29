@@ -1,4 +1,5 @@
 import { GENERIC_SERVER_ERROR_MSG } from "@shared/const";
+import { TRPCError } from "@trpc/server";
 import { ENV } from "./env";
 
 const BUSINESS_MESSAGE_PATTERNS = [
@@ -20,7 +21,22 @@ const BUSINESS_MESSAGE_PATTERNS = [
   /^Sesión inválida/,
   /^Please login \(10001\)$/,
   /^You do not have required permission \(10002\)$/,
+  /^Negocio no encontrado/,
+  /^Se requiere ubicación para fichar/,
+  /^No estás en la ubicación autorizada del negocio/,
+  /^Debes fichar salida antes de volver a entrar/,
+  /^Fichaje no permitido:/,
+  /^No hay fichaje de entrada activo/,
+  /^Debes fichar entrada antes de pausar/,
+  /^Ya estás en pausa/,
+  /^No estás en pausa/,
+  /^Cuenta de empleado desactivada/,
 ];
+
+/** Errores de negocio visibles al usuario (400, no 500 genérico). */
+export function throwBusinessError(message: string): never {
+  throw new TRPCError({ code: "BAD_REQUEST", message });
+}
 
 /** PostgreSQL unique_violation */
 export function isUniqueViolation(error: unknown): boolean {

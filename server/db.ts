@@ -13,6 +13,7 @@ import {
   legalAcceptances,
   auditLogs,
   timeclockBreaks,
+  timeOffRequests,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
@@ -890,6 +891,139 @@ export async function listAuditLogsByCompany(companyId: number, limit = 100) {
     .where(eq(auditLogs.companyId, companyId))
     .orderBy(desc(auditLogs.performedAt))
     .limit(limit);
+}
+
+export type WorkforceTodaySnapshot = {
+  working: { employeeId: number; employeeName: string; entryTime: string | null }[];
+  onBreak: { employeeId: number; employeeName: string; entryTime: string | null }[];
+  notClockedIn: { employeeId: number; employeeName: string }[];
+  onTimeOff: { employeeId: number; employeeName: string; kind: string }[];
+  finishedToday: { employeeId: number; employeeName: string; exitTime: string | null }[];
+};
+
+export async function getAdminWorkforceToday(
+  employees: { id: number; name: string }[],
+  companyId: number,
+  todayYmd: string
+): Promise<WorkforceTodaySnapshot> {
+  const empty: WorkforceTodaySnapshot = {
+    working: [],
+    onBreak: [],
+    notClockedIn: [],
+    onTimeOff: [],
+    finishedToday: [],
+  };
+  if (employees.length === 0) return empty;
+
+  if (isDemoRequestActive()) {
+    const working: WorkforceTodaySnapshot["working"] = [];
+    const onBreak: WorkforceTodaySnapshot["onBreak"] = [];
+    const clockedInIds = new Set<number>();
+    for (const emp of employees) {
+      const open = getDemoLatestOpenTimeclock(emp.id);
+      if (open) {
+        clockedInIds.add(emp.id);
+        const item = {
+          employeeId: emp.id,
+          employeeName: emp.name,
+          entryTime: open.entryTime ? new Date(open.entryTime).toISOString() : null,
+        };
+        if (getDemoOpenBreak(open.id)) onBreak.push(item);
+        else working.push(item);
+      }
+    }
+    const notClockedIn = employees
+      .filter((e) => !clockedInIds.has(e.id))
+      .map((e) => ({ employeeId: e.id, employeeName: e.name }));
+    return { ...empty, working, onBreak, notClockedIn };
+  }
+
+  const db = await getDb();
+  if (!db) return empty;
+
+  const employeeIds = employees.map((e) => e.id);
+  const nameById = new Map(employees.map((e) => [e.id, e.name]));
+
+  const openClocks = await db
+    .select()
+    .from(timeclocks)
+    .where(
+      and(
+        eq(timeclocks.companyId, companyId),
+        inArray(timeclocks.employeeId, employeeIds),
+        isNull(timeclocks.exitTime),
+        sql`${timeclocks.status} != 'voided'`
+      )
+    );
+
+  const timeOffRows = await db
+    .select()
+    .from(timeOffRequests)
+    .where(
+      and(
+        eq(timeOffRequests.companyId, companyId),
+        inArray(timeOffRequests.employeeId, employeeIds),
+        eq(timeOffRequests.status, "approved"),
+        sql`${timeOffRequests.startDate}::text <= ${todayYmd}`,
+        sql`${timeOffRequests.endDate}::text >= ${todayYmd}`
+      )
+    );
+
+  const onTimeOffIds = new Set(timeOffRows.map((r) => r.employeeId));
+  const onTimeOff = timeOffRows.map((r) => ({
+    employeeId: r.employeeId,
+    employeeName: nameById.get(r.employeeId) ?? "—",
+    kind: r.kind,
+  }));
+
+  const working: WorkforceTodaySnapshot["working"] = [];
+  const onBreak: WorkforceTodaySnapshot["onBreak"] = [];
+  const clockedInIds = new Set<number>();
+
+  for (const tc of openClocks) {
+    clockedInIds.add(tc.employeeId);
+    const item = {
+      employeeId: tc.employeeId,
+      employeeName: nameById.get(tc.employeeId) ?? "—",
+      entryTime: tc.entryTime ? new Date(tc.entryTime).toISOString() : null,
+    };
+    const openBreak = await getOpenBreakForTimeclock(tc.id, companyId);
+    if (openBreak) onBreak.push(item);
+    else working.push(item);
+  }
+
+  const finishedToday: WorkforceTodaySnapshot["finishedToday"] = [];
+  const finishedRows = await db
+    .select()
+    .from(timeclocks)
+    .where(
+      and(
+        eq(timeclocks.companyId, companyId),
+        inArray(timeclocks.employeeId, employeeIds),
+        sql`${timeclocks.exitTime} IS NOT NULL`,
+        sql`${timeclocks.status} != 'voided'`,
+        sql`${timeclocks.entryTime}::date = ${todayYmd}::date`
+      )
+    );
+  const finishedByEmployee = new Map<number, (typeof finishedRows)[0]>();
+  for (const row of finishedRows) {
+    if (!clockedInIds.has(row.employeeId)) {
+      finishedByEmployee.set(row.employeeId, row);
+    }
+  }
+  for (const [employeeId, row] of finishedByEmployee) {
+    finishedToday.push({
+      employeeId,
+      employeeName: nameById.get(employeeId) ?? "—",
+      exitTime: row.exitTime ? new Date(row.exitTime).toISOString() : null,
+    });
+  }
+
+  const notClockedIn = employees
+    .filter((e) => !clockedInIds.has(e.id) && !onTimeOffIds.has(e.id) && !finishedByEmployee.has(e.id))
+    .map((e) => ({ employeeId: e.id, employeeName: e.name }));
+
+  return { working, onBreak, notClockedIn, onTimeOff, finishedToday };
 }
 
 export async function listTimeclocksForEmployeeIds(employeeIds: number[], companyId: number) {

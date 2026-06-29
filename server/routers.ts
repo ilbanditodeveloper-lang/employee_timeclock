@@ -34,6 +34,7 @@ import {
   listIncidentsForEmployeeIds,
   registerBusinessTenant,
   countEmployeesByCompany,
+  getAdminWorkforceToday,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
 import { hashPassword } from "./_core/password";
@@ -49,7 +50,7 @@ import {
 import { setSessionCookie, clearSessionCookie } from "./_core/session";
 import { checkRateLimit, checkRateLimitWithIp } from "./_core/rateLimit";
 import { getClientIp } from "./_core/requestIp";
-import { isUniqueViolation } from "./_core/errors";
+import { isUniqueViolation, throwBusinessError } from "./_core/errors";
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
 import { writeAuditLog } from "./_core/audit";
 import { enrichSuperAdminCompany } from "./_core/superAdminCompanies";
@@ -1166,9 +1167,9 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const openRecord = await getLatestOpenTimeclockByEmployee(employee.id, employee.companyId);
-      if (!openRecord) throw new Error("Debes fichar entrada antes de pausar");
+      if (!openRecord) throwBusinessError("Debes fichar entrada antes de pausar");
       const existingBreak = await getOpenBreakForTimeclock(openRecord.id, employee.companyId);
-      if (existingBreak) throw new Error("Ya estás en pausa");
+      if (existingBreak) throwBusinessError("Ya estás en pausa");
       await db.insert(timeclockBreaks).values({
         companyId: employee.companyId,
         employeeId: employee.id,
@@ -1190,9 +1191,9 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const openRecord = await getLatestOpenTimeclockByEmployee(employee.id, employee.companyId);
-      if (!openRecord) throw new Error("No hay fichaje de entrada activo");
+      if (!openRecord) throwBusinessError("No hay fichaje de entrada activo");
       const existingBreak = await getOpenBreakForTimeclock(openRecord.id, employee.companyId);
-      if (!existingBreak) throw new Error("No estás en pausa");
+      if (!existingBreak) throwBusinessError("No estás en pausa");
       await db
         .update(timeclockBreaks)
         .set({ endedAt: new Date() })
@@ -1389,11 +1390,11 @@ export const appRouter = router({
       if (!db) throw new Error("Database not available");
       const company = await getCompanyById(employee.companyId);
       const restaurant = await getRestaurantById(employee.restaurantId, employee.companyId);
-      if (!restaurant) throw new Error("Negocio no encontrado");
+      if (!restaurant) throwBusinessError("Negocio no encontrado");
 
       if (company?.locationEnabled) {
         if (input.latitude === undefined || input.longitude === undefined) {
-          throw new Error("Se requiere ubicación para fichar en este negocio");
+          throwBusinessError("Se requiere ubicación para fichar en este negocio");
         }
         const distance = calculateDistance(
           parseFloat(restaurant.latitude.toString()),
@@ -1402,21 +1403,35 @@ export const appRouter = router({
           input.longitude
         );
         if (distance > restaurant.radiusMeters) {
-          throw new Error("No estás en la ubicación autorizada del negocio");
+          throwBusinessError("No estás en la ubicación autorizada del negocio");
         }
       }
-      const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId);
-      if (openRecord) throw new Error("You must clock out before clocking in again");
+      const openRecord = await getLatestOpenTimeclockByEmployee(
+        input.employeeId,
+        employee.companyId
+      );
+      if (openRecord) {
+        throwBusinessError("Debes fichar salida antes de volver a entrar");
+      }
       const now = new Date();
       const graceMinutes = employee.lateGraceMinutes ?? 5;
       const dayOfWeek = now.getDay();
-      const todayTimeclocks = await getTodayTimeclocksByEmployee(input.employeeId, now);
+      const todayTimeclocks = await getTodayTimeclocksByEmployee(
+        input.employeeId,
+        now,
+        employee.companyId
+      );
       const completedShifts = todayTimeclocks.filter(tc => tc.exitTime).length;
       const schedule =
         completedShifts === 0
-          ? await getScheduleByEmployeeAndDay(input.employeeId, dayOfWeek)
+          ? await getScheduleByEmployeeAndDay(input.employeeId, dayOfWeek, employee.companyId)
           : completedShifts === 1
-          ? await getScheduleByEmployeeDayAndSlot(input.employeeId, dayOfWeek, 2)
+          ? await getScheduleByEmployeeDayAndSlot(
+              input.employeeId,
+              dayOfWeek,
+              2,
+              employee.companyId
+            )
           : undefined;
       if (schedule && schedule.isWorkDay && schedule.entryTime !== "00:00") {
         const parsed = parseScheduleTime(schedule.entryTime);
@@ -1425,7 +1440,7 @@ export const appRouter = router({
           scheduleTime.setHours(parsed.hour, parsed.minute, 0, 0);
           const graceTime = new Date(scheduleTime.getTime() + graceMinutes * 60 * 1000);
           if (now > graceTime) {
-            throw new Error(
+            throwBusinessError(
               `Fichaje no permitido: has superado los ${graceMinutes} minutos de gracia desde la hora de entrada.`
             );
           }
@@ -1461,11 +1476,11 @@ export const appRouter = router({
       if (!db) throw new Error("Database not available");
       const company = await getCompanyById(employee.companyId);
       const restaurant = await getRestaurantById(employee.restaurantId, employee.companyId);
-      if (!restaurant) throw new Error("Negocio no encontrado");
+      if (!restaurant) throwBusinessError("Negocio no encontrado");
 
       if (company?.locationEnabled) {
         if (input.latitude === undefined || input.longitude === undefined) {
-          throw new Error("Se requiere ubicación para fichar en este negocio");
+          throwBusinessError("Se requiere ubicación para fichar en este negocio");
         }
         const distance = calculateDistance(
           parseFloat(restaurant.latitude.toString()),
@@ -1474,11 +1489,11 @@ export const appRouter = router({
           input.longitude
         );
         if (distance > restaurant.radiusMeters) {
-          throw new Error("No estás en la ubicación autorizada del negocio");
+          throwBusinessError("No estás en la ubicación autorizada del negocio");
         }
       }
       const openRecord = await getLatestOpenTimeclockByEmployee(input.employeeId, employee.companyId);
-      if (!openRecord) throw new Error("No hay fichaje de entrada activo");
+      if (!openRecord) throwBusinessError("No hay fichaje de entrada activo");
       const now = new Date();
       await closeOpenBreakForTimeclock(openRecord.id, employee.companyId, now);
       await db.update(timeclocks).set({
@@ -1800,6 +1815,33 @@ export const appRouter = router({
           .map(([date, entries]) => ({ date, entries }))
           .sort((a, b) => a.date.localeCompare(b.date));
         return { days };
+      }),
+
+    getTodayWorkforceStatus: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        if (!restaurant) {
+          return {
+            date: todayYmdInTimeZone(company.timezone || "Europe/Madrid"),
+            working: [],
+            onBreak: [],
+            notClockedIn: [],
+            onTimeOff: [],
+            finishedToday: [],
+          };
+        }
+        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
+        const activeEmployees = restaurantEmployees.filter((e) => e.isActive !== false);
+        const tz = company.timezone || "Europe/Madrid";
+        const todayStr = todayYmdInTimeZone(tz);
+        const snapshot = await getAdminWorkforceToday(
+          activeEmployees.map((e) => ({ id: e.id, name: e.name })),
+          company.id,
+          todayStr
+        );
+        return { date: todayStr, ...snapshot };
       }),
 
     pushNotifications: router({
