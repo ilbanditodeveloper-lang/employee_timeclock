@@ -13,12 +13,16 @@ Checklist final antes de abrir producción a clientes reales.
 
 ## Infraestructura
 
-- [ ] Supabase **production** creado (UE), separado de staging
-- [ ] Backups Supabase activados
-- [ ] Render Web Service desplegado
-- [ ] Dominio HTTPS configurado
-- [ ] `FRONTEND_URL` / `VITE_APP_URL` correctos
-- [ ] Health `/healthz` responde 200
+**Opción elegida (v1): un solo Supabase** — mismo proyecto para staging y producción. No hace falta crear otro proyecto Supabase hasta tener clientes de pago y querer aislamiento.
+
+- [x] Supabase UE con migraciones **0000–0011** aplicadas
+- [ ] Backups Supabase activados (plan Pro recomendado)
+- [x] Render Web Service desplegado (`employee-timeclock-1.onrender.com`)
+- [ ] Dominio HTTPS propio configurado (opcional al inicio; Render ya da HTTPS)
+- [ ] `FRONTEND_URL` / `VITE_APP_URL` = URL final de producción
+- [x] Health `/healthz` responde 200 (staging verificado)
+
+> **Alternativa futura:** segundo proyecto Supabase solo cuando quieras separar datos staging/prod.
 
 ## Seguridad
 
@@ -32,17 +36,17 @@ Checklist final antes de abrir producción a clientes reales.
 
 ## Base de datos production
 
-- [ ] Migraciones 0000–0008 aplicadas
+- [x] Migraciones **0000–0011** aplicadas (incl. suscripción y pausas fichaje)
 - [ ] `node scripts/verify-production-db.mjs --production` → PASS
-- [ ] 0 datos TEST (`test-*`, `@example.com`)
+- [x] 0 datos TEST (`test-*`, `@example.com`) — verificado en Supabase
 - [ ] 0 emails admin duplicados
-- [ ] Preflight `--production` → PASS
+- [ ] Preflight `--production` → PASS (con `DEMO_MODE=false`)
 
 ## Legal y compliance técnico
 
-- [ ] `/legal/privacy` público
-- [ ] `/legal/terms` público
-- [ ] `/legal/dpa` público
+- [x] `/legal/privacy` público (staging OK)
+- [x] `/legal/terms` público (staging OK)
+- [x] `/legal/dpa` público (staging OK)
 - [ ] Textos revisados por asesor (responsabilidad cliente)
 - [ ] Exportaciones probadas (PDF inspección, CSV)
 

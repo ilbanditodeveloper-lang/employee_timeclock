@@ -18,19 +18,30 @@ Usuario ──HTTPS──► Render Web Service
 ## Requisitos
 
 - Cuenta [Render](https://render.com)
-- 2 proyectos Supabase: **staging** y **production** (región UE recomendada)
+- 1 proyecto Supabase (v1) o 2 si quieres aislamiento staging/prod más adelante
 - Dominio opcional: `app.tudominio.com`, `staging.app.tudominio.com`
 
 ## 1. Supabase
 
 Ver [SUPABASE_SETUP.md](../SUPABASE_SETUP.md) y [BACKUP_AND_RECOVERY.md](./BACKUP_AND_RECOVERY.md).
 
-1. Crear proyecto **staging** (región Frankfurt/UE)
-2. Crear proyecto **production** (separado, sin datos TEST)
-3. Activar **backups** (plan Pro recomendado en prod)
-4. Copiar connection strings:
-   - **Pooler** (6543) → `DATABASE_URL` en Render
-   - **Direct** (5432) → migraciones locales/CI
+### v1 — un solo proyecto (recomendado para arrancar)
+
+1. Usar el proyecto Supabase existente (región UE)
+2. Aplicar migraciones `pnpm db:migrate` (pooler si directo falla en local)
+3. Activar **backups** cuando pases a clientes de pago
+4. **Pooler** (6543) → `DATABASE_URL` en Render
+
+### v2 — dos proyectos (opcional, más adelante)
+
+1. Crear proyecto **production** separado, sin datos TEST
+2. Repetir migraciones tras backup
+3. Secretos y `DATABASE_URL` distintos por entorno
+
+Connection strings:
+
+- **Pooler** (6543) → `DATABASE_URL` en Render
+- **Direct** (5432) → migraciones locales/CI (si DNS lo permite)
 
 ## 2. Migraciones
 
@@ -45,7 +56,7 @@ node scripts/verify-production-db.mjs --staging
 node scripts/e2e-phase1-check.mjs   # contra staging URL
 ```
 
-Repetir en production tras backup y QA staging.
+Con un solo Supabase, no hace falta repetir migraciones para “prod”. Con dos proyectos, repetir tras backup y QA staging.
 
 ## 3. Render — Web Service
 

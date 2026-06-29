@@ -80,6 +80,53 @@ VITE_APP_URL=https://app.tudominio.com
 
 Sin datos TEST. Preflight `--production` debe pasar.
 
+## Go-live v1: copiar de staging a Render (un solo Supabase)
+
+Usa **el mismo** `DATABASE_URL` (pooler Supabase). Solo cambia secretos, URLs y demo.
+
+Copia desde `.env.staging.local` al dashboard de Render (Environment). **No subas ese archivo a Git.**
+
+| Variable | Staging (actual) | Production (Render) |
+|----------|------------------|---------------------|
+| `NODE_ENV` | `production` | `production` |
+| `DATABASE_URL` | pooler `:6543` | **Igual** — mismo Supabase |
+| `JWT_SECRET` | secret staging | **Nuevo** ≥ 32 chars (distinto a staging y local) |
+| `CRON_SECRET` | secret staging | **Nuevo** aleatorio (16+ chars) |
+| `CRON_INTERNAL` | `false` | `false` |
+| `SUPERADMIN_USERNAME` | tu usuario | Igual o nuevo (recomendado fuerte) |
+| `SUPERADMIN_PASSWORD` | tu contraseña | Igual o **nueva** para prod |
+| `FRONTEND_URL` | `https://employee-timeclock-1.onrender.com` | URL prod (misma si reutilizas el servicio) |
+| `VITE_APP_URL` | igual que `FRONTEND_URL` | igual que `FRONTEND_URL` |
+| `PORT` | lo inyecta Render | no tocar |
+| `DEMO_MODE` | `true` | **omitir** o `false` |
+| `APP_ENV` | `staging` (opcional) | omitir en prod |
+
+### Opciones de deploy
+
+1. **Reutilizar el servicio actual** (`employee-timeclock-1.onrender.com`): en Render cambia `DEMO_MODE` → `false`, rota `JWT_SECRET` y `CRON_SECRET`, redeploy.
+2. **Segundo servicio Render “prod”**: mismas vars salvo URLs propias; **mismo** `DATABASE_URL`.
+
+### Migraciones (solo desde tu PC)
+
+```powershell
+# Usa pooler si el hostname directo falla (ENOTFOUND en Windows)
+$env:DATABASE_URL = "<DATABASE_URL pooler de .env.staging.local>"
+pnpm db:migrate
+node scripts/inventory-test-data.mjs
+```
+
+`DATABASE_URL_DIRECT` (puerto 5432) solo si tu red resuelve `db.*.supabase.co`.
+
+### Cron HTTP (Render Cron Job)
+
+Programar cada 1–5 min:
+
+```
+GET https://TU-URL.onrender.com/api/cron/notifications?secret=<CRON_SECRET>
+```
+
+Usa el `CRON_SECRET` de **production**, no el de staging si los rotaste.
+
 ## DATABASE_URL: pooler vs directo
 
 | Uso | Conexión |

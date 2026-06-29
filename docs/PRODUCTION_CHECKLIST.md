@@ -23,11 +23,10 @@ Usar antes de cada deploy a **production** y como referencia de configuración.
 
 ## Supabase production
 
-- [ ] Proyecto separado de staging/dev
-- [ ] Región UE
+- [ ] Proyecto UE (v1: **mismo** que staging; v2: separado opcional)
 - [ ] Backups activados
 - [ ] `DATABASE_URL` = pooler (6543)
-- [ ] Migraciones 0000–0008 aplicadas (`pnpm db:migrate`)
+- [ ] Migraciones **0000–0011** aplicadas (`pnpm db:migrate`)
 - [ ] Índice `users_admin_email_lower_unique_idx` presente
 - [ ] **0** companies `test-*`
 - [ ] **0** users `@example.com`
