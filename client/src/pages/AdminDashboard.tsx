@@ -976,10 +976,9 @@ export default function AdminDashboard() {
   const atEmployeeLimit = Boolean(subscription?.atEmployeeLimit);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
-        <div className="container py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex flex-col">
+      <header className="bg-card border-b border-border shadow-sm shrink-0 z-50">
+        <div className="px-4 lg:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
               <AlertCircle className="w-5 h-5 text-accent-foreground" />
@@ -1007,20 +1006,13 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-8">
-        {showOnboardingBanner && <OnboardingReminderBanner />}
-        {showTrialBanner && subscription?.bannerMessage ? (
-          <SubscriptionBanner message={subscription.bannerMessage} variant="trial" />
-        ) : null}
-        {showLimitBanner && subscription?.bannerMessage ? (
-          <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
-        ) : null}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="flex flex-col gap-6 md:flex-row md:items-start">
-            <aside className="w-full shrink-0 md:w-56 lg:w-64">
-              <nav className="md:sticky md:top-24">
-                <TabsList className="flex h-auto w-full flex-col items-stretch gap-1 rounded-xl border border-border bg-card p-2 shadow-sm">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 min-h-0 w-full">
+        <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card shadow-sm lg:w-60 xl:w-64">
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menú</p>
+          </div>
+          <nav className="flex-1 overflow-y-auto p-2">
+            <TabsList className="flex h-auto w-full flex-col items-stretch gap-1 rounded-lg bg-transparent p-0 shadow-none">
                   <TabsTrigger
                     value="restaurant"
                     className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
@@ -1085,8 +1077,18 @@ export default function AdminDashboard() {
                     Legal / RGPD
                   </TabsTrigger>
                 </TabsList>
-              </nav>
-            </aside>
+          </nav>
+        </aside>
+
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
+            {showOnboardingBanner && <OnboardingReminderBanner />}
+            {showTrialBanner && subscription?.bannerMessage ? (
+              <SubscriptionBanner message={subscription.bannerMessage} variant="trial" />
+            ) : null}
+            {showLimitBanner && subscription?.bannerMessage ? (
+              <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
+            ) : null}
 
             <div className="min-w-0 flex-1">
           <TabsContent value="restaurant" className="space-y-6">
@@ -2363,8 +2365,8 @@ export default function AdminDashboard() {
           </TabsContent>
             </div>
           </div>
-        </Tabs>
-      </main>
+        </main>
+      </Tabs>
     </div>
   );
 }

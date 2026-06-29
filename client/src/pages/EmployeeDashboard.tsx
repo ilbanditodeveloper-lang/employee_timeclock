@@ -8,10 +8,14 @@ import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { employeeQueryInput } from '@/lib/authApi';
 import EmployeePrivacyNotice from '@/pages/EmployeePrivacyNotice';
+import { EARLY_CLOCK_MINUTES } from '@shared/const';
+import {
+  formatScheduleTime,
+  getClockWindowMinutes,
+  parseScheduleEntryTime,
+} from '@shared/scheduleClockWindow';
 import EmployeeBottomMenu from '@/components/EmployeeBottomMenu';
 
-const LATE_CUTOFF_HOUR = 9;
-const LATE_CUTOFF_MINUTE = 0;
 const LATE_GRACE_MINUTES = 5;
 
 const weekdayKeys = [
@@ -109,6 +113,8 @@ export default function EmployeeDashboard() {
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isLate, setIsLate] = useState(false);
+  const [isTooEarly, setIsTooEarly] = useState(false);
+  const [scheduledEntryLabel, setScheduledEntryLabel] = useState<string | null>(null);
   const [isWorkDay, setIsWorkDay] = useState(true);
   const [lastClockOut, setLastClockOut] = useState<Date | null>(null);
   const notificationWarningShown = useRef(false);
@@ -240,6 +246,7 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     if (isClockedIn) {
       setIsLate(false);
+      setIsTooEarly(false);
       return;
     }
 
@@ -258,39 +265,39 @@ export default function EmployeeDashboard() {
     setIsWorkDay(dayActive);
     if (!dayActive) {
       setIsLate(false);
+      setIsTooEarly(false);
+      setScheduledEntryLabel(null);
       return;
     }
 
     const entryTime = isSameDayClockOut && entry2 ? entry2 : entry1;
 
-    let cutoffHour = LATE_CUTOFF_HOUR;
-    let cutoffMinute = LATE_CUTOFF_MINUTE;
-
     if (!entryTime) {
       setIsLate(false);
+      setIsTooEarly(false);
+      setScheduledEntryLabel(null);
       return;
     }
 
-    if (typeof entryTime === "string") {
-      const normalized = entryTime.replace(".", ":").trim();
-      if (normalized.includes(":")) {
-        const [hourStr, minuteStr] = normalized.split(":");
-        cutoffHour = Number(hourStr);
-        cutoffMinute = Number(minuteStr || "0");
-      } else if (normalized.length > 0) {
-        cutoffHour = Number(normalized);
-        cutoffMinute = 0;
-      }
+    const parsed = parseScheduleEntryTime(entryTime);
+    if (!parsed) {
+      setIsLate(false);
+      setIsTooEarly(false);
+      setScheduledEntryLabel(null);
+      return;
     }
 
-    const hours = currentTime.getHours();
-    const minutes = currentTime.getMinutes();
+    setScheduledEntryLabel(formatScheduleTime(parsed.hour, parsed.minute));
     const graceMinutes = employeeSession?.lateGraceMinutes ?? LATE_GRACE_MINUTES;
-    const cutoffTotalMinutes = cutoffHour * 60 + cutoffMinute + graceMinutes;
-    const currentTotalMinutes = hours * 60 + minutes;
-    const isAfterCutoff = currentTotalMinutes > cutoffTotalMinutes;
-
-    setIsLate(isAfterCutoff);
+    const { earliest, latest } = getClockWindowMinutes(
+      parsed.hour,
+      parsed.minute,
+      graceMinutes,
+      EARLY_CLOCK_MINUTES
+    );
+    const currentTotalMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+    setIsTooEarly(currentTotalMinutes < earliest);
+    setIsLate(currentTotalMinutes > latest);
   }, [
     currentTime,
     isClockedIn,
@@ -464,7 +471,7 @@ export default function EmployeeDashboard() {
     );
   }
 
-  const canClockIn = !isClockedIn && !loading && !isLate && isWorkDay;
+  const canClockIn = !isClockedIn && !loading && isWorkDay && !isLate && !isTooEarly;
   const canClockOut = isClockedIn && !loading;
 
   return (
@@ -521,6 +528,11 @@ export default function EmployeeDashboard() {
                   Día no laborable
                 </p>
               )}
+              {isTooEarly && isWorkDay && scheduledEntryLabel && !isClockedIn && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                  Fichaje disponible desde {EARLY_CLOCK_MINUTES} min antes de las {scheduledEntryLabel}
+                </p>
+              )}
               {isLate && isWorkDay && !isClockedIn && (
                 <p className="text-sm text-red-600 dark:text-red-400 mt-2">
                   Fichaje bloqueado: superaste los {employeeSession?.lateGraceMinutes ?? 5} min de gracia
@@ -548,7 +560,10 @@ export default function EmployeeDashboard() {
             className="btn-primary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
           >
             <Clock className="w-6 h-6" />
-            {isLate ? "Entrada bloqueada" : "Entrada"}
+            {isTooEarly ? "Aún no puedes fichar" : isLate ? "Entrada bloqueada" : "Entrada"}
+            {isTooEarly && scheduledEntryLabel && (
+              <span className="text-xs font-normal">Desde {EARLY_CLOCK_MINUTES} min antes de {scheduledEntryLabel}</span>
+            )}
             {isLate && (
               <span className="text-xs font-normal">Retraso &gt; gracia permitida</span>
             )}

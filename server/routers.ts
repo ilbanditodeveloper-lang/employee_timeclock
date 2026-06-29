@@ -1,4 +1,9 @@
-import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION, DUPLICATE_EMPLOYEE_EMAIL_MSG } from "@shared/const";
+import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION, DUPLICATE_EMPLOYEE_EMAIL_MSG, EARLY_CLOCK_MINUTES } from "@shared/const";
+import {
+  formatScheduleTime,
+  getClockWindowMinutes,
+  parseScheduleEntryTime,
+} from "@shared/scheduleClockWindow";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, deprecatedProcedure } from "./_core/trpc";
@@ -1436,12 +1441,21 @@ export const appRouter = router({
             )
           : undefined;
       if (schedule && schedule.isWorkDay && schedule.entryTime !== "00:00") {
-        const parsed = parseScheduleTime(schedule.entryTime);
+        const parsed = parseScheduleEntryTime(schedule.entryTime);
         if (parsed) {
-          const scheduleTime = new Date();
-          scheduleTime.setHours(parsed.hour, parsed.minute, 0, 0);
-          const graceTime = new Date(scheduleTime.getTime() + graceMinutes * 60 * 1000);
-          if (now > graceTime) {
+          const { earliest, latest } = getClockWindowMinutes(
+            parsed.hour,
+            parsed.minute,
+            graceMinutes,
+            EARLY_CLOCK_MINUTES
+          );
+          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          if (nowMinutes < earliest) {
+            throwBusinessError(
+              `Fichaje disponible desde ${EARLY_CLOCK_MINUTES} min antes de tu hora (${formatScheduleTime(parsed.hour, parsed.minute)}).`
+            );
+          }
+          if (nowMinutes > latest) {
             throwBusinessError(
               `Fichaje no permitido: has superado los ${graceMinutes} minutos de gracia desde la hora de entrada.`
             );

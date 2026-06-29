@@ -30,3 +30,6 @@ export const GENERIC_AUTH_FAILURE_MSG = "Credenciales inválidas";
 export const RATE_LIMIT_MSG = "Demasiados intentos. Espera un minuto e inténtalo de nuevo.";
 
 export const GENERIC_SERVER_ERROR_MSG = "Ha ocurrido un error. Inténtalo de nuevo más tarde.";
+
+/** Minutos antes de la hora de entrada en los que el empleado ya puede fichar. */
+export const EARLY_CLOCK_MINUTES = 5;

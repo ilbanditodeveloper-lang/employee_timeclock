@@ -26,6 +26,7 @@ const BUSINESS_MESSAGE_PATTERNS = [
   /^No estás en la ubicación autorizada del negocio/,
   /^No estás dentro del radio permitido/,
   /^Debes fichar salida antes de volver a entrar/,
+  /^Fichaje disponible desde/,
   /^Fichaje no permitido:/,
   /^No hay fichaje de entrada activo/,
   /^Debes fichar entrada antes de pausar/,
