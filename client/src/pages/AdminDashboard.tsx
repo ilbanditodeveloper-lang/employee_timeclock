@@ -984,7 +984,7 @@ export default function AdminDashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="container py-8">
+      <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-8">
         {showOnboardingBanner && <OnboardingReminderBanner />}
         {showTrialBanner && subscription?.bannerMessage ? (
           <SubscriptionBanner message={subscription.bannerMessage} variant="trial" />
@@ -993,84 +993,78 @@ export default function AdminDashboard() {
           <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
         ) : null}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="mb-8 -mx-4 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:thin]">
-            <TabsList className="inline-flex h-auto min-h-10 w-max max-w-none flex-nowrap items-stretch justify-start gap-1 rounded-lg bg-muted p-1 text-muted-foreground sm:w-full sm:max-w-full sm:flex-wrap sm:justify-center md:flex-nowrap md:justify-center">
-              <TabsTrigger
-                value="restaurant"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <MapPin className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Restaurante</span>
-                <span className="sm:hidden">Local</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="employees"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <Users className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Empleados</span>
-                <span className="sm:hidden">Equipo</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="hours"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <Calendar className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Horas</span>
-                <span className="sm:hidden">Horas</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="shifts"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <Clock3 className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Turnos</span>
-                <span className="sm:hidden">Turnos</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="tracking"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <Activity className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Seguimiento</span>
-                <span className="sm:hidden">Seguim.</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="timeoff"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <Palmtree className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Vacaciones</span>
-                <span className="sm:hidden">Libres</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="incidents"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Incidencias</span>
-                <span className="sm:hidden">Avisos</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="audit"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <ClipboardList className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Auditoría</span>
-                <span className="sm:hidden">Audit</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="legal"
-                className="flex shrink-0 grow-0 basis-auto items-center gap-2 px-3 sm:min-w-0 sm:flex-1"
-              >
-                <Scale className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Legal / RGPD</span>
-                <span className="sm:hidden">Legal</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+          <div className="flex flex-col gap-6 md:flex-row md:items-start">
+            <aside className="w-full shrink-0 md:w-56 lg:w-64">
+              <nav className="md:sticky md:top-24">
+                <TabsList className="flex h-auto w-full flex-col items-stretch gap-1 rounded-xl border border-border bg-card p-2 shadow-sm">
+                  <TabsTrigger
+                    value="restaurant"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    Restaurante
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="employees"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Users className="w-4 h-4 shrink-0" />
+                    Empleados
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="hours"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Calendar className="w-4 h-4 shrink-0" />
+                    Horas
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="shifts"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Clock3 className="w-4 h-4 shrink-0" />
+                    Turnos
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="tracking"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Activity className="w-4 h-4 shrink-0" />
+                    Seguimiento
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="timeoff"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Palmtree className="w-4 h-4 shrink-0" />
+                    Vacaciones
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="incidents"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    Incidencias
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="audit"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <ClipboardList className="w-4 h-4 shrink-0" />
+                    Auditoría
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="legal"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Scale className="w-4 h-4 shrink-0" />
+                    Legal / RGPD
+                  </TabsTrigger>
+                </TabsList>
+              </nav>
+            </aside>
 
-          {/* Restaurant Tab */}
+            <div className="min-w-0 flex-1">
           <TabsContent value="restaurant" className="space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-6">Gestión del Negocio</h2>
@@ -2338,6 +2332,8 @@ export default function AdminDashboard() {
           <TabsContent value="audit" className="space-y-6">
             <AdminAuditLogPanel />
           </TabsContent>
+            </div>
+          </div>
         </Tabs>
       </main>
     </div>
