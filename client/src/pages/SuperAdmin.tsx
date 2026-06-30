@@ -1,14 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Shield, ArrowLeft, Building2, Globe, Plus, Trash2 } from "lucide-react";
+import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
+import AppShellLayout, {
+  AppShellKpiCard,
+  AppShellPanel,
+  type AppShellNavItem,
+} from "@/components/AppShellLayout";
 import {
   DEFAULT_LANDING_PAGE_CONFIG,
   type LandingPageConfig,
@@ -19,7 +24,28 @@ import {
 } from "@shared/landingConfig";
 import { cn } from "@/lib/utils";
 
-type SuperAdminTab = "companies" | "landing";
+type SuperAdminTab = "dashboard" | "companies" | "landing";
+
+const SUPERADMIN_NAV: AppShellNavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "companies", label: "Empresas", icon: Building2 },
+  { id: "landing", label: "Web / Landing", icon: Globe },
+];
+
+const SUPERADMIN_PAGE_TITLES: Record<SuperAdminTab, { title: string; subtitle: string }> = {
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Resumen de la plataforma TimeClock",
+  },
+  companies: {
+    title: "Empresas",
+    subtitle: "Gestión de clientes y suscripciones",
+  },
+  landing: {
+    title: "Web / Landing",
+    subtitle: "Contenido público de la página principal",
+  },
+};
 
 function packFeaturesToText(features: string[]) {
   return features.join("\n");
@@ -37,7 +63,7 @@ export default function SuperAdmin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthed, setIsAuthed] = useState(false);
-  const [activeTab, setActiveTab] = useState<SuperAdminTab>("companies");
+  const [activeTab, setActiveTab] = useState<SuperAdminTab>("dashboard");
   const [landingDraft, setLandingDraft] = useState<LandingPageConfig>(DEFAULT_LANDING_PAGE_CONFIG);
 
   const loginMutation = trpc.publicApi.superAdminLogin.useMutation();
@@ -50,6 +76,19 @@ export default function SuperAdmin() {
     enabled: isAuthed,
   });
   const saveLanding = trpc.publicApi.superAdminUpdateLandingSettings.useMutation();
+  const logoutMutation = trpc.publicApi.logoutSession.useMutation();
+
+  const companies = listCompanies.data ?? [];
+  const stats = useMemo(() => {
+    const active = companies.filter((c) => c.isActive);
+    return {
+      total: companies.length,
+      active: active.length,
+      inactive: companies.length - active.length,
+      employees: companies.reduce((sum, c) => sum + (c.employeeCount ?? 0), 0),
+      onTrial: active.filter((c) => c.subscriptionPlan === "trial").length,
+    };
+  }, [companies]);
 
   useEffect(() => {
     if (sessionQuery.data?.session?.type === "superadmin") {
@@ -186,19 +225,23 @@ export default function SuperAdmin() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-8">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <button
-          onClick={() => setLocation("/")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver
-        </button>
+  const handleLogout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // cookie cleared or session already ended
+    }
+    setIsAuthed(false);
+    setLocation("/");
+  };
 
-        {!isAuthed ? (
-          <Card className="p-8 shadow-lg max-w-md mx-auto">
+  const pageMeta = SUPERADMIN_PAGE_TITLES[activeTab];
+
+  return (
+    <div className="min-h-screen bg-[#f4f7f6]">
+      {!isAuthed ? (
+        <div className="flex min-h-screen items-center justify-center px-4 py-8">
+          <Card className="w-full max-w-md p-8 shadow-lg">
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-14 h-14 bg-accent rounded-2xl mb-4 shadow-lg">
                 <Shield className="w-7 h-7 text-accent-foreground" />
@@ -234,35 +277,145 @@ export default function SuperAdmin() {
               </Button>
             </form>
           </Card>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant={activeTab === "companies" ? "default" : "outline"}
-                onClick={() => setActiveTab("companies")}
-                className="gap-2"
-              >
-                <Building2 className="size-4" />
-                Empresas
-              </Button>
-              <Button
-                type="button"
-                variant={activeTab === "landing" ? "default" : "outline"}
-                onClick={() => setActiveTab("landing")}
-                className="gap-2"
-              >
-                <Globe className="size-4" />
-                Web / Landing
-              </Button>
-            </div>
+        </div>
+      ) : (
+        <AppShellLayout
+          brandLabel="Superadmin"
+          brandIcon={<Shield className="size-5" />}
+          pageTitle={pageMeta.title}
+          pageSubtitle={pageMeta.subtitle}
+          userName="Superadmin"
+          userEmail="Control de plataforma"
+          navItems={SUPERADMIN_NAV}
+          activeNavId={activeTab}
+          onNavChange={(id) => setActiveTab(id as SuperAdminTab)}
+          onLogout={() => void handleLogout()}
+          headerActions={
+            <Button type="button" variant="outline" size="sm" onClick={() => setLocation("/")}>
+              <ExternalLink className="mr-2 size-4" />
+              Ver web
+            </Button>
+          }
+        >
+          {activeTab === "dashboard" ? (
+            <div className="mx-auto max-w-6xl space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <AppShellKpiCard
+                  label="Empresas totales"
+                  value={stats.total}
+                  icon={<Building2 className="size-5" />}
+                  accent="blue"
+                />
+                <AppShellKpiCard
+                  label="Empresas activas"
+                  value={stats.active}
+                  icon={<UserCheck className="size-5" />}
+                  accent="emerald"
+                />
+                <AppShellKpiCard
+                  label="Empleados en plataforma"
+                  value={stats.employees}
+                  icon={<Users className="size-5" />}
+                  accent="amber"
+                />
+                <AppShellKpiCard
+                  label="En periodo de prueba"
+                  value={stats.onTrial}
+                  icon={<Clock className="size-5" />}
+                  accent="rose"
+                />
+              </div>
 
-            {activeTab === "companies" ? (
-              <Card className="p-6">
-                <h2 className="text-xl font-bold text-foreground mb-2">Empresas registradas</h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Las empresas se dan de baja solas si superan el límite de empleados o vence el trial.
-                </p>
+              <div className="grid gap-6 lg:grid-cols-3">
+                <AppShellPanel
+                  title="Estado de clientes"
+                  description="Distribución actual de empresas registradas"
+                  className="lg:col-span-1"
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
+                      <span className="text-sm font-medium text-emerald-800">Activas</span>
+                      <span className="text-2xl font-bold text-emerald-900">{stats.active}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3">
+                      <span className="text-sm font-medium text-slate-700">Dadas de baja</span>
+                      <span className="text-2xl font-bold text-slate-900">{stats.inactive}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setActiveTab("companies")}
+                    >
+                      Gestionar empresas
+                    </Button>
+                  </div>
+                </AppShellPanel>
+
+                <AppShellPanel
+                  title="Últimas empresas"
+                  description="Acceso rápido a clientes recientes"
+                  className="lg:col-span-2"
+                >
+                  <div className="space-y-2">
+                    {companies.slice(0, 5).map((company) => (
+                      <div
+                        key={company.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3"
+                      >
+                        <div>
+                          <p className="font-semibold text-slate-900">{company.name}</p>
+                          <p className="text-xs text-slate-500">
+                            {company.employeeCount} empleados · {company.planLabel}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-xs font-semibold",
+                            company.isActive
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-slate-200 text-slate-600"
+                          )}
+                        >
+                          {company.isActive ? "Activa" : "Baja"}
+                        </span>
+                      </div>
+                    ))}
+                    {companies.length === 0 ? (
+                      <p className="text-sm text-slate-500">No hay empresas registradas todavía.</p>
+                    ) : null}
+                  </div>
+                </AppShellPanel>
+              </div>
+
+              <AppShellPanel
+                title="Accesos rápidos"
+                description="Herramientas habituales del superadmin"
+              >
+                <div className="flex flex-wrap gap-3">
+                  <Button type="button" onClick={() => setActiveTab("companies")}>
+                    <Building2 className="mr-2 size-4" />
+                    Ver todas las empresas
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setActiveTab("landing")}>
+                    <Globe className="mr-2 size-4" />
+                    Editar landing
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setLocation("/")}>
+                    <ExternalLink className="mr-2 size-4" />
+                    Abrir web pública
+                  </Button>
+                </div>
+              </AppShellPanel>
+            </div>
+          ) : null}
+
+          {activeTab === "companies" ? (
+            <div className="mx-auto max-w-6xl">
+              <AppShellPanel
+                title="Empresas registradas"
+                description="Las empresas se dan de baja solas si superan el límite de empleados o vence el trial."
+              >
                 <div className="space-y-3">
                   <div className="grid grid-cols-[1.5fr_0.7fr_1fr_0.9fr] gap-3 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <span>Empresa</span>
@@ -299,9 +452,13 @@ export default function SuperAdmin() {
                     <p className="text-sm text-muted-foreground">No hay empresas todavía.</p>
                   ) : null}
                 </div>
-              </Card>
-            ) : (
-              <Card className="p-6 space-y-8">
+              </AppShellPanel>
+            </div>
+          ) : null}
+
+          {activeTab === "landing" ? (
+            <div className="mx-auto max-w-6xl">
+              <AppShellPanel className="space-y-8">
                 <div>
                   <h2 className="text-xl font-bold text-foreground mb-1">Ajustes de la landing page</h2>
                   <p className="text-sm text-muted-foreground">
@@ -458,7 +615,7 @@ export default function SuperAdmin() {
                         key={pack.id}
                         className={cn(
                           "rounded-xl border p-4 space-y-3",
-                          pack.highlighted ? "border-emerald-500 bg-emerald-50/50" : "border-border"
+                          pack.highlighted ? "border-blue-500 bg-blue-50/50" : "border-border"
                         )}
                       >
                         <p className="text-sm font-semibold text-muted-foreground">Plan {index + 1}</p>
@@ -652,11 +809,11 @@ export default function SuperAdmin() {
                     Ver landing
                   </Button>
                 </div>
-              </Card>
-            )}
-          </>
-        )}
-      </div>
+              </AppShellPanel>
+            </div>
+          ) : null}
+        </AppShellLayout>
+      )}
     </div>
   );
 }

@@ -3,8 +3,8 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -17,6 +17,7 @@ import AdminLegalPanel from '@/components/AdminLegalPanel';
 import AdminAuditLogPanel from '@/components/AdminAuditLogPanel';
 import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
+import AppShellLayout, { type AppShellNavItem } from '@/components/AppShellLayout';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
 import {
@@ -54,6 +55,18 @@ const scheduleDays = [
   { key: 'saturday', label: 'Sábado' },
   { key: 'sunday', label: 'Domingo' },
 ] as const;
+
+const ADMIN_NAV: AppShellNavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'employees', label: 'Empleados', icon: Users },
+  { id: 'hours', label: 'Horas', icon: Calendar },
+  { id: 'shifts', label: 'Turnos', icon: Clock3 },
+  { id: 'timeoff', label: 'Vacaciones', icon: Palmtree },
+  { id: 'incidents', label: 'Incidencias', icon: AlertCircle },
+  { id: 'audit', label: 'Auditoría', icon: ClipboardList },
+  { id: 'legal', label: 'Legal / RGPD', icon: Scale },
+  { id: 'settings', label: 'Ajustes', icon: Settings },
+];
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -990,118 +1003,33 @@ export default function AdminDashboard() {
   const showTrialBanner = Boolean(subscription?.showTrialBanner && subscription.bannerMessage);
   const showLimitBanner = Boolean(subscription?.showLimitBanner && subscription.bannerMessage);
   const atEmployeeLimit = Boolean(subscription?.atEmployeeLimit);
+  const activeNav = ADMIN_NAV.find((item) => item.id === activeTab);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex flex-col">
-      <header className="bg-card border-b border-border shadow-sm shrink-0 z-50">
-        <div className="px-4 lg:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
-              <AlertCircle className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">Panel de Administrador</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/admin/onboarding")}
-            >
-              Configuración inicial
-            </Button>
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              className="flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              Cerrar Sesión
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="grid min-h-0 flex-1 w-full grid-cols-[auto_1fr] gap-0"
-      >
-        <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card shadow-sm lg:w-60 xl:w-64">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menú</p>
-          </div>
-          <nav className="flex-1 overflow-y-auto p-2">
-            <TabsList className="flex h-auto w-full flex-col items-stretch gap-1 rounded-lg bg-transparent p-0 shadow-none">
-                  <TabsTrigger
-                    value="dashboard"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <LayoutDashboard className="w-4 h-4 shrink-0" />
-                    Dashboard
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="employees"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Users className="w-4 h-4 shrink-0" />
-                    Empleados
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="hours"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Calendar className="w-4 h-4 shrink-0" />
-                    Horas
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="shifts"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Clock3 className="w-4 h-4 shrink-0" />
-                    Turnos
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="timeoff"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Palmtree className="w-4 h-4 shrink-0" />
-                    Vacaciones
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="incidents"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    Incidencias
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="audit"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <ClipboardList className="w-4 h-4 shrink-0" />
-                    Auditoría
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="legal"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Scale className="w-4 h-4 shrink-0" />
-                    Legal / RGPD
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="settings"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Settings className="w-4 h-4 shrink-0" />
-                    Ajustes
-                  </TabsTrigger>
-                </TabsList>
-          </nav>
-        </aside>
-
-        <main className="min-h-0 min-w-0 overflow-y-auto">
-          <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
+    <AppShellLayout
+      brandLabel={adminSession?.displayName ?? adminSession?.companySlug ?? 'Mi negocio'}
+      brandIcon={<LayoutDashboard className="size-5" />}
+      pageTitle={activeNav?.label ?? 'Panel de administración'}
+      pageSubtitle="Gestión de equipo y control horario"
+      userName={adminSession?.displayName ?? 'Administrador'}
+      userEmail={adminSession?.companySlug}
+      navItems={ADMIN_NAV}
+      activeNavId={activeTab}
+      onNavChange={setActiveTab}
+      onLogout={() => void handleLogout()}
+      headerActions={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setLocation('/admin/onboarding')}
+        >
+          Configuración inicial
+        </Button>
+      }
+    >
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="mx-auto max-w-6xl space-y-6">
             {showOnboardingBanner && <OnboardingReminderBanner />}
             {showTrialBanner && subscription?.bannerMessage ? (
               <SubscriptionBanner message={subscription.bannerMessage} variant="trial" />
@@ -1111,7 +1039,7 @@ export default function AdminDashboard() {
             ) : null}
 
           <TabsContent value="dashboard" className="mt-0 space-y-6">
-            <Card className="p-6">
+            <Card className="app-shell-card p-6 border-0 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
@@ -2375,9 +2303,8 @@ export default function AdminDashboard() {
               </Button>
             </Card>
           </TabsContent>
-          </div>
-        </main>
+        </div>
       </Tabs>
-    </div>
+    </AppShellLayout>
   );
 }

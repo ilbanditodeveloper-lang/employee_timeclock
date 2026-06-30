@@ -229,3 +229,12 @@
 .glass-effect {
   @apply bg-white/10 backdrop-blur-md border border-white/20;
 }
+
+/* App shell dashboard (superadmin + business admin) */
+.app-shell-sidebar {
+  background: linear-gradient(180deg, #1e3a5f 0%, #1a2b48 100%);
+}
+
+.app-shell-card {
+  @apply rounded-2xl border border-slate-100 bg-white shadow-sm;
+}

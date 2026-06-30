@@ -94,9 +94,9 @@ function useLandingConfig(): LandingPageConfig {
 function PhoneMockup() {
   return (
     <div className="relative mx-auto w-[220px] rounded-[2rem] border-[6px] border-slate-800 bg-slate-900 p-2 shadow-2xl">
-      <div className="rounded-[1.4rem] bg-gradient-to-b from-emerald-50 to-white p-4 min-h-[360px]">
+      <div className="rounded-[1.4rem] bg-gradient-to-b from-blue-50 to-white p-4 min-h-[360px]">
         <div className="text-center mb-4">
-          <div className="inline-flex size-10 items-center justify-center rounded-xl bg-emerald-700 text-white mb-2">
+          <div className="inline-flex size-10 items-center justify-center rounded-xl bg-blue-700 text-white mb-2">
             <Clock className="size-5" />
           </div>
           <p className="text-xs font-semibold text-slate-800">TimeClock</p>
@@ -105,7 +105,7 @@ function PhoneMockup() {
         <p className="text-3xl font-bold text-center text-slate-900 mb-1">09:02</p>
         <p className="text-[10px] text-center text-slate-500 mb-6">Horario de Madrid</p>
         <div className="space-y-2">
-          <div className="rounded-xl bg-emerald-700 text-white text-center py-3 text-sm font-semibold">
+          <div className="rounded-xl bg-blue-700 text-white text-center py-3 text-sm font-semibold">
             Fichar entrada
           </div>
           <div className="rounded-xl border border-slate-200 text-slate-400 text-center py-3 text-sm">
@@ -128,7 +128,7 @@ function DashboardMockup() {
               key={item}
               className={cn(
                 "rounded-lg px-2 py-1.5 text-[11px]",
-                i === 0 ? "bg-emerald-700 text-white" : "text-slate-400"
+                i === 0 ? "bg-blue-700 text-white" : "text-slate-400"
               )}
             >
               {item}
@@ -138,9 +138,9 @@ function DashboardMockup() {
         <div className="flex-1 p-4 bg-slate-50">
           <p className="text-sm font-bold text-slate-900 mb-3">Dashboard · Seguimiento en vivo</p>
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-lg bg-emerald-100 border border-emerald-200 p-2">
-              <p className="text-[10px] text-emerald-800">Trabajando</p>
-              <p className="text-lg font-bold text-emerald-900">4</p>
+            <div className="rounded-lg bg-blue-100 border border-blue-200 p-2">
+              <p className="text-[10px] text-blue-800">Trabajando</p>
+              <p className="text-lg font-bold text-blue-900">4</p>
             </div>
             <div className="rounded-lg bg-amber-100 border border-amber-200 p-2">
               <p className="text-[10px] text-amber-800">En pausa</p>
@@ -151,7 +151,7 @@ function DashboardMockup() {
             {[40, 65, 55, 80, 70, 90, 60].map((h, i) => (
               <div
                 key={i}
-                className="flex-1 rounded-t bg-emerald-600/80"
+                className="flex-1 rounded-t bg-blue-600/80"
                 style={{ height: `${h}%` }}
               />
             ))}
@@ -194,19 +194,19 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 lg:px-8">
           <a href="#" className="flex items-center gap-2 shrink-0">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-800 text-white">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-blue-800 text-white">
               <Clock className="size-5" />
             </div>
             <div className="leading-tight">
-              <p className="font-bold text-emerald-900">TimeClock</p>
+              <p className="font-bold text-blue-900">TimeClock</p>
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Fichaje de empleados</p>
             </div>
           </a>
           <nav className="hidden items-center gap-6 text-sm text-slate-600 md:flex">
-            <a href="#funciones" className="hover:text-emerald-800">Funciones</a>
-            <a href="#para-quien" className="hover:text-emerald-800">Para quién es</a>
-            <a href="#precios" className="hover:text-emerald-800">Precios</a>
-            <a href="#faq" className="hover:text-emerald-800">FAQ</a>
+            <a href="#funciones" className="hover:text-blue-800">Funciones</a>
+            <a href="#para-quien" className="hover:text-blue-800">Para quién es</a>
+            <a href="#precios" className="hover:text-blue-800">Precios</a>
+            <a href="#faq" className="hover:text-blue-800">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
             <Link href="/acceso">
@@ -216,14 +216,14 @@ export default function LandingPage() {
             </Link>
             {waExternal ? (
               <a href={waHref} target="_blank" rel="noreferrer">
-                <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5">
+                <Button size="sm" className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5">
                   <MessageCircle className="size-4" />
                   <span className="hidden sm:inline">{hero.ctaWhatsappLabel}</span>
                 </Button>
               </a>
             ) : (
               <Link href="/register-business">
-                <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5">
+                <Button size="sm" className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5">
                   <MessageCircle className="size-4" />
                   <span className="hidden sm:inline">Probar gratis</span>
                 </Button>
@@ -234,28 +234,28 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-800 text-white">
+      <section className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 text-white">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2 lg:items-center lg:px-8 lg:py-24">
           <div>
-            <p className="mb-4 inline-block rounded-full bg-emerald-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+            <p className="mb-4 inline-block rounded-full bg-blue-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100">
               {hero.badge}
             </p>
             <h1 className="text-4xl font-bold leading-tight sm:text-5xl lg:text-[3.25rem]">
               {hero.titleMain}{" "}
-              <span className="text-emerald-300">{hero.titleHighlight}</span>
+              <span className="text-blue-300">{hero.titleHighlight}</span>
             </h1>
-            <p className="mt-5 text-lg text-emerald-100/90 max-w-xl">{hero.subtitle}</p>
+            <p className="mt-5 text-lg text-blue-100/90 max-w-xl">{hero.subtitle}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               {waExternal ? (
                 <a href={waHref} target="_blank" rel="noreferrer">
-                  <Button size="lg" className="bg-white text-emerald-900 hover:bg-emerald-50 gap-2">
+                  <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
                     <MessageCircle className="size-5" />
                     {hero.ctaWhatsappLabel}
                   </Button>
                 </a>
               ) : (
                 <Link href="/register-business">
-                  <Button size="lg" className="bg-white text-emerald-900 hover:bg-emerald-50 gap-2">
+                  <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
                     {hero.ctaTrialLabel}
                     <ArrowRight className="size-4" />
                   </Button>
@@ -265,17 +265,17 @@ export default function LandingPage() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="border-emerald-400/50 text-white hover:bg-emerald-800/50 gap-2"
+                  className="border-blue-400/50 text-white hover:bg-blue-800/50 gap-2"
                 >
                   <Play className="size-4" />
                   {hero.ctaSecondaryLabel}
                 </Button>
               </a>
             </div>
-            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-emerald-100">
+            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-blue-100">
               {hero.trustBadges.map((item) => (
                 <li key={item} className="flex items-center gap-2">
-                  <Check className="size-4 text-emerald-300" />
+                  <Check className="size-4 text-blue-300" />
                   {item}
                 </li>
               ))}
@@ -306,7 +306,7 @@ export default function LandingPage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, text }) => (
               <Card key={title} className="p-6 border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-blue-100 text-blue-800">
                   <Icon className="size-6" />
                 </div>
                 <h3 className="font-semibold text-lg text-slate-900 mb-2">{title}</h3>
@@ -325,12 +325,12 @@ export default function LandingPage() {
             {steps.map(({ icon: Icon, title, text }, i) => (
               <div key={title} className="relative text-center">
                 {i < steps.length - 1 ? (
-                  <ArrowRight className="absolute right-0 top-8 hidden md:block size-6 text-emerald-300 -mr-4 translate-x-1/2" />
+                  <ArrowRight className="absolute right-0 top-8 hidden md:block size-6 text-blue-300 -mr-4 translate-x-1/2" />
                 ) : null}
-                <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-emerald-800 text-white">
+                <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-blue-800 text-white">
                   <Icon className="size-8" />
                 </div>
-                <p className="text-xs font-semibold text-emerald-700 mb-1">Paso {i + 1}</p>
+                <p className="text-xs font-semibold text-blue-700 mb-1">Paso {i + 1}</p>
                 <h3 className="font-semibold text-lg mb-2">{title}</h3>
                 <p className="text-sm text-slate-600">{text}</p>
               </div>
@@ -386,13 +386,13 @@ export default function LandingPage() {
                 "Geolocalización opcional al fichar",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
-                  <Check className="size-5 shrink-0 text-emerald-600 mt-0.5" />
+                  <Check className="size-5 shrink-0 text-blue-600 mt-0.5" />
                   {item}
                 </li>
               ))}
             </ul>
             <Link href="/acceso">
-              <Button className="bg-emerald-700 hover:bg-emerald-800 gap-2">
+              <Button className="bg-blue-700 hover:bg-blue-800 gap-2">
                 <Play className="size-4" />
                 Probar la app
               </Button>
@@ -417,12 +417,12 @@ export default function LandingPage() {
                 className={cn(
                   "p-6 flex flex-col",
                   pack.highlighted
-                    ? "border-emerald-500 shadow-lg ring-2 ring-emerald-500/20 scale-[1.02]"
+                    ? "border-blue-500 shadow-lg ring-2 ring-blue-500/20 scale-[1.02]"
                     : "border-slate-200"
                 )}
               >
                 {pack.highlighted ? (
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-2">
                     Más popular
                   </p>
                 ) : null}
@@ -435,7 +435,7 @@ export default function LandingPage() {
                 <ul className="space-y-2 mb-8 flex-1">
                   {pack.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
-                      <Check className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <Check className="size-4 text-blue-600 shrink-0 mt-0.5" />
                       {feature}
                     </li>
                   ))}
@@ -446,7 +446,7 @@ export default function LandingPage() {
                       className={cn(
                         "w-full",
                         pack.highlighted
-                          ? "bg-emerald-700 hover:bg-emerald-800"
+                          ? "bg-blue-700 hover:bg-blue-800"
                           : "bg-slate-900 hover:bg-slate-800"
                       )}
                     >
@@ -459,7 +459,7 @@ export default function LandingPage() {
                       className={cn(
                         "w-full",
                         pack.highlighted
-                          ? "bg-emerald-700 hover:bg-emerald-800"
+                          ? "bg-blue-700 hover:bg-blue-800"
                           : "bg-slate-900 hover:bg-slate-800"
                       )}
                     >
@@ -478,7 +478,7 @@ export default function LandingPage() {
             <Accordion type="single" collapsible className="w-full">
               {config.faqs.map((faq, i) => (
                 <AccordionItem key={`${faq.q}-${i}`} value={`faq-${i}`}>
-                  <AccordionTrigger className="text-left text-slate-900 hover:text-emerald-800">
+                  <AccordionTrigger className="text-left text-slate-900 hover:text-blue-800">
                     {faq.q}
                   </AccordionTrigger>
                   <AccordionContent className="text-slate-600">
@@ -492,15 +492,15 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="relative overflow-hidden bg-emerald-950 py-20 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_right,_var(--tw-gradient-stops))] from-emerald-800/40 via-transparent to-transparent" />
+      <section className="relative overflow-hidden bg-blue-950 py-20 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_right,_var(--tw-gradient-stops))] from-blue-800/40 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-3xl px-4 text-center lg:px-8">
           <h2 className="text-3xl font-bold mb-4 sm:text-4xl">{hero.footerTitle}</h2>
-          <p className="text-emerald-100 mb-8">{hero.footerSubtitle}</p>
+          <p className="text-blue-100 mb-8">{hero.footerSubtitle}</p>
           <div className="flex flex-wrap justify-center gap-3">
             {waExternal ? (
               <a href={waHref} target="_blank" rel="noreferrer">
-                <Button size="lg" className="bg-white text-emerald-900 hover:bg-emerald-50 gap-2">
+                <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
                   <MessageCircle className="size-5" />
                   {hero.ctaWhatsappLabel}
                 </Button>
@@ -512,8 +512,8 @@ export default function LandingPage() {
                 variant={waExternal ? "outline" : "default"}
                 className={cn(
                   waExternal
-                    ? "border-emerald-400 text-white hover:bg-emerald-800"
-                    : "bg-white text-emerald-900 hover:bg-emerald-50"
+                    ? "border-blue-400 text-white hover:bg-blue-800"
+                    : "bg-white text-blue-900 hover:bg-blue-50"
                 )}
               >
                 {hero.footerCtaRegisterLabel}
@@ -529,10 +529,10 @@ export default function LandingPage() {
           <div className="flex flex-col gap-8 md:flex-row md:justify-between">
             <div className="max-w-sm">
               <div className="flex items-center gap-2 mb-3">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-emerald-800 text-white">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-blue-800 text-white">
                   <Clock className="size-4" />
                 </div>
-                <span className="font-bold text-emerald-900">TimeClock</span>
+                <span className="font-bold text-blue-900">TimeClock</span>
               </div>
               <p className="text-sm text-slate-600">
                 Software de fichaje y control horario para equipos en España. Simple, legal y
@@ -543,17 +543,17 @@ export default function LandingPage() {
               <div>
                 <p className="font-semibold text-slate-900 mb-2">Producto</p>
                 <ul className="space-y-1 text-slate-600">
-                  <li><a href="#funciones" className="hover:text-emerald-800">Funciones</a></li>
-                  <li><a href="#precios" className="hover:text-emerald-800">Precios</a></li>
-                  <li><Link href="/acceso" className="hover:text-emerald-800">Acceder</Link></li>
+                  <li><a href="#funciones" className="hover:text-blue-800">Funciones</a></li>
+                  <li><a href="#precios" className="hover:text-blue-800">Precios</a></li>
+                  <li><Link href="/acceso" className="hover:text-blue-800">Acceder</Link></li>
                 </ul>
               </div>
               <div>
                 <p className="font-semibold text-slate-900 mb-2">Legal</p>
                 <ul className="space-y-1 text-slate-600">
-                  <li><Link href="/legal/privacy" className="hover:text-emerald-800">Privacidad</Link></li>
-                  <li><Link href="/legal/terms" className="hover:text-emerald-800">Términos</Link></li>
-                  <li><Link href="/legal/dpa" className="hover:text-emerald-800">DPA</Link></li>
+                  <li><Link href="/legal/privacy" className="hover:text-blue-800">Privacidad</Link></li>
+                  <li><Link href="/legal/terms" className="hover:text-blue-800">Términos</Link></li>
+                  <li><Link href="/legal/dpa" className="hover:text-blue-800">DPA</Link></li>
                 </ul>
               </div>
             </div>

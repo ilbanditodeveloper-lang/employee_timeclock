@@ -103,8 +103,8 @@ export default function RegisterBusiness() {
         <div className="max-w-md w-full">
           <Card className="p-8 shadow-lg space-y-6">
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-2xl mb-4">
-                <CheckCircle2 className="w-7 h-7 text-green-600 dark:text-green-400" />
+                  <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-2xl mb-4">
+                <CheckCircle2 className="w-7 h-7 text-blue-600 dark:text-blue-400" />
               </div>
               <h1 className="text-2xl font-bold text-foreground mb-2">¡Negocio creado correctamente!</h1>
               <p className="text-sm text-muted-foreground">
