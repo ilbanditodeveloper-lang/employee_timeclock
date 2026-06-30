@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
+import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 
 export default function EmployeeIncident() {
   const [, setLocation] = useLocation();
@@ -84,28 +85,13 @@ export default function EmployeeIncident() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
-              <AlertCircle className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">Reportar Incidencia</h1>
-          </div>
-          <Button
-            onClick={() => setLocation("/employee")}
-            variant="ghost"
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="container py-8">
-        <Card className="p-6 max-w-2xl mx-auto">
+    <EmployeeShellLayout
+      pageTitle="Reportar incidencia"
+      pageSubtitle="Retrasos y ausencias"
+      contentClassName="container mx-auto max-w-2xl py-8 pb-28 md:pb-8"
+      showBottomMenu={false}
+    >
+        <Card className="app-shell-card mx-auto max-w-2xl border-0 p-6 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
@@ -160,14 +146,13 @@ export default function EmployeeIncident() {
 
             <Button
               type="submit"
-              className="w-full btn-primary"
+              className="w-full bg-blue-700 hover:bg-blue-800"
               disabled={submitting}
             >
               {submitting ? "Enviando..." : "Enviar incidencia"}
             </Button>
           </form>
         </Card>
-      </main>
-    </div>
+    </EmployeeShellLayout>
   );
 }

@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Palmtree, Trash2 } from "lucide-react";
+import { Palmtree, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput, emptyCreds } from "@/lib/authApi";
-import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
+import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { resolveAppTimeZone, todayYmdInTimeZone, APP_TIMEZONE } from "@shared/timezone";
 
 const kindLabels: Record<string, string> = {
@@ -149,28 +149,12 @@ export default function EmployeeTimeOff() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
-              <Palmtree className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">Vacaciones y días libres</h1>
-          </div>
-          <Button
-            onClick={() => setLocation("/employee")}
-            variant="ghost"
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="container py-8 pb-28 max-w-2xl mx-auto space-y-8">
-        <Card className="p-6">
+    <EmployeeShellLayout
+      pageTitle="Vacaciones"
+      pageSubtitle="Solicitudes de vacaciones y días libres"
+      contentClassName="container mx-auto max-w-2xl space-y-8 py-8 pb-28 md:pb-8"
+    >
+        <Card className="app-shell-card border-0 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-foreground mb-4">Nueva solicitud</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -255,7 +239,7 @@ export default function EmployeeTimeOff() {
           </form>
         </Card>
 
-        <Card className="p-6">
+        <Card className="app-shell-card border-0 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-foreground mb-4">Mis solicitudes</h2>
           {listQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Cargando…</p>
@@ -312,8 +296,6 @@ export default function EmployeeTimeOff() {
             </ul>
           )}
         </Card>
-      </main>
-      <EmployeeBottomMenu />
-    </div>
+    </EmployeeShellLayout>
   );
 }

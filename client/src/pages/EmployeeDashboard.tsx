@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Clock, LogOut, Calendar, AlertCircle, CalendarDays, Palmtree, Pause, Play } from 'lucide-react';
+import { Clock, Calendar, AlertCircle, CalendarDays, Palmtree, Pause, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -22,7 +22,7 @@ import {
   resolveAppTimeZone,
   todayYmdInTimeZone,
 } from "@shared/timezone";
-import EmployeeBottomMenu from '@/components/EmployeeBottomMenu';
+import EmployeeShellLayout from '@/components/EmployeeShellLayout';
 import { EARLY_CLOCK_MINUTES } from '@shared/const';
 
 const LATE_GRACE_MINUTES = 5;
@@ -113,8 +113,7 @@ export default function EmployeeDashboard() {
   const subscribePushMutation = trpc.publicApi.pushNotifications.subscribe.useMutation();
   const vapidKeyQuery = trpc.publicApi.pushNotifications.getVapidPublicKey.useQuery();
   const [, setLocation] = useLocation();
-  const { employeeSession, setEmployeeSession, clearAllSessions } = useAuthContext();
-  const logoutSession = trpc.publicApi.logoutSession.useMutation();
+  const { employeeSession, setEmployeeSession } = useAuthContext();
   const locationEnabled = employeeSession?.locationEnabled ?? false;
   const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const [isAtRestaurant, setIsAtRestaurant] = useState(() => !locationEnabled);
@@ -462,17 +461,6 @@ export default function EmployeeDashboard() {
     setLocation('/employee/incident');
   };
 
-  const handleLogout = async () => {
-    try {
-      await logoutSession.mutateAsync();
-    } catch {
-      // ignore
-    }
-    clearAllSessions();
-    setEmployeeSession(null);
-    setLocation('/');
-  };
-
   if (employeeSession?.needsPrivacyNotice) {
     return (
       <div className="min-h-screen bg-slate-900/40 flex items-center justify-center p-4">
@@ -485,29 +473,7 @@ export default function EmployeeDashboard() {
   const canClockOut = isClockedIn && !loading;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
-              <Clock className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">TimeClock</h1>
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            className="flex items-center gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar Sesión
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container py-8 pb-28 md:pb-8">
+    <EmployeeShellLayout pageTitle="Fichaje" pageSubtitle="Entrada, salida y pausas">
         {/* Time Display */}
         <div className="mb-8 text-center">
           <div className="text-5xl font-bold text-foreground mb-2">
@@ -520,7 +486,7 @@ export default function EmployeeDashboard() {
         </div>
 
         {/* Location Status */}
-        <Card className="mb-8 p-6 border-2 border-accent/20">
+        <Card className="app-shell-card mb-8 border border-blue-100 p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground mb-2">Estado de Ubicación</h2>
@@ -563,7 +529,7 @@ export default function EmployeeDashboard() {
           <Button
             onClick={handleClockIn}
             disabled={!canClockIn}
-            className="btn-primary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
+            className="h-24 bg-blue-700 text-lg font-semibold text-white hover:bg-blue-800 flex flex-col items-center justify-center gap-2 disabled:opacity-50"
           >
             <Clock className="w-6 h-6" />
             {isTooEarly ? "Aún no puedes fichar" : isLate ? "Entrada bloqueada" : "Entrada"}
@@ -579,7 +545,7 @@ export default function EmployeeDashboard() {
             onClick={handleTogglePause}
             disabled={!isClockedIn || loading}
             variant="outline"
-            className="h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2 border-2"
+            className="h-24 border-2 border-blue-200 text-lg font-semibold text-blue-900 hover:bg-blue-50 flex flex-col items-center justify-center gap-2"
           >
             {isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
             {isPaused ? "Reanudar" : "Pausa"}
@@ -588,7 +554,7 @@ export default function EmployeeDashboard() {
           <Button
             onClick={handleClockOut}
             disabled={!canClockOut}
-            className="btn-secondary h-24 text-lg font-semibold flex flex-col items-center justify-center gap-2"
+            className="h-24 border-2 border-slate-300 bg-white text-lg font-semibold text-slate-800 hover:bg-slate-50 flex flex-col items-center justify-center gap-2 disabled:opacity-50"
           >
             <Clock className="w-6 h-6" />
             Salida
@@ -599,7 +565,7 @@ export default function EmployeeDashboard() {
         <Button
           onClick={handleIncident}
           variant="outline"
-          className="w-full mb-8 h-16 text-lg font-semibold flex items-center justify-center gap-2"
+          className="mb-8 h-16 w-full border-2 border-blue-200 text-lg font-semibold text-blue-900 hover:bg-blue-50 flex items-center justify-center gap-2"
         >
           <AlertCircle className="w-5 h-5" />
           Reportar Incidencia
@@ -608,12 +574,12 @@ export default function EmployeeDashboard() {
         {/* Quick Links */}
         <div className="hidden md:grid md:grid-cols-3 gap-4">
           <Card
-            className="p-6 hover:shadow-md transition-shadow cursor-pointer"
+            className="app-shell-card cursor-pointer p-6 shadow-sm transition-shadow hover:shadow-md"
             onClick={() => setLocation('/employee/time-off')}
           >
             <div className="flex items-center gap-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-lg">
-                <Palmtree className="w-6 h-6 text-teal-700 dark:text-teal-300" />
+              <div className="inline-flex size-12 items-center justify-center rounded-lg bg-blue-100">
+                <Palmtree className="size-6 text-blue-700" />
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">Vacaciones / días libres</h3>
@@ -622,12 +588,12 @@ export default function EmployeeDashboard() {
             </div>
           </Card>
           <Card
-            className="p-6 hover:shadow-md transition-shadow cursor-pointer"
+            className="app-shell-card cursor-pointer p-6 shadow-sm transition-shadow hover:shadow-md"
             onClick={() => setLocation('/employee/calendar')}
           >
             <div className="flex items-center gap-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="inline-flex size-12 items-center justify-center rounded-lg bg-blue-100">
+                <Calendar className="size-6 text-blue-700" />
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">Calendario y Calculadora</h3>
@@ -636,12 +602,12 @@ export default function EmployeeDashboard() {
             </div>
           </Card>
           <Card
-            className="p-6 hover:shadow-md transition-shadow cursor-pointer"
+            className="app-shell-card cursor-pointer p-6 shadow-sm transition-shadow hover:shadow-md"
             onClick={() => setLocation('/employee/schedule')}
           >
             <div className="flex items-center gap-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
-                <CalendarDays className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <div className="inline-flex size-12 items-center justify-center rounded-lg bg-blue-100">
+                <CalendarDays className="size-6 text-blue-700" />
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">Horario</h3>
@@ -652,15 +618,12 @@ export default function EmployeeDashboard() {
         </div>
 
         {/* Status Info */}
-        <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <p className="text-sm text-blue-900 dark:text-blue-200">
+        <div className="mt-8 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm text-blue-900">
             <strong>Estado actual:</strong> {isClockedIn ? 'Fichado (entrada registrada)' : 'No fichado'}
           </p>
         </div>
-      </main>
-
-      <EmployeeBottomMenu />
-    </div>
+    </EmployeeShellLayout>
   );
 }
 

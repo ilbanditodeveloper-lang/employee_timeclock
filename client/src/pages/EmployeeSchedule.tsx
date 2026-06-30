@@ -1,12 +1,10 @@
 import { useMemo } from "react";
-import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
-import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
+import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 
 const scheduleDays = [
   { key: "monday", label: "Lunes" },
@@ -34,7 +32,6 @@ function getShiftLabel(daySchedule?: DaySchedule): string {
 }
 
 export default function EmployeeSchedule() {
-  const [, setLocation] = useLocation();
   const { employeeSession } = useAuthContext();
 
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
@@ -57,24 +54,12 @@ export default function EmployeeSchedule() {
   }, [employeeScheduleQuery.data]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
-              <CalendarDays className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">Horario</h1>
-          </div>
-          <Button onClick={() => setLocation("/employee")} variant="ghost" className="flex items-center gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="container py-8 pb-28">
-        <Card className="p-6">
+    <EmployeeShellLayout
+      pageTitle="Horario"
+      pageSubtitle="Turnos asignados por tu administrador"
+      contentClassName="container mx-auto max-w-4xl py-8 pb-28 md:pb-8"
+    >
+        <Card className="app-shell-card border-0 p-6 shadow-sm">
           <h2 className="text-2xl font-bold text-foreground mb-2">Calendario semanal de turnos</h2>
           <p className="text-sm text-muted-foreground mb-6">
             Tu administrador configura estos turnos. Aquí puedes ver tu planificación por día.
@@ -89,8 +74,6 @@ export default function EmployeeSchedule() {
             ))}
           </div>
         </Card>
-      </main>
-      <EmployeeBottomMenu />
-    </div>
+    </EmployeeShellLayout>
   );
 }

@@ -3,13 +3,13 @@ import { useLocation } from "wouter";
 import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
-import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
+import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { formatTimeInTimeZone, resolveAppTimeZone, todayYmdInTimeZone } from "@shared/timezone";
 import { cn } from "@/lib/utils";
 
@@ -111,28 +111,12 @@ export default function EmployeeCalendar() {
   }, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-lg">
-              <CalendarIcon className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">Calendario</h1>
-          </div>
-          <Button
-            onClick={() => setLocation("/employee")}
-            variant="ghost"
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="container py-8 pb-28">
-        <Card className="p-6 max-w-3xl mx-auto">
+    <EmployeeShellLayout
+      pageTitle="Calendario"
+      pageSubtitle="Consulta de horas y fichajes"
+      contentClassName="container mx-auto max-w-4xl py-8 pb-28 md:pb-8"
+    >
+        <Card className="app-shell-card mx-auto max-w-3xl border-0 p-6 shadow-sm">
           <div className="grid gap-6 md:grid-cols-[auto,1fr] items-start">
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -318,8 +302,6 @@ export default function EmployeeCalendar() {
             </div>
           </div>
         </Card>
-      </main>
-      <EmployeeBottomMenu />
-    </div>
+    </EmployeeShellLayout>
   );
 }
