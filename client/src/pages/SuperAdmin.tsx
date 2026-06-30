@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Shield, ArrowLeft, Building2, Globe } from "lucide-react";
+import { Shield, ArrowLeft, Building2, Globe, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
@@ -14,6 +14,8 @@ import {
   type LandingPageConfig,
   type LandingPricingPack,
   type LandingAudience,
+  type LandingHero,
+  type LandingFaq,
 } from "@shared/landingConfig";
 import { cn } from "@/lib/utils";
 
@@ -114,6 +116,38 @@ export default function SuperAdmin() {
     });
   };
 
+  const updateHero = (patch: Partial<LandingHero>) => {
+    setLandingDraft((prev) => ({
+      ...prev,
+      hero: { ...prev.hero, ...patch },
+    }));
+  };
+
+  const updateFaq = (index: number, patch: Partial<LandingFaq>) => {
+    setLandingDraft((prev) => {
+      const faqs = [...prev.faqs];
+      faqs[index] = { ...faqs[index], ...patch };
+      return { ...prev, faqs };
+    });
+  };
+
+  const addFaq = () => {
+    setLandingDraft((prev) => {
+      if (prev.faqs.length >= 20) return prev;
+      return {
+        ...prev,
+        faqs: [...prev.faqs, { q: "Nueva pregunta", a: "Respuesta..." }],
+      };
+    });
+  };
+
+  const removeFaq = (index: number) => {
+    setLandingDraft((prev) => {
+      if (prev.faqs.length <= 1) return prev;
+      return { ...prev, faqs: prev.faqs.filter((_, i) => i !== index) };
+    });
+  };
+
   const handleSaveLanding = async () => {
     try {
       const packs = landingDraft.pricingPacks.map((pack) => ({
@@ -124,9 +158,26 @@ export default function SuperAdmin() {
         toast.error("Cada plan debe tener al menos una característica");
         return;
       }
+      const trustBadges = landingDraft.hero.trustBadges.map((b) => b.trim()).filter(Boolean);
+      if (trustBadges.length === 0) {
+        toast.error("El hero debe tener al menos un distintivo de confianza");
+        return;
+      }
+      const faqs = landingDraft.faqs
+        .map((f) => ({ q: f.q.trim(), a: f.a.trim() }))
+        .filter((f) => f.q && f.a);
+      if (faqs.length === 0) {
+        toast.error("Debe haber al menos una pregunta FAQ con texto");
+        return;
+      }
       await saveLanding.mutateAsync({
         ...emptyCreds,
-        config: { ...landingDraft, pricingPacks: packs as LandingPageConfig["pricingPacks"] },
+        config: {
+          ...landingDraft,
+          hero: { ...landingDraft.hero, trustBadges },
+          faqs,
+          pricingPacks: packs as LandingPageConfig["pricingPacks"],
+        },
       });
       toast.success("Ajustes de la web guardados");
       void landingQuery.refetch();
@@ -304,6 +355,102 @@ export default function SuperAdmin() {
                 </div>
 
                 <div className="space-y-6">
+                  <h3 className="text-lg font-semibold text-foreground">Hero (cabecera principal)</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <Label>Etiqueta superior (badge)</Label>
+                      <Input
+                        value={landingDraft.hero.badge}
+                        onChange={(e) => updateHero({ badge: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>Título — parte principal</Label>
+                      <Input
+                        value={landingDraft.hero.titleMain}
+                        onChange={(e) => updateHero({ titleMain: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>Título — parte destacada (color)</Label>
+                      <Input
+                        value={landingDraft.hero.titleHighlight}
+                        onChange={(e) => updateHero({ titleHighlight: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label>Subtítulo</Label>
+                      <Textarea
+                        value={landingDraft.hero.subtitle}
+                        onChange={(e) => updateHero({ subtitle: e.target.value })}
+                        className="mt-1 min-h-[80px]"
+                      />
+                    </div>
+                    <div>
+                      <Label>Botón WhatsApp / demo</Label>
+                      <Input
+                        value={landingDraft.hero.ctaWhatsappLabel}
+                        onChange={(e) => updateHero({ ctaWhatsappLabel: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>Botón prueba gratis</Label>
+                      <Input
+                        value={landingDraft.hero.ctaTrialLabel}
+                        onChange={(e) => updateHero({ ctaTrialLabel: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>Botón secundario</Label>
+                      <Input
+                        value={landingDraft.hero.ctaSecondaryLabel}
+                        onChange={(e) => updateHero({ ctaSecondaryLabel: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label>Distintivos de confianza (uno por línea)</Label>
+                      <Textarea
+                        value={packFeaturesToText(landingDraft.hero.trustBadges)}
+                        onChange={(e) =>
+                          updateHero({ trustBadges: textToFeatures(e.target.value) })
+                        }
+                        className="mt-1 min-h-[80px]"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label>Título del bloque final (CTA footer)</Label>
+                      <Input
+                        value={landingDraft.hero.footerTitle}
+                        onChange={(e) => updateHero({ footerTitle: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label>Subtítulo del bloque final</Label>
+                      <Textarea
+                        value={landingDraft.hero.footerSubtitle}
+                        onChange={(e) => updateHero({ footerSubtitle: e.target.value })}
+                        className="mt-1 min-h-[60px]"
+                      />
+                    </div>
+                    <div>
+                      <Label>Botón registro en bloque final</Label>
+                      <Input
+                        value={landingDraft.hero.footerCtaRegisterLabel}
+                        onChange={(e) => updateHero({ footerCtaRegisterLabel: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
                   <h3 className="text-lg font-semibold text-foreground">Planes de precios (3 packs)</h3>
                   <div className="grid gap-6 lg:grid-cols-3">
                     {landingDraft.pricingPacks.map((pack, index) => (
@@ -417,6 +564,67 @@ export default function SuperAdmin() {
                             onChange={(e) => updateAudience(index, { imageUrl: e.target.value })}
                             className="mt-1"
                             placeholder="https://..."
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Preguntas frecuentes (FAQ)</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        En las respuestas puedes usar <code className="text-xs">{"{trialDays}"}</code>{" "}
+                        para insertar los días de prueba configurados arriba.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addFaq}
+                      disabled={landingDraft.faqs.length >= 20}
+                      className="gap-1"
+                    >
+                      <Plus className="size-4" />
+                      Añadir pregunta
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    {landingDraft.faqs.map((faq, index) => (
+                      <div key={index} className="rounded-xl border border-border p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-muted-foreground">
+                            Pregunta {index + 1}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFaq(index)}
+                            disabled={landingDraft.faqs.length <= 1}
+                            className="text-destructive hover:text-destructive gap-1"
+                          >
+                            <Trash2 className="size-4" />
+                            Eliminar
+                          </Button>
+                        </div>
+                        <div>
+                          <Label>Pregunta</Label>
+                          <Input
+                            value={faq.q}
+                            onChange={(e) => updateFaq(index, { q: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label>Respuesta</Label>
+                          <Textarea
+                            value={faq.a}
+                            onChange={(e) => updateFaq(index, { a: e.target.value })}
+                            className="mt-1 min-h-[80px]"
                           />
                         </div>
                       </div>

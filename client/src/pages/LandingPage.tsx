@@ -13,6 +13,7 @@ import { trpc } from "@/lib/trpc";
 import {
   DEFAULT_LANDING_PAGE_CONFIG,
   buildWhatsAppHref,
+  resolveFaqAnswer,
   type LandingPageConfig,
 } from "@shared/landingConfig";
 import {
@@ -82,29 +83,6 @@ const steps = [
     icon: BarChart3,
     title: "Tú controlas todo",
     text: "Dashboard, horas, vacaciones e informes desde el panel admin.",
-  },
-];
-
-const faqs = (trialDays: number) => [
-  {
-    q: "¿Los empleados tienen que instalar una app?",
-    a: "No. TimeClock funciona en el navegador del móvil o PC. Pueden añadir un acceso directo a la pantalla de inicio como una app.",
-  },
-  {
-    q: "¿Puedo ver los fichajes desde el móvil?",
-    a: "Sí. El panel de administrador es responsive y el dashboard de seguimiento se actualiza en tiempo real.",
-  },
-  {
-    q: "¿Es válido para el control horario en España?",
-    a: "Registra entradas, salidas, pausas e incidencias con trazabilidad. Los informes facilitan el cumplimiento del registro de jornada.",
-  },
-  {
-    q: "¿Hay geolocalización obligatoria?",
-    a: "Es opcional por empresa. Puedes activar validación GPS con radio configurable alrededor del local.",
-  },
-  {
-    q: "¿Puedo probarlo antes de contratar?",
-    a: `Sí. Regístrate gratis con ${trialDays} días de prueba o pide una demo por WhatsApp.`,
   },
 ];
 
@@ -194,7 +172,7 @@ export default function LandingPage() {
     [config.whatsappNumber]
   );
   const waExternal = waHref.startsWith("http");
-  const faqItems = faqs(config.trialDays);
+  const { hero } = config;
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -240,7 +218,7 @@ export default function LandingPage() {
               <a href={waHref} target="_blank" rel="noreferrer">
                 <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5">
                   <MessageCircle className="size-4" />
-                  <span className="hidden sm:inline">Pedir demo</span>
+                  <span className="hidden sm:inline">{hero.ctaWhatsappLabel}</span>
                 </Button>
               </a>
             ) : (
@@ -260,28 +238,25 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2 lg:items-center lg:px-8 lg:py-24">
           <div>
             <p className="mb-4 inline-block rounded-full bg-emerald-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100">
-              Control horario fácil y legal
+              {hero.badge}
             </p>
             <h1 className="text-4xl font-bold leading-tight sm:text-5xl lg:text-[3.25rem]">
-              Controla los horarios de tu equipo{" "}
-              <span className="text-emerald-300">sin complicaciones</span>
+              {hero.titleMain}{" "}
+              <span className="text-emerald-300">{hero.titleHighlight}</span>
             </h1>
-            <p className="mt-5 text-lg text-emerald-100/90 max-w-xl">
-              Tus empleados fichan desde el móvil, tablet o PC. Tú tienes un panel claro con
-              seguimiento en vivo, informes y vacaciones.
-            </p>
+            <p className="mt-5 text-lg text-emerald-100/90 max-w-xl">{hero.subtitle}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               {waExternal ? (
                 <a href={waHref} target="_blank" rel="noreferrer">
                   <Button size="lg" className="bg-white text-emerald-900 hover:bg-emerald-50 gap-2">
                     <MessageCircle className="size-5" />
-                    Pedir demo por WhatsApp
+                    {hero.ctaWhatsappLabel}
                   </Button>
                 </a>
               ) : (
                 <Link href="/register-business">
                   <Button size="lg" className="bg-white text-emerald-900 hover:bg-emerald-50 gap-2">
-                    Empezar prueba gratis
+                    {hero.ctaTrialLabel}
                     <ArrowRight className="size-4" />
                   </Button>
                 </Link>
@@ -293,12 +268,12 @@ export default function LandingPage() {
                   className="border-emerald-400/50 text-white hover:bg-emerald-800/50 gap-2"
                 >
                   <Play className="size-4" />
-                  Ver cómo funciona
+                  {hero.ctaSecondaryLabel}
                 </Button>
               </a>
             </div>
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-emerald-100">
-              {["Sin papel", "Sin instalaciones", "Siempre accesible"].map((item) => (
+              {hero.trustBadges.map((item) => (
                 <li key={item} className="flex items-center gap-2">
                   <Check className="size-4 text-emerald-300" />
                   {item}
@@ -501,12 +476,14 @@ export default function LandingPage() {
               Preguntas frecuentes
             </h2>
             <Accordion type="single" collapsible className="w-full">
-              {faqItems.map((faq, i) => (
-                <AccordionItem key={faq.q} value={`faq-${i}`}>
+              {config.faqs.map((faq, i) => (
+                <AccordionItem key={`${faq.q}-${i}`} value={`faq-${i}`}>
                   <AccordionTrigger className="text-left text-slate-900 hover:text-emerald-800">
                     {faq.q}
                   </AccordionTrigger>
-                  <AccordionContent className="text-slate-600">{faq.a}</AccordionContent>
+                  <AccordionContent className="text-slate-600">
+                    {resolveFaqAnswer(faq.a, config.trialDays)}
+                  </AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
@@ -518,18 +495,14 @@ export default function LandingPage() {
       <section className="relative overflow-hidden bg-emerald-950 py-20 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_right,_var(--tw-gradient-stops))] from-emerald-800/40 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-3xl px-4 text-center lg:px-8">
-          <h2 className="text-3xl font-bold mb-4 sm:text-4xl">
-            Empieza a controlar los horarios de tu equipo hoy mismo
-          </h2>
-          <p className="text-emerald-100 mb-8">
-            Regístrate en minutos o contacta con nosotros para una demo personalizada.
-          </p>
+          <h2 className="text-3xl font-bold mb-4 sm:text-4xl">{hero.footerTitle}</h2>
+          <p className="text-emerald-100 mb-8">{hero.footerSubtitle}</p>
           <div className="flex flex-wrap justify-center gap-3">
             {waExternal ? (
               <a href={waHref} target="_blank" rel="noreferrer">
                 <Button size="lg" className="bg-white text-emerald-900 hover:bg-emerald-50 gap-2">
                   <MessageCircle className="size-5" />
-                  Pedir demo por WhatsApp
+                  {hero.ctaWhatsappLabel}
                 </Button>
               </a>
             ) : null}
@@ -543,7 +516,7 @@ export default function LandingPage() {
                     : "bg-white text-emerald-900 hover:bg-emerald-50"
                 )}
               >
-                Crear cuenta gratis
+                {hero.footerCtaRegisterLabel}
               </Button>
             </Link>
           </div>
