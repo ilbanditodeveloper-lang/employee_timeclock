@@ -51,6 +51,8 @@ import {
   createCompanyLocation,
   updateCompanyLocation,
   deleteCompanyLocation,
+  listCompanyCrmActivities,
+  addCompanyCrmActivity,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
 import { hashPassword } from "./_core/password";
@@ -86,6 +88,7 @@ import {
   getPublicStripeConfig,
   isCheckoutPlan,
 } from "@shared/stripeConfig";
+import { CRM_STAGES, CRM_ACTIVITY_TYPES } from "@shared/crmStages";
 import {
   createStripeBillingPortalSession,
   createStripeCheckoutSession,
@@ -355,16 +358,19 @@ export const appRouter = router({
             .filter((row) => row.companyId != null)
             .map((row) => [row.companyId as number, row])
         );
-        return companyRows.map((company) =>
-          enrichSuperAdminCompany(
+        return companyRows.map((company) => {
+          const admin = adminByCompany.get(company.id);
+          return enrichSuperAdminCompany(
             {
               ...company,
-              adminUsername: adminByCompany.get(company.id)?.name ?? null,
+              adminUsername: admin?.name ?? null,
+              adminEmail: admin?.email ?? null,
+              adminLastSignedIn: admin?.lastSignedIn ?? null,
             },
             employeeCounts.get(company.id) ?? 0,
             locationCounts.get(company.id) ?? 0
-          )
-        );
+          );
+        });
       }),
 
     superAdminCreateCompany: publicProcedure
@@ -535,6 +541,82 @@ export const appRouter = router({
           throw new Error("No se pudo crear el admin de empresa");
         }
         return { success: true };
+      }),
+
+    superAdminListCrmActivities: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        return listCompanyCrmActivities(input.companyId);
+      }),
+
+    superAdminAddCrmActivity: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+          body: z.string().min(1),
+          activityType: z.enum(CRM_ACTIVITY_TYPES).default("note"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        const row = await addCompanyCrmActivity({
+          companyId: input.companyId,
+          body: input.body,
+          activityType: input.activityType,
+        });
+        return { success: true as const, activity: row };
+      }),
+
+    superAdminUpdateCompanyCrm: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+          crmStage: z.enum(CRM_STAGES).optional(),
+          crmContactName: z.string().optional().nullable(),
+          crmContactPhone: z.string().optional().nullable(),
+          crmNotes: z.string().optional().nullable(),
+          crmNextFollowUpAt: z.string().datetime().optional().nullable(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const [company] = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.id, input.companyId))
+          .limit(1);
+        if (!company) throw new Error("Empresa no encontrada");
+
+        await db
+          .update(companies)
+          .set({
+            ...(input.crmStage !== undefined ? { crmStage: input.crmStage } : {}),
+            ...(input.crmContactName !== undefined
+              ? { crmContactName: input.crmContactName?.trim() || null }
+              : {}),
+            ...(input.crmContactPhone !== undefined
+              ? { crmContactPhone: input.crmContactPhone?.trim() || null }
+              : {}),
+            ...(input.crmNotes !== undefined ? { crmNotes: input.crmNotes?.trim() || null } : {}),
+            ...(input.crmNextFollowUpAt !== undefined
+              ? {
+                  crmNextFollowUpAt: input.crmNextFollowUpAt
+                    ? new Date(input.crmNextFollowUpAt)
+                    : null,
+                }
+              : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(companies.id, input.companyId));
+
+        return { success: true as const };
       }),
 
     createCheckoutSession: publicProcedure

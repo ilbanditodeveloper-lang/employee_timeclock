@@ -60,6 +60,11 @@ export const companies = pgTable("companies", {
   billingStatus: varchar("billingStatus", { length: 32 }),
   billingEmail: varchar("billingEmail", { length: 320 }),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
+  crmStage: varchar("crmStage", { length: 32 }).default("trial").notNull(),
+  crmContactName: varchar("crmContactName", { length: 255 }),
+  crmContactPhone: varchar("crmContactPhone", { length: 32 }),
+  crmNotes: text("crmNotes"),
+  crmNextFollowUpAt: timestamp("crmNextFollowUpAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -367,6 +372,24 @@ export const legalAcceptances = pgTable(
 
 export type LegalAcceptance = typeof legalAcceptances.$inferSelect;
 export type InsertLegalAcceptance = typeof legalAcceptances.$inferInsert;
+
+/** Historial CRM por empresa (superadmin). */
+export const companyCrmActivities = pgTable(
+  "company_crm_activities",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("companyId").notNull(),
+    activityType: varchar("activityType", { length: 32 }).default("note").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    companyIdx: index("company_crm_activities_company_idx").on(table.companyId),
+  })
+);
+
+export type CompanyCrmActivity = typeof companyCrmActivities.$inferSelect;
+export type InsertCompanyCrmActivity = typeof companyCrmActivities.$inferInsert;
 
 /** Configuración global de la plataforma (landing, etc.). */
 export const platformSettings = pgTable("platform_settings", {

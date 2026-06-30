@@ -29,6 +29,11 @@ export const demoCompany = {
   billingStatus: null as string | null,
   billingEmail: null as string | null,
   currentPeriodEnd: null as Date | null,
+  crmStage: "active" as const,
+  crmContactName: null as string | null,
+  crmContactPhone: null as string | null,
+  crmNotes: null as string | null,
+  crmNextFollowUpAt: null as Date | null,
   isActive: true,
   createdAt: now,
   updatedAt: now,
@@ -208,6 +213,11 @@ type DemoSuperCompany = {
   billingStatus: string | null;
   billingEmail: string | null;
   currentPeriodEnd: Date | null;
+  crmStage: string;
+  crmContactName: string | null;
+  crmContactPhone: string | null;
+  crmNotes: string | null;
+  crmNextFollowUpAt: Date | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -241,6 +251,11 @@ let superCompanies: DemoSuperCompany[] = [
     billingStatus: null,
     billingEmail: null,
     currentPeriodEnd: null,
+    crmStage: "trial",
+    crmContactName: null,
+    crmContactPhone: null,
+    crmNotes: null,
+    crmNextFollowUpAt: null,
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -445,6 +460,11 @@ export function demoCreateSuperCompany(input: {
     billingStatus: null,
     billingEmail: null,
     currentPeriodEnd: null,
+    crmStage: "trial",
+    crmContactName: null,
+    crmContactPhone: null,
+    crmNotes: null,
+    crmNextFollowUpAt: null,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),

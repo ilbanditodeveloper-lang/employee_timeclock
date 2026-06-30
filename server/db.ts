@@ -14,6 +14,7 @@ import {
   auditLogs,
   timeclockBreaks,
   timeOffRequests,
+  companyCrmActivities,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
@@ -1196,4 +1197,33 @@ export async function listIncidentsForEmployeeIds(employeeIds: number[], company
     .from(incidents)
     .where(and(eq(incidents.companyId, companyId), inArray(incidents.employeeId, employeeIds)))
     .orderBy(desc(incidents.createdAt));
+}
+
+export async function listCompanyCrmActivities(companyId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(companyCrmActivities)
+    .where(eq(companyCrmActivities.companyId, companyId))
+    .orderBy(desc(companyCrmActivities.createdAt))
+    .limit(limit);
+}
+
+export async function addCompanyCrmActivity(params: {
+  companyId: number;
+  body: string;
+  activityType?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .insert(companyCrmActivities)
+    .values({
+      companyId: params.companyId,
+      body: params.body.trim(),
+      activityType: params.activityType ?? "note",
+    })
+    .returning();
+  return row;
 }
