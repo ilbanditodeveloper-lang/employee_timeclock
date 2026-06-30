@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
+import { MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings, Plus, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -88,6 +88,7 @@ export default function AdminDashboard() {
   const [employeePhone, setEmployeePhone] = useState('');
   const [lateGraceMinutes, setLateGraceMinutes] = useState('5');
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
+  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [workedHours, setWorkedHours] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -924,6 +925,7 @@ export default function AdminDashboard() {
         setEditingEmployeeId(null);
         setEmployeeSchedule(nextSchedule);
         setScheduleSectionOpen(false);
+        setShowEmployeeForm(false);
         listEmployees.refetch();
       })
       .catch((error) => {
@@ -932,6 +934,31 @@ export default function AdminDashboard() {
         );
         console.error(error);
       });
+  };
+
+  const resetEmployeeFormFields = () => {
+    const nextSchedule = adminSession?.companySlug
+      ? loadDefaultSchedule(adminSession.companySlug)
+      : createDefaultEmployeeSchedule();
+    setEmployeeName('');
+    setEmployeeEmail('');
+    setEmployeeUsername('');
+    setEmployeePassword('');
+    setEmployeePhone('');
+    setLateGraceMinutes('5');
+    setEditingEmployeeId(null);
+    setEmployeeSchedule(nextSchedule);
+    setScheduleSectionOpen(false);
+  };
+
+  const handleStartCreateEmployee = () => {
+    resetEmployeeFormFields();
+    setShowEmployeeForm(true);
+  };
+
+  const handleCancelEmployeeForm = () => {
+    resetEmployeeFormFields();
+    setShowEmployeeForm(false);
   };
 
   const handleEditEmployee = (employeeId: number) => {
@@ -945,6 +972,7 @@ export default function AdminDashboard() {
     setEmployeePhone(employee.phone || '');
     setLateGraceMinutes(String(employee.lateGraceMinutes ?? 5));
     setScheduleSectionOpen(true);
+    setShowEmployeeForm(true);
   };
 
   useEffect(() => {
@@ -988,6 +1016,12 @@ export default function AdminDashboard() {
       setLocation('/admin/onboarding');
     }
   }, [adminSession, onboardingQuery.data, setLocation]);
+
+  useEffect(() => {
+    if (activeTab !== 'employees') {
+      setShowEmployeeForm(false);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (!adminSession?.companySlug || editingEmployeeId) return;
@@ -1191,10 +1225,107 @@ export default function AdminDashboard() {
 
           {/* Employees Tab */}
           <TabsContent value="employees" className="mt-0 space-y-6">
-            <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Gestión de Empleados</h2>
-              
-              <div className="space-y-4 mb-8">
+            <Card className="app-shell-card border-0 p-6 shadow-sm">
+              {!showEmployeeForm ? (
+                <>
+                  <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-2xl font-bold text-foreground">Gestión de Empleados</h2>
+                    <Button
+                      type="button"
+                      onClick={handleStartCreateEmployee}
+                      className="btn-primary gap-2"
+                      disabled={atEmployeeLimit}
+                    >
+                      <Plus className="size-4" />
+                      Crear Empleado
+                    </Button>
+                  </div>
+                  {atEmployeeLimit ? (
+                    <p className="mb-4 text-xs text-muted-foreground">
+                      Has alcanzado el límite de empleados de tu plan. La empresa será dada de baja
+                      automáticamente.
+                    </p>
+                  ) : null}
+
+                  <div>
+                    <h3 className="mb-2 font-semibold text-foreground">Empleados registrados</h3>
+                    <p className="mb-4 text-xs text-muted-foreground">
+                      Desactivar un empleado impide su acceso, pero conserva fichajes e historial (mínimo
+                      4 años). Puede seguir exportando sus registros.
+                    </p>
+                    <div className="space-y-2">
+                      {listEmployees.data?.length ? (
+                        listEmployees.data.map((employee) => (
+                          <div
+                            key={employee.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted p-4"
+                          >
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-medium text-foreground">{employee.name}</p>
+                                {employee.isActive === false ? (
+                                  <Badge variant="secondary">Inactivo</Badge>
+                                ) : (
+                                  <Badge variant="outline">Activo</Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                Email: {employee.email || "—"} · Usuario: {employee.username}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditEmployee(employee.id)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleExportEmployeeData(employee.id, employee.name)}
+                              >
+                                Exportar JSON
+                              </Button>
+                              {employee.isActive !== false && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDeactivateEmployee(employee)}
+                                  disabled={deactivateEmployee.isPending}
+                                >
+                                  Desactivar
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No hay empleados registrados.</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mb-6 flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEmployeeForm}
+                      className="gap-2"
+                    >
+                      <ArrowLeft className="size-4" />
+                      Volver a la lista
+                    </Button>
+                    <h2 className="text-2xl font-bold text-foreground">
+                      {editingEmployeeId ? "Editar empleado" : "Crear empleado"}
+                    </h2>
+                  </div>
+
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Nombre del Empleado
@@ -1431,60 +1562,8 @@ export default function AdminDashboard() {
                   </p>
                 ) : null}
               </div>
-
-              {/* Employee List */}
-              <div className="border-t border-border pt-6">
-                <h3 className="font-semibold text-foreground mb-2">Empleados registrados</h3>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Desactivar un empleado impide su acceso, pero conserva fichajes e historial (mínimo 4
-                  años). Puede seguir exportando sus registros.
-                </p>
-                <div className="space-y-2">
-                  {listEmployees.data?.length ? (
-                    listEmployees.data.map((employee) => (
-                      <div key={employee.id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-muted rounded-lg">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-foreground">{employee.name}</p>
-                            {employee.isActive === false ? (
-                              <Badge variant="secondary">Inactivo</Badge>
-                            ) : (
-                              <Badge variant="outline">Activo</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Email: {employee.email || "—"} · Usuario: {employee.username}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditEmployee(employee.id)}>
-                            Editar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleExportEmployeeData(employee.id, employee.name)}
-                          >
-                            Exportar JSON
-                          </Button>
-                          {employee.isActive !== false && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDeactivateEmployee(employee)}
-                              disabled={deactivateEmployee.isPending}
-                            >
-                              Desactivar
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No hay empleados registrados.</p>
-                  )}
-                </div>
-              </div>
+                </>
+              )}
             </Card>
           </TabsContent>
 
