@@ -103,19 +103,25 @@ export default function Home() {
           Volver al inicio
         </Link>
 
-        <div className="overflow-hidden rounded-2xl border-2 border-blue-600 bg-white shadow-2xl shadow-blue-900/15 ring-4 ring-blue-600/10">
-          <div className="bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 px-6 py-8 text-center text-white">
-            <div className="mx-auto mb-4 inline-flex size-16 items-center justify-center rounded-2xl bg-white/15 shadow-lg backdrop-blur-sm">
-              <Clock className="size-8 text-white" />
+        <div className="relative">
+          <div
+            className="pointer-events-none absolute -inset-3 rounded-[1.75rem] bg-gradient-to-br from-blue-500/25 via-blue-600/15 to-blue-900/30 blur-xl"
+            aria-hidden
+          />
+          <div className="relative overflow-hidden rounded-2xl bg-white shadow-[0_24px_60px_-20px_rgba(30,64,175,0.35)]">
+            <div className="h-1.5 bg-gradient-to-r from-blue-400 via-blue-600 to-blue-900" />
+            <div className="bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 px-6 py-8 text-center text-white">
+              <div className="mx-auto mb-4 inline-flex size-16 items-center justify-center rounded-2xl bg-white/15 shadow-lg backdrop-blur-sm">
+                <Clock className="size-8 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">TimeClock</h1>
+              <p className="mt-2 text-blue-100/90">Sistema de fichaje de empleados</p>
+              <p className="mt-4 inline-block rounded-full bg-blue-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100">
+                Acceso seguro
+              </p>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">TimeClock</h1>
-            <p className="mt-2 text-blue-100/90">Sistema de fichaje de empleados</p>
-            <p className="mt-4 inline-block rounded-full bg-blue-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100">
-              Acceso seguro
-            </p>
-          </div>
 
-          <div className="space-y-5 p-6 sm:p-8">
+            <div className="space-y-5 p-6 sm:p-8">
             <div className="space-y-3">
               {featureItems.map((item) => {
                 const Icon = item.icon;
@@ -178,7 +184,7 @@ export default function Home() {
                 onClick={() => setLocation("/admin-login")}
                 variant="outline"
                 className={cn(
-                  "h-11 w-full border-2 border-blue-600 text-base text-blue-900",
+                  "h-11 w-full border border-blue-300 text-base text-blue-900",
                   "hover:bg-blue-50"
                 )}
               >
@@ -210,6 +216,7 @@ export default function Home() {
                   DPA
                 </Link>
               </p>
+            </div>
             </div>
           </div>
         </div>
