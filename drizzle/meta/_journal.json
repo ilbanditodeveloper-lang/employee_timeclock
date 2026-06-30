@@ -85,6 +85,13 @@
       "when": 1782087000000,
       "tag": "0011_timeclock_breaks",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782088000000,
+      "tag": "0012_platform_settings",
+      "breakpoints": true
     }
   ]
 }
