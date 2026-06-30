@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import { useLocation } from "wouter";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -10,7 +10,8 @@ import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
-import { formatTimeInTimeZone, resolveAppTimeZone } from "@shared/timezone";
+import { formatTimeInTimeZone, resolveAppTimeZone, todayYmdInTimeZone } from "@shared/timezone";
+import { cn } from "@/lib/utils";
 
 export default function EmployeeCalendar() {
   const [, setLocation] = useLocation();
@@ -33,22 +34,73 @@ export default function EmployeeCalendar() {
     return Math.max(hours, 0) * Math.max(rate, 0);
   }, [hoursWorked, hourlyRate]);
 
-  const filteredTimeclocks = (employeeTimeclocks.data || []).filter((entry) => {
-    const entryDate = new Date(entry.entryTime || entry.createdAt);
-    if (selectionMode === "range") {
-      if (!selectedRange?.from || !selectedRange?.to) return false;
-      const start = new Date(selectedRange.from);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(selectedRange.to);
-      end.setHours(23, 59, 59, 999);
-      return entryDate >= start && entryDate <= end;
+  const workedDayKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const entry of employeeTimeclocks.data ?? []) {
+      if (!entry.entryTime || entry.status === "voided") continue;
+      keys.add(todayYmdInTimeZone(appTimeZone, new Date(entry.entryTime)));
     }
-    if (!selectedDate) return false;
-    const day = new Date(selectedDate);
-    day.setHours(0, 0, 0, 0);
-    entryDate.setHours(0, 0, 0, 0);
-    return entryDate.getTime() === day.getTime();
-  });
+    return keys;
+  }, [employeeTimeclocks.data, appTimeZone]);
+
+  const isWorkedDay = (date: Date) =>
+    workedDayKeys.has(todayYmdInTimeZone(appTimeZone, date));
+
+  const workedDayCalendarProps = {
+    modifiers: { worked: isWorkedDay },
+    components: {
+      DayButton: (btnProps: ComponentProps<typeof CalendarDayButton>) => {
+        const { worked, selected, range_start, range_end, range_middle } = btnProps.modifiers;
+        const isRangeDay = range_start || range_end || range_middle;
+        return (
+          <CalendarDayButton
+            {...btnProps}
+            className={cn(
+              btnProps.className,
+              worked &&
+                !selected &&
+                !isRangeDay &&
+                "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/45 dark:text-emerald-50 dark:hover:bg-emerald-800/55"
+            )}
+          >
+            {btnProps.children}
+            {worked ? (
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  selected || range_start || range_end
+                    ? "bg-emerald-300 dark:bg-emerald-400"
+                    : "bg-emerald-600 dark:bg-emerald-400"
+                )}
+                aria-hidden
+              />
+            ) : null}
+          </CalendarDayButton>
+        );
+      },
+    },
+  };
+
+  const filteredTimeclocks = useMemo(() => {
+    return (employeeTimeclocks.data || []).filter((entry) => {
+      if (!entry.entryTime) return false;
+      const entryYmd = todayYmdInTimeZone(appTimeZone, new Date(entry.entryTime));
+      if (selectionMode === "range") {
+        if (!selectedRange?.from || !selectedRange?.to) return false;
+        const startYmd = todayYmdInTimeZone(appTimeZone, selectedRange.from);
+        const endYmd = todayYmdInTimeZone(appTimeZone, selectedRange.to);
+        return entryYmd >= startYmd && entryYmd <= endYmd;
+      }
+      if (!selectedDate) return false;
+      return entryYmd === todayYmdInTimeZone(appTimeZone, selectedDate);
+    });
+  }, [
+    employeeTimeclocks.data,
+    appTimeZone,
+    selectionMode,
+    selectedRange,
+    selectedDate,
+  ]);
 
   const totalHours = filteredTimeclocks.reduce((total, entry) => {
     if (!entry.entryTime || !entry.exitTime) return total;
@@ -143,10 +195,23 @@ export default function EmployeeCalendar() {
                   mode="range"
                   selected={selectedRange}
                   onSelect={setSelectedRange}
+                  {...workedDayCalendarProps}
                 />
               ) : (
-                <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} />
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  {...workedDayCalendarProps}
+                />
               )}
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  className="inline-block size-3 rounded-sm border border-emerald-400 bg-emerald-100 dark:border-emerald-600 dark:bg-emerald-900/45"
+                  aria-hidden
+                />
+                Día con fichaje registrado
+              </p>
             </div>
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">
@@ -250,9 +315,6 @@ export default function EmployeeCalendar() {
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Próximamente verás aquí tus fichajes e incidencias por día.
-              </p>
             </div>
           </div>
         </Card>
