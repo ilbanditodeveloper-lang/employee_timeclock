@@ -1022,7 +1022,11 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 min-h-0 w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="grid min-h-0 flex-1 w-full grid-cols-[auto_1fr] gap-0"
+      >
         <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card shadow-sm lg:w-60 xl:w-64">
           <div className="border-b border-border px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menú</p>
@@ -1096,7 +1100,7 @@ export default function AdminDashboard() {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main className="min-h-0 min-w-0 overflow-y-auto">
           <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
             {showOnboardingBanner && <OnboardingReminderBanner />}
             {showTrialBanner && subscription?.bannerMessage ? (
@@ -1106,8 +1110,7 @@ export default function AdminDashboard() {
               <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
             ) : null}
 
-            <div className="min-w-0 flex-1">
-          <TabsContent value="restaurant" className="space-y-6">
+          <TabsContent value="restaurant" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-6">Gestión del Negocio</h2>
               
@@ -1180,7 +1183,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {/* Employees Tab */}
-          <TabsContent value="employees" className="space-y-6">
+          <TabsContent value="employees" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-6">Gestión de Empleados</h2>
               
@@ -1479,7 +1482,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {/* Shifts Tab */}
-          <TabsContent value="shifts" className="space-y-6">
+          <TabsContent value="shifts" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-6">Configuración de Turnos</h2>
               <div className="space-y-4 mb-6">
@@ -1539,7 +1542,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {/* Hours Tab */}
-          <TabsContent value="hours" className="space-y-6">
+          <TabsContent value="hours" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-6">Calendario de Horas</h2>
               
@@ -1936,7 +1939,7 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="tracking" className="space-y-6">
+          <TabsContent value="tracking" className="mt-0 space-y-6">
             <Card className="p-6">
               <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
                 <div>
@@ -2087,7 +2090,7 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="timeoff" className="space-y-6">
+          <TabsContent value="timeoff" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-2">Vacaciones y días libres</h2>
               <p className="text-sm text-muted-foreground mb-6">
@@ -2288,7 +2291,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {/* Incidents Tab */}
-          <TabsContent value="incidents" className="space-y-6">
+          <TabsContent value="incidents" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-6">Gestión de Incidencias</h2>
               
@@ -2358,14 +2361,13 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="legal" className="space-y-6">
+          <TabsContent value="legal" className="mt-0 space-y-6">
             <AdminLegalPanel />
           </TabsContent>
 
-          <TabsContent value="audit" className="space-y-6">
+          <TabsContent value="audit" className="mt-0 space-y-6">
             <AdminAuditLogPanel />
           </TabsContent>
-            </div>
           </div>
         </main>
       </Tabs>
