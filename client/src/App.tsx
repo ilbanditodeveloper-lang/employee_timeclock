@@ -8,6 +8,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import LandingPage from "./pages/LandingPage";
 import Home from "./pages/Home";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import AdminLogin from "./pages/AdminLogin";
@@ -29,7 +30,8 @@ import RegisterBusiness from "./pages/RegisterBusiness";
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
+      <Route path={"/"} component={LandingPage} />
+      <Route path={"/acceso"} component={Home} />
       <Route path={"/register-business"} component={RegisterBusiness} />
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/admin-login"} component={AdminLogin} />
