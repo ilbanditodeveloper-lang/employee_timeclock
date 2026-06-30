@@ -361,3 +361,12 @@ export const legalAcceptances = pgTable(
 
 export type LegalAcceptance = typeof legalAcceptances.$inferSelect;
 export type InsertLegalAcceptance = typeof legalAcceptances.$inferInsert;
+
+/** Configuración global de la plataforma (landing, etc.). */
+export const platformSettings = pgTable("platform_settings", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type PlatformSetting = typeof platformSettings.$inferSelect;

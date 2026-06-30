@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { trpc } from "@/lib/trpc";
+import {
+  DEFAULT_LANDING_PAGE_CONFIG,
+  buildWhatsAppHref,
+  type LandingPageConfig,
+} from "@shared/landingConfig";
 import {
   ArrowRight,
   BarChart3,
@@ -16,30 +22,17 @@ import {
   CalendarDays,
   Check,
   Clock,
-  Dumbbell,
   FileDown,
   LayoutDashboard,
   MapPin,
   MessageCircle,
   Play,
-  Scissors,
   Shield,
   Smartphone,
-  Store,
-  UtensilsCrossed,
-  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER as string | undefined)?.replace(/\D/g, "");
-const WHATSAPP_MSG = encodeURIComponent(
-  "Hola, me gustaría una demo de TimeClock para mi negocio."
-);
-
-function whatsAppHref() {
-  if (!WHATSAPP_NUMBER) return "/register-business";
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
-}
+const WHATSAPP_MSG = "Hola, me gustaría una demo de TimeClock para mi negocio.";
 
 const features = [
   {
@@ -92,16 +85,7 @@ const steps = [
   },
 ];
 
-const audiences = [
-  { icon: UtensilsCrossed, label: "Restaurantes y bares" },
-  { icon: Store, label: "Tiendas y comercios" },
-  { icon: Scissors, label: "Peluquerías y estética" },
-  { icon: Wrench, label: "Talleres y servicios" },
-  { icon: Building2, label: "Oficinas y equipos" },
-  { icon: Dumbbell, label: "Gimnasios y centros" },
-];
-
-const faqs = [
+const faqs = (trialDays: number) => [
   {
     q: "¿Los empleados tienen que instalar una app?",
     a: "No. TimeClock funciona en el navegador del móvil o PC. Pueden añadir un acceso directo a la pantalla de inicio como una app.",
@@ -120,9 +104,14 @@ const faqs = [
   },
   {
     q: "¿Puedo probarlo antes de contratar?",
-    a: "Sí. Regístrate gratis con 14 días de prueba o pide una demo por WhatsApp.",
+    a: `Sí. Regístrate gratis con ${trialDays} días de prueba o pide una demo por WhatsApp.`,
   },
 ];
+
+function useLandingConfig(): LandingPageConfig {
+  const query = trpc.publicApi.getLandingPageConfig.useQuery();
+  return query.data ?? DEFAULT_LANDING_PAGE_CONFIG;
+}
 
 function PhoneMockup() {
   return (
@@ -198,6 +187,14 @@ function DashboardMockup() {
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { adminSession, employeeSession, isAuthLoading } = useAuthContext();
+  const config = useLandingConfig();
+
+  const waHref = useMemo(
+    () => buildWhatsAppHref(config.whatsappNumber, WHATSAPP_MSG) ?? "/register-business",
+    [config.whatsappNumber]
+  );
+  const waExternal = waHref.startsWith("http");
+  const faqItems = faqs(config.trialDays);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -212,9 +209,6 @@ export default function LandingPage() {
       </div>
     );
   }
-
-  const waHref = whatsAppHref();
-  const waExternal = waHref.startsWith("http");
 
   return (
     <div className="min-h-screen bg-white text-slate-900 scroll-smooth">
@@ -377,19 +371,20 @@ export default function LandingPage() {
             Ideal para todo tipo de negocios
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {audiences.map(({ icon: Icon, label }) => (
+            {config.audienceImages.map((item) => (
               <div
-                key={label}
-                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-800 to-emerald-950 p-8 min-h-[140px] flex flex-col justify-end"
+                key={item.id}
+                className="group relative overflow-hidden rounded-2xl min-h-[160px] flex flex-col justify-end bg-slate-800"
               >
-                <div className="absolute right-4 top-4 opacity-20 group-hover:opacity-30 transition-opacity">
-                  <Icon className="size-16 text-white" />
-                </div>
-                <div className="relative flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-full bg-white/20 text-white">
-                    <Icon className="size-5" />
-                  </div>
-                  <p className="font-semibold text-white">{label}</p>
+                <img
+                  src={item.imageUrl}
+                  alt={item.label}
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+                <div className="relative p-4">
+                  <p className="font-semibold text-white text-sm sm:text-base">{item.label}</p>
                 </div>
               </div>
             ))}
@@ -435,53 +430,86 @@ export default function LandingPage() {
       {/* Pricing + FAQ */}
       <section id="precios" className="py-20 bg-slate-50">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
-          <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-            <Card className="p-8 border-emerald-200 shadow-lg">
-              <p className="text-sm font-semibold text-emerald-700 uppercase tracking-wide mb-2">
-                Plan negocio
-              </p>
-              <div className="flex items-baseline gap-1 mb-6">
-                <span className="text-5xl font-bold text-slate-900">14 días</span>
-                <span className="text-slate-600">de prueba gratis</span>
-              </div>
-              <ul className="space-y-3 mb-8">
-                {[
-                  "Fichaje móvil y PC",
-                  "Panel admin con dashboard",
-                  "Hasta 5 empleados en trial",
-                  "Informes y exportación",
-                  "Vacaciones e incidencias",
-                  "Soporte por email",
-                ].map((item) => (
-                  <li key={item} className="flex items-center gap-2 text-sm text-slate-700">
-                    <Check className="size-4 text-emerald-600 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/register-business">
-                <Button className="w-full bg-emerald-700 hover:bg-emerald-800" size="lg">
-                  Registrar mi negocio
-                </Button>
-              </Link>
-              <p className="text-xs text-slate-500 text-center mt-3">
-                Sin tarjeta para empezar · Horario Europa/Madrid
-              </p>
-            </Card>
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Planes y precios</h2>
+            <p className="mt-3 text-slate-600">{config.trialHeadline}</p>
+          </div>
 
-            <div id="faq">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6">Preguntas frecuentes</h2>
-              <Accordion type="single" collapsible className="w-full">
-                {faqs.map((faq, i) => (
-                  <AccordionItem key={faq.q} value={`faq-${i}`}>
-                    <AccordionTrigger className="text-left text-slate-900 hover:text-emerald-800">
-                      {faq.q}
-                    </AccordionTrigger>
-                    <AccordionContent className="text-slate-600">{faq.a}</AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
+          <div className="grid gap-6 md:grid-cols-3 mb-16">
+            {config.pricingPacks.map((pack) => (
+              <Card
+                key={pack.id}
+                className={cn(
+                  "p-6 flex flex-col",
+                  pack.highlighted
+                    ? "border-emerald-500 shadow-lg ring-2 ring-emerald-500/20 scale-[1.02]"
+                    : "border-slate-200"
+                )}
+              >
+                {pack.highlighted ? (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 mb-2">
+                    Más popular
+                  </p>
+                ) : null}
+                <h3 className="text-xl font-bold text-slate-900">{pack.name}</h3>
+                <p className="text-sm text-slate-600 mt-1 mb-4">{pack.description}</p>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-bold text-slate-900">{pack.price}</span>
+                  <span className="text-slate-600">{pack.priceSuffix}</span>
+                </div>
+                <ul className="space-y-2 mb-8 flex-1">
+                  {pack.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
+                      <Check className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                {waExternal ? (
+                  <a href={waHref} target="_blank" rel="noreferrer" className="w-full">
+                    <Button
+                      className={cn(
+                        "w-full",
+                        pack.highlighted
+                          ? "bg-emerald-700 hover:bg-emerald-800"
+                          : "bg-slate-900 hover:bg-slate-800"
+                      )}
+                    >
+                      {pack.ctaLabel}
+                    </Button>
+                  </a>
+                ) : (
+                  <Link href="/register-business">
+                    <Button
+                      className={cn(
+                        "w-full",
+                        pack.highlighted
+                          ? "bg-emerald-700 hover:bg-emerald-800"
+                          : "bg-slate-900 hover:bg-slate-800"
+                      )}
+                    >
+                      {pack.ctaLabel}
+                    </Button>
+                  </Link>
+                )}
+              </Card>
+            ))}
+          </div>
+
+          <div id="faq" className="max-w-3xl mx-auto">
+            <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">
+              Preguntas frecuentes
+            </h2>
+            <Accordion type="single" collapsible className="w-full">
+              {faqItems.map((faq, i) => (
+                <AccordionItem key={faq.q} value={`faq-${i}`}>
+                  <AccordionTrigger className="text-left text-slate-900 hover:text-emerald-800">
+                    {faq.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-slate-600">{faq.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </div>
         </div>
       </section>

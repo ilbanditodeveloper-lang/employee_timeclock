@@ -64,6 +64,8 @@ import { isUniqueViolation, throwBusinessError } from "./_core/errors";
 import { DUPLICATE_ADMIN_EMAIL_MSG } from "@shared/const";
 import { writeAuditLog } from "./_core/audit";
 import { enrichSuperAdminCompany } from "./_core/superAdminCompanies";
+import { getLandingPageConfig, saveLandingPageConfig } from "./landingSettings";
+import { landingPageConfigSchema } from "@shared/landingConfig";
 import { syncAllCompaniesSubscriptionEnforcement, deactivateCompanyIfSubscriptionViolated } from "./_core/subscriptionEnforcement";
 import {
   SUBSCRIPTION_PLANS,
@@ -168,6 +170,8 @@ export const appRouter = router({
       demoMode: isDemoModeEnabled(),
       registrationAvailable: Boolean(process.env.DATABASE_URL?.trim()),
     })),
+
+    getLandingPageConfig: publicProcedure.query(async () => getLandingPageConfig()),
 
     registerBusiness: publicProcedure
       .input(
@@ -372,18 +376,13 @@ export const appRouter = router({
 
     superAdminSetCompanyStatus: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           companyId: z.number().int().positive(),
           isActive: z.boolean(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireSuperAdminCredentials({
-          username: input.username,
-          password: input.password,
-        });
+        await resolveSuperAdminAuth(ctx, input);
         if (isDemoModeEnabled()) {
           return demoSetCompanyStatus(input.companyId, input.isActive);
         }
@@ -400,6 +399,19 @@ export const appRouter = router({
           .set({ isActive: input.isActive, updatedAt: new Date() })
           .where(eq(companies.id, input.companyId));
         return { success: true };
+      }),
+
+    superAdminGetLandingSettings: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
+      await resolveSuperAdminAuth(ctx, input);
+      return getLandingPageConfig();
+    }),
+
+    superAdminUpdateLandingSettings: publicProcedure
+      .input(optionalCreds.extend({ config: landingPageConfigSchema }))
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        const config = await saveLandingPageConfig(input.config);
+        return { success: true as const, config };
       }),
 
     superAdminSetCompanySubscription: publicProcedure
