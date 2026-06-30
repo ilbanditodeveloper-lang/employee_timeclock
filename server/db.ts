@@ -382,6 +382,7 @@ export type RegisterBusinessParams = {
   country: string;
   timezone: string;
   address?: string;
+  trialDays?: number;
 };
 
 export type RegisterBusinessResult = {
@@ -428,7 +429,7 @@ export async function registerBusinessTenant(
         termsAcceptedAt: now,
         onboardingCompleted: false,
         subscriptionPlan: "trial",
-        trialEndsAt: addTrialDays(now),
+        trialEndsAt: addTrialDays(now, params.trialDays && params.trialDays > 0 ? params.trialDays : undefined),
         isActive: true,
       })
       .returning();
@@ -467,6 +468,7 @@ export async function registerBusinessTenant(
         longitude: MADRID_LNG,
         radiusMeters: 150,
         adminId: admin.id,
+        isPrimary: true,
       })
       .returning();
 
@@ -577,6 +579,120 @@ export async function getEmployeeByUsername(username: string, companyId?: number
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getRestaurantsByCompany(companyId: number) {
+  if (isDemoRequestActive()) {
+    return [getDemoRestaurant()];
+  }
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(restaurants)
+    .where(eq(restaurants.companyId, companyId))
+    .orderBy(desc(restaurants.isPrimary), restaurants.id);
+}
+
+export async function countRestaurantsByCompany(companyId: number): Promise<number> {
+  const list = await getRestaurantsByCompany(companyId);
+  return list.length;
+}
+
+export async function createCompanyLocation(params: {
+  companyId: number;
+  adminId: number;
+  name: string;
+  address?: string | null;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getRestaurantsByCompany(params.companyId);
+  const isPrimary = existing.length === 0;
+
+  const [created] = await db
+    .insert(restaurants)
+    .values({
+      companyId: params.companyId,
+      name: params.name.trim(),
+      address: params.address?.trim() || null,
+      latitude: params.latitude.toString(),
+      longitude: params.longitude.toString(),
+      radiusMeters: params.radiusMeters,
+      adminId: params.adminId,
+      isPrimary,
+    })
+    .returning();
+
+  return created;
+}
+
+export async function updateCompanyLocation(
+  locationId: number,
+  companyId: number,
+  patch: {
+    name?: string;
+    address?: string | null;
+    latitude?: number;
+    longitude?: number;
+    radiusMeters?: number;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getRestaurantById(locationId, companyId);
+  if (!existing) throw new Error("Sede no encontrada");
+
+  await db
+    .update(restaurants)
+    .set({
+      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.address !== undefined ? { address: patch.address?.trim() || null } : {}),
+      ...(patch.latitude !== undefined ? { latitude: patch.latitude.toString() } : {}),
+      ...(patch.longitude !== undefined ? { longitude: patch.longitude.toString() } : {}),
+      ...(patch.radiusMeters !== undefined ? { radiusMeters: patch.radiusMeters } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(restaurants.id, locationId), eq(restaurants.companyId, companyId)));
+
+  return getRestaurantById(locationId, companyId);
+}
+
+export async function deleteCompanyLocation(locationId: number, companyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getRestaurantById(locationId, companyId);
+  if (!existing) throw new Error("Sede no encontrada");
+
+  const emps = await getEmployeesByRestaurant(locationId, companyId);
+  if (emps.length > 0) {
+    throw new Error("No se puede eliminar una sede con empleados asignados");
+  }
+
+  const all = await getRestaurantsByCompany(companyId);
+  if (all.length <= 1) {
+    throw new Error("Debe existir al menos una sede");
+  }
+
+  await db
+    .delete(restaurants)
+    .where(and(eq(restaurants.id, locationId), eq(restaurants.companyId, companyId)));
+
+  if (existing.isPrimary) {
+    const remaining = await getRestaurantsByCompany(companyId);
+    if (remaining[0]) {
+      await db
+        .update(restaurants)
+        .set({ isPrimary: true, updatedAt: new Date() })
+        .where(eq(restaurants.id, remaining[0].id));
+    }
+  }
+}
+
 // Restaurant queries
 export async function getRestaurantById(id: number, companyId?: number) {
   if (isDemoRequestActive()) {
@@ -594,20 +710,56 @@ export async function getRestaurantById(id: number, companyId?: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getRestaurantByAdmin(adminId: number, companyId?: number) {
+export async function resolveAdminRestaurantForCompany(
+  adminId: number,
+  companyId: number,
+  restaurantId?: number
+) {
+  if (restaurantId) {
+    return getRestaurantById(restaurantId, companyId);
+  }
+  const list = await getRestaurantsByCompany(companyId);
+  if (list.length > 0) {
+    return list.find((r) => r.isPrimary) ?? list[0];
+  }
+  if (isDemoRequestActive()) {
+    const r = getDemoRestaurant();
+    if (r.adminId !== adminId) return undefined;
+    if (r.companyId !== companyId) return undefined;
+    return r;
+  }
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(restaurants)
+    .where(and(eq(restaurants.adminId, adminId), eq(restaurants.companyId, companyId)))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getRestaurantByAdmin(
+  adminId: number,
+  companyId?: number,
+  restaurantId?: number
+) {
   if (isDemoRequestActive()) {
     const r = getDemoRestaurant();
     if (r.adminId !== adminId) return undefined;
     if (companyId && r.companyId !== companyId) return undefined;
     return r;
   }
-  const db = await getDb();
-  if (!db) return undefined;
-  const where = companyId
-    ? and(eq(restaurants.adminId, adminId), eq(restaurants.companyId, companyId))
-    : eq(restaurants.adminId, adminId);
-  const result = await db.select().from(restaurants).where(where).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  if (!companyId) {
+    const db = await getDb();
+    if (!db) return undefined;
+    const result = await db
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.adminId, adminId))
+      .limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  }
+  return resolveAdminRestaurantForCompany(adminId, companyId, restaurantId);
 }
 
 // Schedule queries

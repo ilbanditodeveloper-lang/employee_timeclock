@@ -146,7 +146,7 @@ export const DEFAULT_LANDING_PAGE_CONFIG: LandingPageConfig = {
       description: "Para cadenas y empresas con varios centros o muchos empleados.",
       features: [
         "Empleados ilimitados",
-        "Multi-sede (próximamente)",
+        "Multi-sede incluida",
         "Auditoría y RGPD",
         "Onboarding asistido",
         "Soporte dedicado",

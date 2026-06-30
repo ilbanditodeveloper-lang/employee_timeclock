@@ -142,6 +142,28 @@ async function startServer() {
   };
 
   app.use(cors(corsOptions));
+
+  app.post(
+    "/api/stripe/webhook",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      try {
+        const signature = req.headers["stripe-signature"];
+        if (!signature || typeof signature !== "string") {
+          res.status(400).send("Missing stripe-signature");
+          return;
+        }
+        const { verifyStripeWebhook, handleStripeWebhookEvent } = await import("./stripe.js");
+        const event = verifyStripeWebhook(req.body as Buffer, signature);
+        await handleStripeWebhookEvent(event);
+        res.json({ received: true });
+      } catch (error) {
+        console.error("Stripe webhook error:", error);
+        res.status(400).send("Webhook error");
+      }
+    }
+  );
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(

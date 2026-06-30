@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink } from "lucide-react";
+import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
@@ -23,6 +23,8 @@ import {
   type LandingFaq,
 } from "@shared/landingConfig";
 import { cn } from "@/lib/utils";
+import { SUBSCRIPTION_PLANS, SUBSCRIPTION_PLAN_LABELS } from "@shared/subscriptionPlans";
+import type { SubscriptionPlan } from "@shared/subscriptionPlans";
 
 type SuperAdminTab = "dashboard" | "companies" | "landing";
 
@@ -65,6 +67,21 @@ export default function SuperAdmin() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [activeTab, setActiveTab] = useState<SuperAdminTab>("dashboard");
   const [landingDraft, setLandingDraft] = useState<LandingPageConfig>(DEFAULT_LANDING_PAGE_CONFIG);
+  const [showCreateCompany, setShowCreateCompany] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    companyName: "",
+    companySlug: "",
+    adminUsername: "",
+    adminPassword: "",
+  });
+  const [editingCompanyId, setEditingCompanyId] = useState<number | null>(null);
+  const [subscriptionForm, setSubscriptionForm] = useState<{
+    plan: SubscriptionPlan;
+    trialEndsAt: string;
+    billingStatus: string;
+    isActive: boolean;
+  }>({ plan: "trial", trialEndsAt: "", billingStatus: "", isActive: true });
+  const [adminForm, setAdminForm] = useState({ adminUsername: "", adminPassword: "" });
 
   const loginMutation = trpc.publicApi.superAdminLogin.useMutation();
   const sessionQuery = trpc.publicApi.getSession.useQuery();
@@ -77,6 +94,9 @@ export default function SuperAdmin() {
   });
   const saveLanding = trpc.publicApi.superAdminUpdateLandingSettings.useMutation();
   const logoutMutation = trpc.publicApi.logoutSession.useMutation();
+  const createCompany = trpc.publicApi.superAdminCreateCompany.useMutation();
+  const setSubscription = trpc.publicApi.superAdminSetCompanySubscription.useMutation();
+  const setCompanyAdmin = trpc.publicApi.superAdminSetCompanyAdmin.useMutation();
 
   const companies = listCompanies.data ?? [];
   const stats = useMemo(() => {
@@ -150,6 +170,76 @@ export default function SuperAdmin() {
       await listCompanies.refetch();
     } catch {
       toast.error("No se pudo dar de alta la empresa");
+    }
+  };
+
+  const openCompanyEditor = (company: (typeof companies)[number]) => {
+    setEditingCompanyId(company.id);
+    setSubscriptionForm({
+      plan: (company.subscriptionPlan ?? "trial") as SubscriptionPlan,
+      trialEndsAt: company.trialEndsAt
+        ? new Date(company.trialEndsAt).toISOString().slice(0, 16)
+        : "",
+      billingStatus: company.billingStatus ?? "",
+      isActive: company.isActive,
+    });
+    setAdminForm({ adminUsername: company.adminUsername ?? "", adminPassword: "" });
+  };
+
+  const handleCreateCompany = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      await createCompany.mutateAsync({
+        ...emptyCreds,
+        ...createForm,
+      });
+      toast.success("Empresa creada");
+      setShowCreateCompany(false);
+      setCreateForm({ companyName: "", companySlug: "", adminUsername: "", adminPassword: "" });
+      await listCompanies.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo crear la empresa");
+    }
+  };
+
+  const handleSaveSubscription = async () => {
+    if (editingCompanyId == null) return;
+    try {
+      await setSubscription.mutateAsync({
+        ...emptyCreds,
+        companyId: editingCompanyId,
+        subscriptionPlan: subscriptionForm.plan,
+        trialEndsAt: subscriptionForm.trialEndsAt
+          ? new Date(subscriptionForm.trialEndsAt).toISOString()
+          : null,
+        billingStatus: subscriptionForm.billingStatus || null,
+        isActive: subscriptionForm.isActive,
+      });
+      toast.success("Suscripción actualizada");
+      setEditingCompanyId(null);
+      await listCompanies.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar");
+    }
+  };
+
+  const handleSaveAdmin = async () => {
+    if (editingCompanyId == null || !adminForm.adminPassword) {
+      toast.error("Introduce una contraseña para el admin");
+      return;
+    }
+    try {
+      await setCompanyAdmin.mutateAsync({
+        ...emptyCreds,
+        companyId: editingCompanyId,
+        adminUsername: adminForm.adminUsername,
+        adminPassword: adminForm.adminPassword,
+      });
+      toast.success("Admin actualizado");
+      setAdminForm((p) => ({ ...p, adminPassword: "" }));
+      await listCompanies.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar el admin");
     }
   };
 
@@ -432,50 +522,273 @@ export default function SuperAdmin() {
           ) : null}
 
           {activeTab === "companies" ? (
-            <div className="w-full">
+            <div className="w-full space-y-6">
+              <AppShellPanel
+                title="Nueva empresa"
+                description="Alta manual de cliente (trial según días configurados en landing)"
+              >
+                {showCreateCompany ? (
+                  <form onSubmit={handleCreateCompany} className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label>Nombre empresa</Label>
+                      <Input
+                        value={createForm.companyName}
+                        onChange={(e) =>
+                          setCreateForm((p) => ({ ...p, companyName: e.target.value }))
+                        }
+                        className="mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Slug (URL)</Label>
+                      <Input
+                        value={createForm.companySlug}
+                        onChange={(e) =>
+                          setCreateForm((p) => ({ ...p, companySlug: e.target.value }))
+                        }
+                        className="mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Usuario admin</Label>
+                      <Input
+                        value={createForm.adminUsername}
+                        onChange={(e) =>
+                          setCreateForm((p) => ({ ...p, adminUsername: e.target.value }))
+                        }
+                        className="mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Contraseña admin</Label>
+                      <Input
+                        type="password"
+                        value={createForm.adminPassword}
+                        onChange={(e) =>
+                          setCreateForm((p) => ({ ...p, adminPassword: e.target.value }))
+                        }
+                        className="mt-1"
+                        required
+                      />
+                    </div>
+                    <div className="sm:col-span-2 flex gap-2">
+                      <Button type="submit" disabled={createCompany.isPending}>
+                        Crear empresa
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setShowCreateCompany(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <Button type="button" onClick={() => setShowCreateCompany(true)}>
+                    <Plus className="mr-2 size-4" />
+                    Crear empresa
+                  </Button>
+                )}
+              </AppShellPanel>
+
               <AppShellPanel
                 title="Empresas registradas"
-                description="Las empresas se dan de baja solas si superan el límite de empleados o vence el trial. Puedes reactivarlas manualmente si fue un error."
+                description="Gestión de planes, trial, facturación y admins. Las empresas se dan de baja solas si superan límites o vence el trial."
               >
                 <div className="space-y-3">
-                  <div className="grid grid-cols-[1.5fr_0.7fr_1fr_0.9fr] gap-3 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div className="hidden md:grid grid-cols-[1.4fr_0.6fr_0.6fr_1fr_0.8fr_1fr] gap-3 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <span>Empresa</span>
                     <span>Empleados</span>
-                    <span>Suscripción</span>
-                    <span className="text-right">Acción</span>
+                    <span>Sedes</span>
+                    <span>Plan</span>
+                    <span>Estado</span>
+                    <span className="text-right">Acciones</span>
                   </div>
                   {(listCompanies.data || []).map((company) => (
-                    <div
-                      key={company.id}
-                      className="grid grid-cols-[1.5fr_0.7fr_1fr_0.9fr] gap-3 items-center border border-border rounded-lg p-3"
-                    >
-                      <p className="font-semibold text-foreground">{company.name}</p>
-                      <p className="text-sm text-foreground">{company.employeeCount}</p>
-                      <p className="text-sm text-foreground">{company.planLabel}</p>
-                      <div className="text-right">
-                        {company.isActive ? (
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDeactivate(company.id, company.name)}
-                            disabled={setStatus.isPending}
-                          >
-                            Dar de baja
-                          </Button>
-                        ) : (
+                    <div key={company.id} className="border border-border rounded-lg p-3 space-y-3">
+                      <div className="grid md:grid-cols-[1.4fr_0.6fr_0.6fr_1fr_0.8fr_1fr] gap-3 items-center">
+                        <div>
+                          <p className="font-semibold text-foreground">{company.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {company.slug} · admin: {company.adminUsername ?? "—"}
+                          </p>
+                        </div>
+                        <p className="text-sm">{company.employeeCount}</p>
+                        <p className="text-sm">{company.locationCount ?? 1}</p>
+                        <div className="text-sm">
+                          <p>{company.planName ?? company.planLabel}</p>
+                          {company.trialDaysRemaining != null ? (
+                            <p className="text-xs text-muted-foreground">
+                              Trial: {company.trialDaysRemaining}d
+                              {company.trialExpired ? " (vencido)" : ""}
+                            </p>
+                          ) : null}
+                          {company.billingStatus ? (
+                            <p className="text-xs text-muted-foreground">Stripe: {company.billingStatus}</p>
+                          ) : null}
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-xs font-semibold w-fit",
+                            company.isActive
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-slate-200 text-slate-600"
+                          )}
+                        >
+                          {company.isActive ? "Activa" : "Baja"}
+                        </span>
+                        <div className="flex flex-wrap justify-end gap-2">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="border-blue-600 text-blue-700 hover:bg-blue-50"
-                            onClick={() => handleActivate(company.id, company.name)}
-                            disabled={setStatus.isPending}
+                            onClick={() => openCompanyEditor(company)}
                           >
-                            Dar de alta
+                            <Pencil className="size-3.5 mr-1" />
+                            Gestionar
                           </Button>
-                        )}
+                          {company.isActive ? (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeactivate(company.id, company.name)}
+                              disabled={setStatus.isPending}
+                            >
+                              Baja
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleActivate(company.id, company.name)}
+                              disabled={setStatus.isPending}
+                            >
+                              Alta
+                            </Button>
+                          )}
+                        </div>
                       </div>
+
+                      {editingCompanyId === company.id ? (
+                        <div className="rounded-xl bg-slate-50 p-4 grid gap-4 lg:grid-cols-2">
+                          <div className="space-y-3">
+                            <h4 className="font-semibold text-sm">Suscripción</h4>
+                            <div>
+                              <Label>Plan</Label>
+                              <select
+                                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={subscriptionForm.plan}
+                                onChange={(e) =>
+                                  setSubscriptionForm((p) => ({
+                                    ...p,
+                                    plan: e.target.value as SubscriptionPlan,
+                                  }))
+                                }
+                              >
+                                {SUBSCRIPTION_PLANS.map((plan) => (
+                                  <option key={plan} value={plan}>
+                                    {SUBSCRIPTION_PLAN_LABELS[plan]}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            {subscriptionForm.plan === "trial" ? (
+                              <div>
+                                <Label>Fin de trial</Label>
+                                <Input
+                                  type="datetime-local"
+                                  value={subscriptionForm.trialEndsAt}
+                                  onChange={(e) =>
+                                    setSubscriptionForm((p) => ({
+                                      ...p,
+                                      trialEndsAt: e.target.value,
+                                    }))
+                                  }
+                                  className="mt-1"
+                                />
+                              </div>
+                            ) : null}
+                            <div>
+                              <Label>Estado facturación (manual)</Label>
+                              <Input
+                                placeholder="active, past_due, canceled..."
+                                value={subscriptionForm.billingStatus}
+                                onChange={(e) =>
+                                  setSubscriptionForm((p) => ({
+                                    ...p,
+                                    billingStatus: e.target.value,
+                                  }))
+                                }
+                                className="mt-1"
+                              />
+                            </div>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={subscriptionForm.isActive}
+                                onChange={(e) =>
+                                  setSubscriptionForm((p) => ({
+                                    ...p,
+                                    isActive: e.target.checked,
+                                  }))
+                                }
+                              />
+                              Empresa activa
+                            </label>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void handleSaveSubscription()}
+                              disabled={setSubscription.isPending}
+                            >
+                              Guardar suscripción
+                            </Button>
+                          </div>
+                          <div className="space-y-3">
+                            <h4 className="font-semibold text-sm">Admin de empresa</h4>
+                            <div>
+                              <Label>Usuario admin</Label>
+                              <Input
+                                value={adminForm.adminUsername}
+                                onChange={(e) =>
+                                  setAdminForm((p) => ({ ...p, adminUsername: e.target.value }))
+                                }
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label>Nueva contraseña</Label>
+                              <Input
+                                type="password"
+                                value={adminForm.adminPassword}
+                                onChange={(e) =>
+                                  setAdminForm((p) => ({ ...p, adminPassword: e.target.value }))
+                                }
+                                className="mt-1"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void handleSaveAdmin()}
+                              disabled={setCompanyAdmin.isPending}
+                            >
+                              Actualizar admin
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingCompanyId(null)}
+                            >
+                              Cerrar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                   {listCompanies.data?.length === 0 ? (

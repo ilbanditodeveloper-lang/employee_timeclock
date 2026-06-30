@@ -28,6 +28,52 @@ export const PLAN_EMPLOYEE_LIMITS: Record<SubscriptionPlan, number | null> = {
   legacy: null,
 };
 
+/** Límite de sedes/locales por plan (null = ilimitado). */
+export const PLAN_LOCATION_LIMITS: Record<SubscriptionPlan, number | null> = {
+  trial: 1,
+  starter: 1,
+  pro: 1,
+  enterprise: null,
+  legacy: null,
+};
+
+export const BILLING_BLOCKED_STATUSES = ["past_due", "unpaid", "canceled", "incomplete_expired"] as const;
+
+export const BILLING_BLOCKED_MSG =
+  "Tu suscripción requiere atención. Actualiza el método de pago para seguir usando TimeClock.";
+
+export function getPlanLocationLimit(plan: SubscriptionPlan): number | null {
+  return PLAN_LOCATION_LIMITS[plan];
+}
+
+export function isBillingAccessBlocked(
+  company: {
+    subscriptionPlan?: string | null;
+    billingStatus?: string | null;
+    stripeSubscriptionId?: string | null;
+  }
+): boolean {
+  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+  if (plan === "trial" || plan === "legacy") return false;
+  if (!company.stripeSubscriptionId) return false;
+  const status = company.billingStatus ?? "";
+  return (BILLING_BLOCKED_STATUSES as readonly string[]).includes(status);
+}
+
+export function assertBillingAllowsAccess(company: {
+  subscriptionPlan?: string | null;
+  billingStatus?: string | null;
+  stripeSubscriptionId?: string | null;
+  isActive?: boolean;
+}) {
+  if (company.isActive === false) {
+    throw new Error("Empresa no disponible");
+  }
+  if (isBillingAccessBlocked(company)) {
+    throw new Error(BILLING_BLOCKED_MSG);
+  }
+}
+
 export function addTrialDays(from: Date = new Date(), days = TRIAL_DAYS): Date {
   const end = new Date(from);
   end.setDate(end.getDate() + days);
@@ -62,18 +108,23 @@ export function subscriptionEmployeeLimitMessage(limit: number, plan: Subscripti
   return `Has alcanzado el límite de ${limit} empleados del plan ${SUBSCRIPTION_PLAN_LABELS[plan]}. La empresa ha sido dada de baja automáticamente.`;
 }
 
-export type SubscriptionViolationReason = "trial_expired" | "employee_limit";
+export type SubscriptionViolationReason = "trial_expired" | "employee_limit" | "billing_blocked";
 
 export function getSubscriptionViolationReason(
   company: {
     subscriptionPlan?: string | null;
     trialEndsAt?: Date | null;
+    billingStatus?: string | null;
+    stripeSubscriptionId?: string | null;
     isActive?: boolean;
   },
   employeeCount: number,
   now = new Date()
 ): SubscriptionViolationReason | null {
   if (company.isActive === false) return null;
+  if (isBillingAccessBlocked(company)) {
+    return "billing_blocked";
+  }
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
   if (isTrialExpired(plan, company.trialEndsAt, now)) {
     return "trial_expired";
@@ -90,31 +141,46 @@ export type SubscriptionAccessStatus = {
   planLabel: string;
   employeeCount: number;
   employeeLimit: number | null;
+  locationLimit: number | null;
   atEmployeeLimit: boolean;
   trialDaysRemaining: number | null;
   trialExpired: boolean;
+  billingStatus: string | null;
+  billingBlocked: boolean;
+  stripeEnabled: boolean;
   accessBlocked: boolean;
   showTrialBanner: boolean;
   showLimitBanner: boolean;
+  showBillingBanner: boolean;
   bannerMessage: string | null;
   blockMessage: string | null;
 };
 
 export function getSubscriptionAccessStatus(
-  company: { subscriptionPlan?: string | null; trialEndsAt?: Date | null },
+  company: {
+    subscriptionPlan?: string | null;
+    trialEndsAt?: Date | null;
+    billingStatus?: string | null;
+    stripeSubscriptionId?: string | null;
+  },
   employeeCount: number,
-  now = new Date()
+  now = new Date(),
+  options?: { stripeEnabled?: boolean; locationCount?: number }
 ): SubscriptionAccessStatus {
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
   const employeeLimit = getPlanEmployeeLimit(plan);
+  const locationLimit = getPlanLocationLimit(plan);
+  const billingBlocked = isBillingAccessBlocked(company);
   const trialDaysRemaining =
     plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt, now) : null;
   const trialExpired = isTrialExpired(plan, company.trialEndsAt, now);
   const atEmployeeLimit = employeeLimit != null && employeeCount >= employeeLimit;
-  const accessBlocked = trialExpired || atEmployeeLimit;
+  const accessBlocked = trialExpired || atEmployeeLimit || billingBlocked;
 
   let bannerMessage: string | null = null;
-  if (plan === "trial" && !trialExpired && trialDaysRemaining != null) {
+  if (billingBlocked) {
+    bannerMessage = BILLING_BLOCKED_MSG;
+  } else if (plan === "trial" && !trialExpired && trialDaysRemaining != null) {
     if (trialDaysRemaining === 0) {
       bannerMessage = "Tu periodo de prueba termina hoy.";
     } else if (trialDaysRemaining === 1) {
@@ -127,6 +193,12 @@ export function getSubscriptionAccessStatus(
     }
   } else if (atEmployeeLimit && !trialExpired) {
     bannerMessage = `Has alcanzado el límite de ${employeeLimit} empleados. La empresa será dada de baja automáticamente.`;
+  } else if (
+    locationLimit != null &&
+    options?.locationCount != null &&
+    options.locationCount >= locationLimit
+  ) {
+    bannerMessage = `Tu plan permite ${locationLimit} sede. Actualiza a Enterprise para multi-sede.`;
   }
 
   return {
@@ -134,29 +206,39 @@ export function getSubscriptionAccessStatus(
     planLabel: SUBSCRIPTION_PLAN_LABELS[plan],
     employeeCount,
     employeeLimit,
+    locationLimit,
     atEmployeeLimit,
     trialDaysRemaining,
     trialExpired,
+    billingStatus: company.billingStatus ?? null,
+    billingBlocked,
+    stripeEnabled: options?.stripeEnabled ?? false,
     accessBlocked,
-    showTrialBanner: plan === "trial" && !trialExpired && trialDaysRemaining != null,
-    showLimitBanner: atEmployeeLimit && !trialExpired,
+    showTrialBanner: plan === "trial" && !trialExpired && trialDaysRemaining != null && !billingBlocked,
+    showLimitBanner: atEmployeeLimit && !trialExpired && !billingBlocked,
+    showBillingBanner: billingBlocked,
     bannerMessage,
-    blockMessage: trialExpired
-      ? SUBSCRIPTION_TRIAL_EXPIRED_MSG
-      : atEmployeeLimit
-        ? subscriptionEmployeeLimitMessage(employeeLimit as number, plan)
-        : null,
+    blockMessage: billingBlocked
+      ? BILLING_BLOCKED_MSG
+      : trialExpired
+        ? SUBSCRIPTION_TRIAL_EXPIRED_MSG
+        : atEmployeeLimit
+          ? subscriptionEmployeeLimitMessage(employeeLimit as number, plan)
+          : null,
   };
 }
 
 export function assertSubscriptionAllowsAccess(company: {
   subscriptionPlan?: string | null;
   trialEndsAt?: Date | null;
+  billingStatus?: string | null;
+  stripeSubscriptionId?: string | null;
   isActive?: boolean;
 }) {
   if (company.isActive === false) {
     throw new Error("Empresa no disponible");
   }
+  assertBillingAllowsAccess(company);
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
   if (isTrialExpired(plan, company.trialEndsAt)) {
     throw new Error(SUBSCRIPTION_TRIAL_EXPIRED_MSG);

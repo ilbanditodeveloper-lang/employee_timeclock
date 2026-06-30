@@ -55,6 +55,11 @@ export const companies = pgTable("companies", {
   onboardingLegalAcknowledgedAt: timestamp("onboardingLegalAcknowledgedAt"),
   subscriptionPlan: varchar("subscriptionPlan", { length: 32 }).default("trial").notNull(),
   trialEndsAt: timestamp("trialEndsAt"),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  billingStatus: varchar("billingStatus", { length: 32 }),
+  billingEmail: varchar("billingEmail", { length: 320 }),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -107,6 +112,7 @@ export const restaurants = pgTable("restaurants", {
   latitude: numeric("latitude", { precision: 10, scale: 8 }).notNull(),
   longitude: numeric("longitude", { precision: 11, scale: 8 }).notNull(),
   radiusMeters: integer("radiusMeters").default(100).notNull(), // GPS validation radius
+  isPrimary: boolean("isPrimary").default(false).notNull(),
   adminId: integer("adminId").notNull(), // Reference to admin user
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),

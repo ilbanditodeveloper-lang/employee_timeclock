@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Building2, CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import AccessPageShell from "@/components/AccessPageShell";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { isCheckoutPlan, type CheckoutPlan } from "@shared/stripeConfig";
 
 type SuccessData = {
   companySlug: string;
@@ -29,6 +30,11 @@ export default function RegisterBusiness() {
   const { setAdminSession, setEmployeeSession } = useAuthContext();
   const configQuery = trpc.publicApi.getAppConfig.useQuery();
   const registerBusiness = trpc.publicApi.registerBusiness.useMutation();
+  const checkout = trpc.publicApi.createCheckoutSession.useMutation();
+  const selectedPlan = useMemo(() => {
+    const plan = new URLSearchParams(window.location.search).get("plan");
+    return plan && isCheckoutPlan(plan) ? (plan as CheckoutPlan) : null;
+  }, []);
 
   const [businessName, setBusinessName] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -82,6 +88,16 @@ export default function RegisterBusiness() {
         displayName: result.adminUsername,
       });
       setEmployeeSession(null);
+
+      if (selectedPlan && configQuery.data?.stripe?.enabled) {
+        try {
+          const { url } = await checkout.mutateAsync({ plan: selectedPlan });
+          window.location.href = url;
+          return;
+        } catch {
+          toast.message("Cuenta creada. Puedes contratar el plan desde Ajustes → Facturación.");
+        }
+      }
 
       setSuccess({
         companySlug: result.companySlug,

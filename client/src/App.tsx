@@ -26,6 +26,7 @@ import TermsOfUse from "./pages/TermsOfUse";
 import PlatformDpa from "./pages/PlatformDpa";
 import EmployeePrivacyNotice from "./pages/EmployeePrivacyNotice";
 import RegisterBusiness from "./pages/RegisterBusiness";
+import PwaInstallPrompt from "./components/PwaInstallPrompt";
 
 function Router() {
   return (
@@ -115,6 +116,7 @@ function App() {
             <Toaster />
             <Router />
             <UpdateAppButton />
+            <PwaInstallPrompt />
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

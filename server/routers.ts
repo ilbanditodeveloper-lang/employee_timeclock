@@ -45,6 +45,12 @@ import {
   registerBusinessTenant,
   countEmployeesByCompany,
   getAdminWorkforceToday,
+  getRestaurantsByCompany,
+  countRestaurantsByCompany,
+  resolveAdminRestaurantForCompany,
+  createCompanyLocation,
+  updateCompanyLocation,
+  deleteCompanyLocation,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
 import { hashPassword } from "./_core/password";
@@ -72,8 +78,18 @@ import {
   addTrialDays,
   assertCanAddEmployee,
   getSubscriptionAccessStatus,
+  getPlanLocationLimit,
   type SubscriptionPlan,
 } from "@shared/subscriptionPlans";
+import {
+  CHECKOUT_PLANS,
+  getPublicStripeConfig,
+  isCheckoutPlan,
+} from "@shared/stripeConfig";
+import {
+  createStripeBillingPortalSession,
+  createStripeCheckoutSession,
+} from "./_core/stripe";
 import {
   buildEmployeeExportBundle,
   buildLaborReportBundle,
@@ -122,7 +138,23 @@ import {
 const optionalCreds = z.object({
   username: z.string().min(1).optional(),
   password: z.string().min(1).optional(),
+  restaurantId: z.number().int().positive().optional(),
 });
+
+type OptionalCredsInput = z.infer<typeof optionalCreds>;
+
+async function resolveAdminWithRestaurant(
+  ctx: Parameters<typeof resolveAdminAuth>[0],
+  input: OptionalCredsInput
+) {
+  const { admin, company } = await resolveAdminAuth(ctx, input);
+  const restaurant = await resolveAdminRestaurantForCompany(
+    admin.id,
+    company.id,
+    input.restaurantId
+  );
+  return { admin, company, restaurant };
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -169,6 +201,7 @@ export const appRouter = router({
     getAppConfig: publicProcedure.query(() => ({
       demoMode: isDemoModeEnabled(),
       registrationAvailable: Boolean(process.env.DATABASE_URL?.trim()),
+      stripe: getPublicStripeConfig(),
     })),
 
     getLandingPageConfig: publicProcedure.query(async () => getLandingPageConfig()),
@@ -207,6 +240,7 @@ export const appRouter = router({
 
         let result;
         try {
+          const landing = await getLandingPageConfig();
           result = await registerBusinessTenant({
             businessName: input.businessName,
             adminName: input.adminName,
@@ -215,6 +249,7 @@ export const appRouter = router({
             country: input.country,
             timezone: input.timezone,
             address: input.address,
+            trialDays: landing.trialDays,
           });
         } catch (error) {
           if (isUniqueViolation(error)) {
@@ -233,6 +268,7 @@ export const appRouter = router({
 
         return {
           success: true as const,
+          companyId: result.companyId,
           companySlug: result.companySlug,
           companyName: result.companyName,
           adminUsername: result.adminUsername,
@@ -298,7 +334,7 @@ export const appRouter = router({
         await resolveSuperAdminAuth(ctx, input);
         if (isDemoModeEnabled()) {
           return getDemoSuperCompanies().map((company) =>
-            enrichSuperAdminCompany(company, company.employeeCount ?? 0)
+            enrichSuperAdminCompany(company, company.employeeCount ?? 0, 1)
           );
         }
         await syncAllCompaniesSubscriptionEnforcement();
@@ -306,6 +342,10 @@ export const appRouter = router({
         if (!db) return [];
         const companyRows = await db.select().from(companies).orderBy(desc(companies.createdAt));
         const employeeCounts = await countEmployeesByCompany(companyRows.map((c) => c.id));
+        const locationCounts = new Map<number, number>();
+        for (const company of companyRows) {
+          locationCounts.set(company.id, await countRestaurantsByCompany(company.id));
+        }
         const adminRows = await db
           .select()
           .from(users)
@@ -321,16 +361,15 @@ export const appRouter = router({
               ...company,
               adminUsername: adminByCompany.get(company.id)?.name ?? null,
             },
-            employeeCounts.get(company.id) ?? 0
+            employeeCounts.get(company.id) ?? 0,
+            locationCounts.get(company.id) ?? 0
           )
         );
       }),
 
     superAdminCreateCompany: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           companyName: z.string().min(2),
           companySlug: z.string().min(2),
           adminUsername: z.string().min(3),
@@ -338,10 +377,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireSuperAdminCredentials({
-          username: input.username,
-          password: input.password,
-        });
+        await resolveSuperAdminAuth(ctx, input);
         if (isDemoModeEnabled()) {
           return demoCreateSuperCompany(input);
         }
@@ -352,11 +388,12 @@ export const appRouter = router({
         if (existing) {
           throw new Error("Ya existe una empresa con ese slug");
         }
+        const landing = await getLandingPageConfig();
         await db.insert(companies).values({
           name: input.companyName.trim(),
           slug,
           subscriptionPlan: "trial",
-          trialEndsAt: addTrialDays(new Date()),
+          trialEndsAt: addTrialDays(new Date(), landing.trialDays),
           isActive: true,
         });
         const createdCompany = await getCompanyBySlug(slug);
@@ -416,19 +453,16 @@ export const appRouter = router({
 
     superAdminSetCompanySubscription: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           companyId: z.number().int().positive(),
           subscriptionPlan: z.enum(SUBSCRIPTION_PLANS),
           trialEndsAt: z.string().datetime().optional().nullable(),
+          billingStatus: z.string().optional().nullable(),
+          isActive: z.boolean().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        requireSuperAdminCredentials({
-          username: input.username,
-          password: input.password,
-        });
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
         const plan = input.subscriptionPlan as SubscriptionPlan;
         let trialEndsAt: Date | null = null;
         if (plan === "trial") {
@@ -453,7 +487,9 @@ export const appRouter = router({
           .update(companies)
           .set({
             subscriptionPlan: plan,
-            trialEndsAt,
+            trialEndsAt: plan === "trial" ? trialEndsAt : null,
+            ...(input.billingStatus !== undefined ? { billingStatus: input.billingStatus } : {}),
+            ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
             updatedAt: new Date(),
           })
           .where(eq(companies.id, input.companyId));
@@ -462,19 +498,14 @@ export const appRouter = router({
 
     superAdminSetCompanyAdmin: publicProcedure
       .input(
-        z.object({
-          username: z.string().min(1),
-          password: z.string().min(1),
+        optionalCreds.extend({
           companyId: z.number().int().positive(),
           adminUsername: z.string().min(3),
           adminPassword: z.string().min(6),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireSuperAdminCredentials({
-          username: input.username,
-          password: input.password,
-        });
+        await resolveSuperAdminAuth(ctx, input);
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const [company] = await db
@@ -506,6 +537,107 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    createCheckoutSession: publicProcedure
+      .input(
+        optionalCreds.extend({
+          plan: z.enum(CHECKOUT_PLANS),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        if (!isCheckoutPlan(input.plan)) {
+          throw new Error("Plan no válido");
+        }
+        const session = await createStripeCheckoutSession({
+          companyId: company.id,
+          plan: input.plan,
+          email: admin.email,
+        });
+        return session;
+      }),
+
+    createBillingPortalSession: publicProcedure
+      .input(optionalCreds)
+      .mutation(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        return createStripeBillingPortalSession(company.id);
+      }),
+
+    listCompanyLocations: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
+      if (ctx.session?.isDemo && ctx.session.type === "admin") {
+        return [getDemoRestaurant()];
+      }
+      const { company } = await resolveAdminAuth(ctx, input);
+      return getRestaurantsByCompany(company.id);
+    }),
+
+    createCompanyLocation: publicProcedure
+      .input(
+        optionalCreds.extend({
+          name: z.string().min(1),
+          address: z.string().optional(),
+          latitude: z.number(),
+          longitude: z.number(),
+          radiusMeters: z.number().default(100),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+        const limit = getPlanLocationLimit(plan);
+        const count = await countRestaurantsByCompany(company.id);
+        if (limit != null && count >= limit) {
+          throw new Error(
+            `Tu plan ${plan} permite ${limit} sede. Actualiza a Enterprise para multi-sede.`
+          );
+        }
+        const created = await createCompanyLocation({
+          companyId: company.id,
+          adminId: admin.id,
+          name: input.name,
+          address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          radiusMeters: input.radiusMeters,
+        });
+        return { success: true as const, locationId: created?.id };
+      }),
+
+    updateCompanyLocation: publicProcedure
+      .input(
+        optionalCreds.extend({
+          locationId: z.number().int().positive(),
+          name: z.string().min(1).optional(),
+          address: z.string().optional(),
+          latitude: z.number().optional(),
+          longitude: z.number().optional(),
+          radiusMeters: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        await updateCompanyLocation(input.locationId, company.id, {
+          name: input.name,
+          address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          radiusMeters: input.radiusMeters,
+        });
+        return { success: true as const };
+      }),
+
+    deleteCompanyLocation: publicProcedure
+      .input(
+        optionalCreds.extend({
+          locationId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        await deleteCompanyLocation(input.locationId, company.id);
+        return { success: true as const };
+      }),
+
     adminLogin: publicProcedure.input(
       z.object({
         username: z.string().min(1),
@@ -523,14 +655,9 @@ export const appRouter = router({
       return { success: true, adminId: admin.id, companySlug: company.slug };
     }),
 
-    getRestaurant: publicProcedure.input(
-      z.object({
-        username: z.string().min(1).optional(),
-        password: z.string().min(1).optional(),
-      })
-    ).query(async ({ ctx, input }) => {
+    getRestaurant: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      return (await getRestaurantByAdmin(admin.id, company.id)) ?? null;
+      return (await resolveAdminRestaurantForCompany(admin.id, company.id, input.restaurantId)) ?? null;
     }),
 
     upsertRestaurant: publicProcedure.input(
@@ -551,7 +678,7 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const existing = await getRestaurantByAdmin(admin.id, company.id);
+      const existing = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (existing) {
         await db.update(restaurants).set({
           name: input.name,
@@ -571,7 +698,7 @@ export const appRouter = router({
         radiusMeters: input.radiusMeters,
         adminId: admin.id,
       });
-      const created = await getRestaurantByAdmin(admin.id, company.id);
+      const created = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       return { success: true, restaurantId: created?.id };
     }),
 
@@ -601,7 +728,7 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Restaurant not found");
       const employeeCounts = await countEmployeesByCompany([company.id]);
       assertCanAddEmployee(company, employeeCounts.get(company.id) ?? 0);
@@ -713,7 +840,7 @@ export const appRouter = router({
       const { admin, company } = await resolveAdminAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Negocio no encontrado");
       const employee = await assertEmployeeBelongsToAdminCompany(
         input.employeeId,
@@ -803,7 +930,7 @@ export const appRouter = router({
       })
     ).query(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) return [];
       return await getEmployeesByRestaurant(restaurant.id, company.id);
     }),
@@ -839,7 +966,7 @@ export const appRouter = router({
       })
     ).query(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((e) => e.id);
@@ -856,7 +983,7 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Restaurant not found");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((employee) => employee.id);
@@ -878,7 +1005,7 @@ export const appRouter = router({
       })
     ).query(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((e) => e.id);
@@ -897,7 +1024,7 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       let employeeIds = restaurantEmployees.map((employee) => employee.id);
@@ -971,7 +1098,7 @@ export const appRouter = router({
     ).query(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
       if (isDemoRequestActive()) return getDemoNotificationLogs();
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) return [];
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = restaurantEmployees.map((e) => e.id);
@@ -1004,7 +1131,7 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
@@ -1069,7 +1196,7 @@ export const appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
@@ -1116,7 +1243,7 @@ export const appRouter = router({
     ).mutation(async ({ ctx, input }) => {
       const reason = input.voidReason ?? "Anulación desde panel admin (legacy)";
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Negocio no encontrado");
       const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
       const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
@@ -1277,7 +1404,7 @@ export const appRouter = router({
       const { admin, company } = await resolveAdminAuth(ctx, input);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) throw new Error("Negocio no encontrado");
       const employee = await assertEmployeeBelongsToAdminCompany(
         input.employeeId,
@@ -1669,7 +1796,7 @@ export const appRouter = router({
       .input(optionalCreds.extend({ requestId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) throw new Error("Restaurant not found");
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = new Set(restaurantEmployees.map((e) => e.id));
@@ -1716,7 +1843,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
         if (isDemoRequestActive()) return getDemoTimeOff(input.status);
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) return [];
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = restaurantEmployees.map((e) => e.id);
@@ -1755,7 +1882,7 @@ export const appRouter = router({
           return demoMutationSuccess();
         }
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) throw new Error("Restaurant not found");
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = new Set(restaurantEmployees.map((e) => e.id));
@@ -1794,7 +1921,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
         if (isDemoRequestActive()) return { days: [] };
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) {
           return {
             days: [] as {
@@ -1855,7 +1982,7 @@ export const appRouter = router({
       .input(optionalCreds)
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) {
           return {
             date: todayYmdInTimeZone(company.timezone || "Europe/Madrid"),
@@ -2036,7 +2163,7 @@ export const appRouter = router({
       .input(optionalCreds)
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) return [];
         return listEmployeePrivacyAcceptances(
           company.id,
@@ -2131,20 +2258,27 @@ export const appRouter = router({
         };
       }
       const { admin, company } = await resolveAdminAuth(ctx, input);
-      const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+      const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, input.restaurantId);
       const employeeList = restaurant
         ? await getEmployeesByRestaurant(restaurant.id, company.id)
         : [];
+      const locationCount = await countRestaurantsByCompany(company.id);
+      const stripe = getPublicStripeConfig();
       return {
         onboardingCompleted: company.onboardingCompleted,
         onboardingSkippedAt: company.onboardingSkippedAt,
         onboardingCompletedAt: company.onboardingCompletedAt,
         onboardingLegalAcknowledgedAt: company.onboardingLegalAcknowledgedAt,
         employeeCount: employeeList.length,
+        locationCount,
         hasRestaurant: Boolean(restaurant),
         company,
         restaurant: restaurant ?? null,
-        subscription: getSubscriptionAccessStatus(company, employeeList.length),
+        locations: await getRestaurantsByCompany(company.id),
+        subscription: getSubscriptionAccessStatus(company, employeeList.length, new Date(), {
+          stripeEnabled: stripe.enabled,
+          locationCount,
+        }),
       };
     }),
 
@@ -2331,7 +2465,7 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        const restaurant = await getRestaurantByAdmin(admin.id, company.id);
+        const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) throw new Error("Negocio no encontrado");
         const employee = await assertEmployeeBelongsToAdminCompany(
           input.employeeId,

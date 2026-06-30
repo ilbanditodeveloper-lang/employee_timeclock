@@ -1,16 +1,20 @@
 {
-  "name": "TimeClock",
+  "name": "TimeClock - Control horario",
   "short_name": "TimeClock",
-  "start_url": "/",
+  "description": "Fichaje y control horario para equipos en España",
+  "start_url": "/acceso",
   "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#f8fafc",
-  "theme_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/accordion";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
+import { isCheckoutPlan } from "@shared/stripeConfig";
 import {
   DEFAULT_LANDING_PAGE_CONFIG,
   buildWhatsAppHref,
@@ -166,6 +167,8 @@ export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { adminSession, employeeSession, isAuthLoading } = useAuthContext();
   const config = useLandingConfig();
+  const appConfig = trpc.publicApi.getAppConfig.useQuery();
+  const stripeEnabled = appConfig.data?.stripe?.enabled ?? false;
 
   const waHref = useMemo(
     () => buildWhatsAppHref(config.whatsappNumber, WHATSAPP_MSG) ?? "/register-business",
@@ -173,6 +176,15 @@ export default function LandingPage() {
   );
   const waExternal = waHref.startsWith("http");
   const { hero } = config;
+
+  const pricingCtaHref = (packId: string) => {
+    if (stripeEnabled && isCheckoutPlan(packId)) {
+      return `/register-business?plan=${packId}`;
+    }
+    return waExternal ? waHref : "/register-business";
+  };
+  const pricingCtaExternal = (packId: string) =>
+    !(stripeEnabled && isCheckoutPlan(packId)) && waExternal;
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -440,8 +452,8 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                {waExternal ? (
-                  <a href={waHref} target="_blank" rel="noreferrer" className="w-full">
+                {pricingCtaExternal(pack.id) ? (
+                  <a href={pricingCtaHref(pack.id)} target="_blank" rel="noreferrer" className="w-full">
                     <Button
                       className={cn(
                         "w-full",
@@ -454,7 +466,7 @@ export default function LandingPage() {
                     </Button>
                   </a>
                 ) : (
-                  <Link href="/register-business">
+                  <Link href={pricingCtaHref(pack.id)}>
                     <Button
                       className={cn(
                         "w-full",
@@ -463,7 +475,7 @@ export default function LandingPage() {
                           : "bg-slate-900 hover:bg-slate-800"
                       )}
                     >
-                      {pack.ctaLabel}
+                      {stripeEnabled && isCheckoutPlan(pack.id) ? "Contratar plan" : pack.ctaLabel}
                     </Button>
                   </Link>
                 )}

@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { emptyCreds } from '@/lib/authApi';
+import { adminApiInput } from '@/lib/adminContext';
 import { Calendar as UiCalendar, CalendarDayButton } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, subMonths } from 'date-fns';
@@ -17,6 +17,8 @@ import AdminLegalPanel from '@/components/AdminLegalPanel';
 import AdminAuditLogPanel from '@/components/AdminAuditLogPanel';
 import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
+import AdminBillingPanel from '@/components/AdminBillingPanel';
+import AdminLocationsPanel from '@/components/AdminLocationsPanel';
 import AppShellLayout, { type AppShellNavItem } from '@/components/AppShellLayout';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
@@ -160,7 +162,8 @@ export default function AdminDashboard() {
   const { adminSession, setAdminSession, clearAllSessions } = useAuthContext();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
 
-  const onboardingQuery = trpc.publicApi.getOnboardingStatus.useQuery(emptyCreds, {
+  const adminInput = adminApiInput();
+  const onboardingQuery = trpc.publicApi.getOnboardingStatus.useQuery(adminInput, {
     enabled: Boolean(adminSession),
   });
   const appTimeZone = resolveAppTimeZone(onboardingQuery.data?.company?.timezone);
@@ -189,13 +192,13 @@ export default function AdminDashboard() {
     });
   };
 
-  const getRestaurant = trpc.publicApi.getRestaurant.useQuery(emptyCreds, {
+  const getRestaurant = trpc.publicApi.getRestaurant.useQuery(adminInput, {
     enabled: Boolean(adminSession),
   });
   const upsertRestaurant = trpc.publicApi.upsertRestaurant.useMutation();
   const createEmployee = trpc.publicApi.createEmployee.useMutation();
   const listEmployees = trpc.publicApi.listEmployees.useQuery(
-    { ...emptyCreds },
+    { ...adminApiInput() },
     { enabled: Boolean(adminSession) }
   );
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
@@ -213,11 +216,11 @@ export default function AdminDashboard() {
   const updateEmployee = trpc.publicApi.updateEmployee.useMutation();
   const updateEmployeeSchedule = trpc.publicApi.updateEmployeeSchedule.useMutation();
   const listIncidents = trpc.publicApi.listIncidents.useQuery(
-    { ...emptyCreds },
+    { ...adminApiInput() },
     { enabled: Boolean(adminSession) }
   );
   const timeclocksQuery = trpc.publicApi.listTimeclocks.useQuery(
-    { ...emptyCreds },
+    { ...adminApiInput() },
     { enabled: Boolean(adminSession) }
   );
   const notificationLogsQuery = trpc.publicApi.listNotificationLogs.useQuery(
@@ -233,22 +236,22 @@ export default function AdminDashboard() {
   const clearAllTimeclocks = trpc.publicApi.clearAllTimeclocks.useMutation();
   const clearAllIncidents = trpc.publicApi.clearAllIncidents.useMutation();
   const timeOffPendingQuery = trpc.publicApi.listTimeOffRequests.useQuery(
-    { ...emptyCreds, status: 'pending' },
+    { ...adminApiInput(), status: 'pending' },
     { enabled: Boolean(adminSession) }
   );
   const timeOffAllQuery = trpc.publicApi.listTimeOffRequests.useQuery(
-    { ...emptyCreds, status: 'all' },
+    { ...adminApiInput(), status: 'all' },
     { enabled: Boolean(adminSession) }
   );
   const timeOffCalendarQuery = trpc.publicApi.getTimeOffCalendarMonth.useQuery(
     {
-      ...emptyCreds,
+      ...adminApiInput(),
       year: timeOffCalMonth.getFullYear(),
       month: timeOffCalMonth.getMonth() + 1,
     },
     { enabled: Boolean(adminSession) }
   );
-  const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(emptyCreds, {
+  const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(adminApiInput(), {
     enabled: Boolean(adminSession),
     refetchInterval: activeTab === 'dashboard' ? 30_000 : false,
   });
@@ -392,7 +395,7 @@ export default function AdminDashboard() {
   const fetchReportBundle = async (withAudit?: boolean) => {
     const { from, to } = getReportDateRange();
     return trpcUtils.publicApi.getLaborReportBundle.fetch({
-      ...emptyCreds,
+      ...adminApiInput(),
       employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
       dateFrom: from,
       dateTo: to,
@@ -501,7 +504,7 @@ export default function AdminDashboard() {
   const handleExportEmployeeData = async (employeeId: number, employeeName: string) => {
     try {
       const data = await trpcUtils.publicApi.exportEmployeeData.fetch({
-        ...emptyCreds,
+        ...adminApiInput(),
         employeeId,
       });
       downloadEmployeeDataJson(data, employeeName);
@@ -526,7 +529,7 @@ export default function AdminDashboard() {
     }
     deactivateEmployee
       .mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         employeeId: employee.id,
         reason: reason.trim() || undefined,
       })
@@ -629,7 +632,7 @@ export default function AdminDashboard() {
     }
     updateEmployeeSchedule
       .mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         employeeId: Number(shiftEmployeeId),
         schedule: shiftSchedule,
       })
@@ -679,7 +682,7 @@ export default function AdminDashboard() {
     }
     updateTimeclock
       .mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         timeclockId: editingTimeclockId,
         entryTime: editingEntryTime ? new Date(editingEntryTime).toISOString() : undefined,
         exitTime: editingExitTime ? new Date(editingExitTime).toISOString() : null,
@@ -709,7 +712,7 @@ export default function AdminDashboard() {
 
     deleteTimeclock
       .mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         timeclockId: entry.id,
         voidReason: voidReason.trim(),
       })
@@ -733,7 +736,7 @@ export default function AdminDashboard() {
     }
     sendTestNotification
       .mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         employeeId: Number(selectedEmployeeId),
       })
       .then((result) => {
@@ -756,7 +759,7 @@ export default function AdminDashboard() {
 
     clearAllTimeclocks
       .mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
         rangeStart: rangeStart || undefined,
         rangeEnd: rangeEnd || undefined,
@@ -793,7 +796,7 @@ export default function AdminDashboard() {
     if (!confirmed) return;
 
     clearAllIncidents
-      .mutateAsync({ ...emptyCreds })
+      .mutateAsync({ ...adminApiInput() })
       .then(() => {
         toast.success('Todas las incidencias se han borrado');
         listIncidents.refetch();
@@ -848,7 +851,7 @@ export default function AdminDashboard() {
 
     try {
       await upsertRestaurant.mutateAsync({
-        ...emptyCreds,
+        ...adminApiInput(),
         name: restaurantName,
         address,
         latitude: lat,
@@ -882,7 +885,7 @@ export default function AdminDashboard() {
       : 5;
     const action = editingEmployeeId
       ? updateEmployee.mutateAsync({
-          ...emptyCreds,
+          ...adminApiInput(),
           employeeId: editingEmployeeId,
           employeeName,
           employeeEmail: employeeEmail.trim().toLowerCase(),
@@ -893,7 +896,7 @@ export default function AdminDashboard() {
           schedule: employeeSchedule,
         })
       : createEmployee.mutateAsync({
-          ...emptyCreds,
+          ...adminApiInput(),
           employeeName,
           employeeEmail: employeeEmail.trim().toLowerCase(),
           employeeUsername,
@@ -1036,7 +1039,23 @@ export default function AdminDashboard() {
   const subscription = onboardingQuery.data?.subscription;
   const showTrialBanner = Boolean(subscription?.showTrialBanner && subscription.bannerMessage);
   const showLimitBanner = Boolean(subscription?.showLimitBanner && subscription.bannerMessage);
+  const showBillingBanner = Boolean(subscription?.showBillingBanner && subscription.bannerMessage);
   const atEmployeeLimit = Boolean(subscription?.atEmployeeLimit);
+  const locationCount = onboardingQuery.data?.locationCount ?? 1;
+  const locationLimit = subscription?.locationLimit ?? 1;
+  const canAddLocation = locationLimit == null || locationCount < locationLimit;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing') === 'success') {
+      toast.success('Pago completado. Tu plan se activará en unos segundos.');
+      window.history.replaceState({}, '', '/admin');
+      void onboardingQuery.refetch();
+    } else if (params.get('billing') === 'cancel') {
+      toast.message('Pago cancelado');
+      window.history.replaceState({}, '', '/admin');
+    }
+  }, []);
   const activeNav = ADMIN_NAV.find((item) => item.id === activeTab);
 
   return (
@@ -1070,6 +1089,9 @@ export default function AdminDashboard() {
             ) : null}
             {showLimitBanner && subscription?.bannerMessage ? (
               <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
+            ) : null}
+            {showBillingBanner && subscription?.bannerMessage ? (
+              <SubscriptionBanner message={subscription.bannerMessage} variant="billing" />
             ) : null}
 
           <TabsContent value="dashboard" className="mt-0 space-y-6">
@@ -2055,7 +2077,7 @@ export default function AdminDashboard() {
                             disabled={decideTimeOff.isPending}
                             onClick={() =>
                               decideTimeOff.mutate({
-                                ...emptyCreds,
+                                ...adminApiInput(),
                                 requestId: row.id,
                                 decision: 'approved',
                               })
@@ -2069,7 +2091,7 @@ export default function AdminDashboard() {
                             disabled={decideTimeOff.isPending}
                             onClick={() =>
                               decideTimeOff.mutate({
-                                ...emptyCreds,
+                                ...adminApiInput(),
                                 requestId: row.id,
                                 decision: 'rejected',
                               })
@@ -2209,7 +2231,7 @@ export default function AdminDashboard() {
                                   : `¿Eliminar la solicitud pendiente de ${row.employeeName}?`;
                               if (!window.confirm(msg)) return;
                               adminDeleteTimeOff.mutate({
-                                ...emptyCreds,
+                                ...adminApiInput(),
                                 requestId: row.id,
                               });
                             }}
@@ -2305,6 +2327,23 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="settings" className="mt-0 space-y-6">
+            {subscription ? (
+              <AdminBillingPanel
+                plan={subscription.plan}
+                planLabel={subscription.planLabel}
+                billingStatus={subscription.billingStatus}
+                stripeEnabled={subscription.stripeEnabled}
+                trialDaysRemaining={subscription.trialDaysRemaining}
+                showBillingBanner={subscription.showBillingBanner}
+              />
+            ) : null}
+
+            <AdminLocationsPanel
+              locationLimit={locationLimit}
+              locationCount={locationCount}
+              canAddLocation={canAddLocation}
+            />
+
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-2">Ajustes</h2>
               <p className="text-sm text-muted-foreground mb-6">

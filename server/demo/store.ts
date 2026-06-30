@@ -24,6 +24,11 @@ export const demoCompany = {
   onboardingLegalAcknowledgedAt: now,
   subscriptionPlan: "legacy",
   trialEndsAt: null as Date | null,
+  stripeCustomerId: null as string | null,
+  stripeSubscriptionId: null as string | null,
+  billingStatus: null as string | null,
+  billingEmail: null as string | null,
+  currentPeriodEnd: null as Date | null,
   isActive: true,
   createdAt: now,
   updatedAt: now,
@@ -53,6 +58,7 @@ export const demoRestaurant = {
   latitude: "40.4168",
   longitude: "-3.7038",
   radiusMeters: 150,
+  isPrimary: true,
   adminId: 1,
   createdAt: now,
   updatedAt: now,
@@ -197,6 +203,11 @@ type DemoSuperCompany = {
   onboardingLegalAcknowledgedAt: Date | null;
   subscriptionPlan: string;
   trialEndsAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  billingStatus: string | null;
+  billingEmail: string | null;
+  currentPeriodEnd: Date | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -225,6 +236,11 @@ let superCompanies: DemoSuperCompany[] = [
     onboardingLegalAcknowledgedAt: null,
     subscriptionPlan: "trial",
     trialEndsAt: addTrialDays(now, 7),
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    billingStatus: null,
+    billingEmail: null,
+    currentPeriodEnd: null,
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -424,6 +440,11 @@ export function demoCreateSuperCompany(input: {
     onboardingLegalAcknowledgedAt: null,
     subscriptionPlan: "trial",
     trialEndsAt: addTrialDays(new Date()),
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    billingStatus: null,
+    billingEmail: null,
+    currentPeriodEnd: null,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
