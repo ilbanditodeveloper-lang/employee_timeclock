@@ -298,7 +298,7 @@ export default function SuperAdmin() {
           }
         >
           {activeTab === "dashboard" ? (
-            <div className="mx-auto max-w-6xl space-y-6">
+            <div className="w-full space-y-6">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <AppShellKpiCard
                   label="Empresas totales"
@@ -411,7 +411,7 @@ export default function SuperAdmin() {
           ) : null}
 
           {activeTab === "companies" ? (
-            <div className="mx-auto max-w-6xl">
+            <div className="w-full">
               <AppShellPanel
                 title="Empresas registradas"
                 description="Las empresas se dan de baja solas si superan el límite de empleados o vence el trial."
@@ -457,7 +457,7 @@ export default function SuperAdmin() {
           ) : null}
 
           {activeTab === "landing" ? (
-            <div className="mx-auto max-w-6xl">
+            <div className="w-full">
               <AppShellPanel className="space-y-8">
                 <div>
                   <h2 className="text-xl font-bold text-foreground mb-1">Ajustes de la landing page</h2>

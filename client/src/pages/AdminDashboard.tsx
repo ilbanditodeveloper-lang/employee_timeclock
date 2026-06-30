@@ -1063,7 +1063,7 @@ export default function AdminDashboard() {
       }
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="mx-auto max-w-6xl space-y-6">
+        <div className="w-full space-y-6">
             {showOnboardingBanner && <OnboardingReminderBanner />}
             {showTrialBanner && subscription?.bannerMessage ? (
               <SubscriptionBanner message={subscription.bannerMessage} variant="trial" />
@@ -1094,7 +1094,7 @@ export default function AdminDashboard() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
                 <section className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-5">
                   <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-3 flex items-center gap-2">
                     <span className="inline-block size-2.5 rounded-full bg-emerald-500" />
