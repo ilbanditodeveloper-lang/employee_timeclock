@@ -132,6 +132,27 @@ export default function SuperAdmin() {
     }
   };
 
+  const handleActivate = async (companyId: number, companyName: string) => {
+    if (
+      !window.confirm(
+        `¿Dar de alta de nuevo a "${companyName}"? Los usuarios podrán volver a acceder.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await setStatus.mutateAsync({
+        ...emptyCreds,
+        companyId,
+        isActive: true,
+      });
+      toast.success("Empresa dada de alta");
+      await listCompanies.refetch();
+    } catch {
+      toast.error("No se pudo dar de alta la empresa");
+    }
+  };
+
   const updatePack = (index: number, patch: Partial<LandingPricingPack>) => {
     setLandingDraft((prev) => {
       const packs = [...prev.pricingPacks] as [LandingPricingPack, LandingPricingPack, LandingPricingPack];
@@ -414,7 +435,7 @@ export default function SuperAdmin() {
             <div className="w-full">
               <AppShellPanel
                 title="Empresas registradas"
-                description="Las empresas se dan de baja solas si superan el límite de empleados o vence el trial."
+                description="Las empresas se dan de baja solas si superan el límite de empleados o vence el trial. Puedes reactivarlas manualmente si fue un error."
               >
                 <div className="space-y-3">
                   <div className="grid grid-cols-[1.5fr_0.7fr_1fr_0.9fr] gap-3 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -443,7 +464,16 @@ export default function SuperAdmin() {
                             Dar de baja
                           </Button>
                         ) : (
-                          <span className="text-sm text-muted-foreground">Dada de baja</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="border-blue-600 text-blue-700 hover:bg-blue-50"
+                            onClick={() => handleActivate(company.id, company.name)}
+                            disabled={setStatus.isPending}
+                          >
+                            Dar de alta
+                          </Button>
                         )}
                       </div>
                     </div>
