@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, Activity } from 'lucide-react';
+import { LogOut, MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -57,7 +57,7 @@ const scheduleDays = [
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState('restaurant');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [timeOffCalMonth, setTimeOffCalMonth] = useState(() => new Date());
   
   // Restaurant form state
@@ -236,7 +236,7 @@ export default function AdminDashboard() {
   );
   const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(emptyCreds, {
     enabled: Boolean(adminSession),
-    refetchInterval: activeTab === 'tracking' ? 30_000 : false,
+    refetchInterval: activeTab === 'dashboard' ? 30_000 : false,
   });
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
     onSuccess: () => {
@@ -1034,11 +1034,11 @@ export default function AdminDashboard() {
           <nav className="flex-1 overflow-y-auto p-2">
             <TabsList className="flex h-auto w-full flex-col items-stretch gap-1 rounded-lg bg-transparent p-0 shadow-none">
                   <TabsTrigger
-                    value="restaurant"
+                    value="dashboard"
                     className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
                   >
-                    <MapPin className="w-4 h-4 shrink-0" />
-                    Restaurante
+                    <LayoutDashboard className="w-4 h-4 shrink-0" />
+                    Dashboard
                   </TabsTrigger>
                   <TabsTrigger
                     value="employees"
@@ -1060,13 +1060,6 @@ export default function AdminDashboard() {
                   >
                     <Clock3 className="w-4 h-4 shrink-0" />
                     Turnos
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="tracking"
-                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
-                  >
-                    <Activity className="w-4 h-4 shrink-0" />
-                    Seguimiento
                   </TabsTrigger>
                   <TabsTrigger
                     value="timeoff"
@@ -1096,6 +1089,13 @@ export default function AdminDashboard() {
                     <Scale className="w-4 h-4 shrink-0" />
                     Legal / RGPD
                   </TabsTrigger>
+                  <TabsTrigger
+                    value="settings"
+                    className="h-auto w-full flex-none justify-start gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Settings className="w-4 h-4 shrink-0" />
+                    Ajustes
+                  </TabsTrigger>
                 </TabsList>
           </nav>
         </aside>
@@ -1110,75 +1110,154 @@ export default function AdminDashboard() {
               <SubscriptionBanner message={subscription.bannerMessage} variant="limit" />
             ) : null}
 
-          <TabsContent value="restaurant" className="mt-0 space-y-6">
+          <TabsContent value="dashboard" className="mt-0 space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Gestión del Negocio</h2>
-              
-              <div className="space-y-4 mb-8">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Nombre del Restaurante
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Mi Restaurante"
-                    value={restaurantName}
-                    onChange={(e) => setRestaurantName(e.target.value)}
-                    className="input-elegant"
-                  />
+                  <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Seguimiento en vivo · Estado del equipo hoy
+                    {workforceTodayQuery.data?.date
+                      ? ` · ${workforceTodayQuery.data.date.split('-').reverse().join('/')}`
+                      : ''}
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Dirección
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Calle Principal, 123"
-                    value={restaurantAddress}
-                    onChange={(e) => setRestaurantAddress(e.target.value)}
-                    className="input-elegant"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Radio de Validación (metros)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="100"
-                      min={50}
-                      value={radiusMeters}
-                      onChange={(e) => setRadiusMeters(Number(e.target.value))}
-                      className="input-elegant"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Recomendado 100–150 m. Con menos de 50 m el GPS del móvil suele fallar al fichar.
-                    </p>
-                  </div>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void workforceTodayQuery.refetch()}
+                  disabled={workforceTodayQuery.isFetching}
+                >
+                  {workforceTodayQuery.isFetching ? 'Actualizando…' : 'Actualizar'}
+                </Button>
               </div>
 
-              {/* Map Component */}
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-foreground mb-4">Seleccionar Ubicación</h3>
-                <RestaurantMap
-                  latitude={latitude}
-                  longitude={longitude}
-                  initialAddress={restaurantAddress}
-                  onLocationSelect={(lat, lng) => {
-                    setLatitude(lat);
-                    setLongitude(lng);
-                  }}
-                  onAddressChange={(address) => setRestaurantAddress(address)}
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <section className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-5">
+                  <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-3 flex items-center gap-2">
+                    <span className="inline-block size-2.5 rounded-full bg-emerald-500" />
+                    Trabajando ahora
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.working ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.working ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nadie fichado en este momento.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(workforceTodayQuery.data?.working ?? []).map((row) => (
+                        <li
+                          key={row.employeeId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-background/80 px-3 py-2"
+                        >
+                          <span className="font-medium text-foreground">{row.employeeName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            Entrada {formatClockTime(row.entryTime)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-5">
+                  <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
+                    <span className="inline-block size-2.5 rounded-full bg-amber-500" />
+                    En pausa
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.onBreak ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.onBreak ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nadie en pausa.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(workforceTodayQuery.data?.onBreak ?? []).map((row) => (
+                        <li
+                          key={row.employeeId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-background/80 px-3 py-2"
+                        >
+                          <span className="font-medium text-foreground">{row.employeeName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            Entrada {formatClockTime(row.entryTime)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-teal-200 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/20 p-5">
+                  <h3 className="text-lg font-semibold text-teal-800 dark:text-teal-200 mb-3 flex items-center gap-2">
+                    <Palmtree className="w-4 h-4" />
+                    Vacaciones / libre hoy
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.onTimeOff ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.onTimeOff ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nadie de baja hoy.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(workforceTodayQuery.data?.onTimeOff ?? []).map((row) => (
+                        <li
+                          key={row.employeeId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-teal-200/80 dark:border-teal-800/50 bg-background/80 px-3 py-2"
+                        >
+                          <span className="font-medium text-foreground">{row.employeeName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {row.kind === 'vacation' ? 'Vacaciones' : 'Día libre'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-border bg-muted/30 p-5">
+                  <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Sin fichar hoy
+                    <Badge variant="secondary" className="ml-auto">
+                      {(workforceTodayQuery.data?.notClockedIn ?? []).length}
+                    </Badge>
+                  </h3>
+                  {(workforceTodayQuery.data?.notClockedIn ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Todos han fichado o están de baja.</p>
+                  ) : (
+                    <ul className="flex flex-wrap gap-2">
+                      {(workforceTodayQuery.data?.notClockedIn ?? []).map((row) => (
+                        <li key={row.employeeId}>
+                          <Badge variant="outline" className="text-sm py-1 px-2">
+                            {row.employeeName}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
               </div>
 
-              <Button onClick={handleSaveRestaurant} className="w-full btn-primary">
-                Guardar Restaurante
-              </Button>
+              {(workforceTodayQuery.data?.finishedToday ?? []).length > 0 ? (
+                <section className="mt-6 rounded-xl border border-border p-5">
+                  <h3 className="text-lg font-semibold text-foreground mb-3">
+                    Ya han terminado jornada hoy
+                  </h3>
+                  <ul className="space-y-2">
+                    {(workforceTodayQuery.data?.finishedToday ?? []).map((row) => (
+                      <li
+                        key={row.employeeId}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium text-foreground">{row.employeeName}</span>
+                        <span className="text-muted-foreground">
+                          Salida {formatClockTime(row.exitTime)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
             </Card>
           </TabsContent>
 
@@ -1939,157 +2018,6 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="tracking" className="mt-0 space-y-6">
-            <Card className="p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">Seguimiento en vivo</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Estado del equipo hoy
-                    {workforceTodayQuery.data?.date
-                      ? ` · ${workforceTodayQuery.data.date.split('-').reverse().join('/')}`
-                      : ''}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void workforceTodayQuery.refetch()}
-                  disabled={workforceTodayQuery.isFetching}
-                >
-                  {workforceTodayQuery.isFetching ? 'Actualizando…' : 'Actualizar'}
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <section className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-5">
-                  <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-3 flex items-center gap-2">
-                    <span className="inline-block size-2.5 rounded-full bg-emerald-500" />
-                    Trabajando ahora
-                    <Badge variant="secondary" className="ml-auto">
-                      {(workforceTodayQuery.data?.working ?? []).length}
-                    </Badge>
-                  </h3>
-                  {(workforceTodayQuery.data?.working ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nadie fichado en este momento.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {(workforceTodayQuery.data?.working ?? []).map((row) => (
-                        <li
-                          key={row.employeeId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-background/80 px-3 py-2"
-                        >
-                          <span className="font-medium text-foreground">{row.employeeName}</span>
-                          <span className="text-sm text-muted-foreground">
-                            Entrada {formatClockTime(row.entryTime)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-5">
-                  <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
-                    <span className="inline-block size-2.5 rounded-full bg-amber-500" />
-                    En pausa
-                    <Badge variant="secondary" className="ml-auto">
-                      {(workforceTodayQuery.data?.onBreak ?? []).length}
-                    </Badge>
-                  </h3>
-                  {(workforceTodayQuery.data?.onBreak ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nadie en pausa.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {(workforceTodayQuery.data?.onBreak ?? []).map((row) => (
-                        <li
-                          key={row.employeeId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-background/80 px-3 py-2"
-                        >
-                          <span className="font-medium text-foreground">{row.employeeName}</span>
-                          <span className="text-sm text-muted-foreground">
-                            Entrada {formatClockTime(row.entryTime)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="rounded-xl border border-teal-200 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/20 p-5">
-                  <h3 className="text-lg font-semibold text-teal-800 dark:text-teal-200 mb-3 flex items-center gap-2">
-                    <Palmtree className="w-4 h-4" />
-                    Vacaciones / libre hoy
-                    <Badge variant="secondary" className="ml-auto">
-                      {(workforceTodayQuery.data?.onTimeOff ?? []).length}
-                    </Badge>
-                  </h3>
-                  {(workforceTodayQuery.data?.onTimeOff ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nadie de baja hoy.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {(workforceTodayQuery.data?.onTimeOff ?? []).map((row) => (
-                        <li
-                          key={row.employeeId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-teal-200/80 dark:border-teal-800/50 bg-background/80 px-3 py-2"
-                        >
-                          <span className="font-medium text-foreground">{row.employeeName}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {row.kind === 'vacation' ? 'Vacaciones' : 'Día libre'}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="rounded-xl border border-border bg-muted/30 p-5">
-                  <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Sin fichar hoy
-                    <Badge variant="secondary" className="ml-auto">
-                      {(workforceTodayQuery.data?.notClockedIn ?? []).length}
-                    </Badge>
-                  </h3>
-                  {(workforceTodayQuery.data?.notClockedIn ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Todos han fichado o están de baja.</p>
-                  ) : (
-                    <ul className="flex flex-wrap gap-2">
-                      {(workforceTodayQuery.data?.notClockedIn ?? []).map((row) => (
-                        <li key={row.employeeId}>
-                          <Badge variant="outline" className="text-sm py-1 px-2">
-                            {row.employeeName}
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              </div>
-
-              {(workforceTodayQuery.data?.finishedToday ?? []).length > 0 ? (
-                <section className="mt-6 rounded-xl border border-border p-5">
-                  <h3 className="text-lg font-semibold text-foreground mb-3">
-                    Ya han terminado jornada hoy
-                  </h3>
-                  <ul className="space-y-2">
-                    {(workforceTodayQuery.data?.finishedToday ?? []).map((row) => (
-                      <li
-                        key={row.employeeId}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
-                      >
-                        <span className="font-medium text-foreground">{row.employeeName}</span>
-                        <span className="text-muted-foreground">
-                          Salida {formatClockTime(row.exitTime)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-            </Card>
-          </TabsContent>
-
           <TabsContent value="timeoff" className="mt-0 space-y-6">
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-2">Vacaciones y días libres</h2>
@@ -2367,6 +2295,85 @@ export default function AdminDashboard() {
 
           <TabsContent value="audit" className="mt-0 space-y-6">
             <AdminAuditLogPanel />
+          </TabsContent>
+
+          <TabsContent value="settings" className="mt-0 space-y-6">
+            <Card className="p-6">
+              <h2 className="text-2xl font-bold text-foreground mb-2">Ajustes</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Configuración del negocio, ubicación y validación GPS al fichar.
+              </p>
+
+              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Restaurante / ubicación
+              </h3>
+
+              <div className="space-y-4 mb-8">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Nombre del Restaurante
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Mi Restaurante"
+                    value={restaurantName}
+                    onChange={(e) => setRestaurantName(e.target.value)}
+                    className="input-elegant"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Dirección
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Calle Principal, 123"
+                    value={restaurantAddress}
+                    onChange={(e) => setRestaurantAddress(e.target.value)}
+                    className="input-elegant"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Radio de Validación (metros)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="100"
+                      min={50}
+                      value={radiusMeters}
+                      onChange={(e) => setRadiusMeters(Number(e.target.value))}
+                      className="input-elegant"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Recomendado 100–150 m. Con menos de 50 m el GPS del móvil suele fallar al fichar.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Seleccionar Ubicación</h3>
+                <RestaurantMap
+                  latitude={latitude}
+                  longitude={longitude}
+                  initialAddress={restaurantAddress}
+                  onLocationSelect={(lat, lng) => {
+                    setLatitude(lat);
+                    setLongitude(lng);
+                  }}
+                  onAddressChange={(address) => setRestaurantAddress(address)}
+                />
+              </div>
+
+              <Button onClick={handleSaveRestaurant} className="w-full btn-primary">
+                Guardar Restaurante
+              </Button>
+            </Card>
           </TabsContent>
           </div>
         </main>
