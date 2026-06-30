@@ -14,8 +14,9 @@ export default function EmployeeBottomMenu() {
   const [location, setLocation] = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-blue-200 bg-white/95 backdrop-blur md:hidden supports-[backdrop-filter]:bg-white/90">
-      <div className="container py-2 grid grid-cols-4 gap-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-200 bg-white shadow-[0_-8px_24px_-12px_rgba(30,64,175,0.25)] backdrop-blur md:hidden supports-[backdrop-filter]:bg-white/95">
+      <div className="mx-auto max-w-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+        <div className="grid grid-cols-4 gap-1">
         {items.map((item) => {
           const active = location === item.path;
           const Icon = item.icon;
@@ -35,6 +36,7 @@ export default function EmployeeBottomMenu() {
             </Button>
           );
         })}
+        </div>
       </div>
     </nav>
   );

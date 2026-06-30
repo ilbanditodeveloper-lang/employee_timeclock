@@ -88,8 +88,7 @@ export default function EmployeeIncident() {
     <EmployeeShellLayout
       pageTitle="Reportar incidencia"
       pageSubtitle="Retrasos y ausencias"
-      contentClassName="container mx-auto max-w-2xl py-8 pb-28 md:pb-8"
-      showBottomMenu={false}
+      contentClassName="container mx-auto max-w-2xl px-4 py-8 pb-28 md:pb-8"
     >
         <Card className="app-shell-card mx-auto max-w-2xl border-0 p-6 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-6">

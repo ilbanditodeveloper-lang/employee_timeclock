@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Building2, CheckCircle2, Copy } from "lucide-react";
+import { Building2, CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import AccessPageShell from "@/components/AccessPageShell";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -99,20 +99,18 @@ export default function RegisterBusiness() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-8">
-        <div className="max-w-md w-full">
-          <Card className="p-8 shadow-lg space-y-6">
-            <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-2xl mb-4">
-                <CheckCircle2 className="w-7 h-7 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h1 className="text-2xl font-bold text-foreground mb-2">¡Negocio creado correctamente!</h1>
-              <p className="text-sm text-muted-foreground">
-                <strong>{success.companyName}</strong> ya está listo. Guarda estos datos de acceso.
-              </p>
-            </div>
+      <AccessPageShell
+        backHref="/acceso"
+        icon={CheckCircle2}
+        title="¡Negocio creado!"
+        subtitle={`${success.companyName} ya está listo`}
+        badge="Guarda tus datos"
+      >
+        <p className="text-center text-sm text-slate-600">
+          Guarda estos datos de acceso para entrar al panel.
+        </p>
 
-            <div className="space-y-3 p-4 bg-muted/50 rounded-lg border border-border text-sm">
+        <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm">
               <div>
                 <p className="text-muted-foreground mb-1">Email de acceso (recomendado)</p>
                 <div className="flex items-center justify-between gap-2">
@@ -150,200 +148,188 @@ export default function RegisterBusiness() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <Button type="button" className="w-full btn-primary" onClick={() => setLocation("/admin/onboarding")}>
-                Configurar mi negocio
-              </Button>
-              <Button type="button" variant="outline" className="w-full" onClick={() => setLocation("/admin")}>
-                Ir al panel
-              </Button>
-            </div>
-          </Card>
+        <div className="flex flex-col gap-3">
+          <Button
+            type="button"
+            className="w-full bg-blue-700 hover:bg-blue-800"
+            onClick={() => setLocation("/admin/onboarding")}
+          >
+            Configurar mi negocio
+          </Button>
+          <Button type="button" variant="outline" className="w-full border-blue-300 text-blue-900 hover:bg-blue-50" onClick={() => setLocation("/admin")}>
+            Ir al panel
+          </Button>
         </div>
-      </div>
+      </AccessPageShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-8">
-      <div className="max-w-md w-full">
-        <button
-          type="button"
-          onClick={() => setLocation("/")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver
-        </button>
+    <AccessPageShell
+      backHref="/acceso"
+      icon={Building2}
+      title="Registrar mi negocio"
+      subtitle="Crea tu empresa y accede al panel de administración"
+      badge="Registro"
+      maxWidthClass="max-w-lg"
+    >
+      {!registrationAvailable ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm text-amber-950">
+            El registro requiere base de datos configurada (<code>DATABASE_URL</code>). El modo demo no
+            permite crear negocios reales.
+          </p>
+        </div>
+      ) : null}
 
-        <Card className="p-8 shadow-lg">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-accent rounded-2xl mb-4 shadow-lg">
-              <Building2 className="w-7 h-7 text-accent-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Registrar mi negocio</h1>
-            <p className="text-sm text-muted-foreground">Crea tu empresa y accede al panel de administración</p>
-          </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Nombre del negocio *</label>
+          <Input
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            placeholder="Mi Cafetería"
+            required
+            minLength={2}
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
 
-          {!registrationAvailable && (
-            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-              <p className="text-sm text-yellow-900 dark:text-yellow-200">
-                El registro requiere base de datos configurada (<code>DATABASE_URL</code>). El modo demo no
-                permite crear negocios reales.
-              </p>
-            </div>
-          )}
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Nombre del responsable *</label>
+          <Input
+            value={adminName}
+            onChange={(e) => setAdminName(e.target.value)}
+            placeholder="Juan Pérez"
+            required
+            minLength={2}
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Nombre del negocio *</label>
-              <Input
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Mi Cafetería"
-                required
-                minLength={2}
-                className="input-elegant"
-              />
-            </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Email del admin *</label>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="juan@empresa.com"
+            required
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Nombre del responsable *</label>
-              <Input
-                value={adminName}
-                onChange={(e) => setAdminName(e.target.value)}
-                placeholder="Juan Pérez"
-                required
-                minLength={2}
-                className="input-elegant"
-              />
-            </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Contraseña *</label>
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Mínimo 8 caracteres"
+            required
+            minLength={8}
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Email del admin *</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="juan@empresa.com"
-                required
-                className="input-elegant"
-              />
-            </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Confirmar contraseña *</label>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Repite la contraseña"
+            required
+            minLength={8}
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Contraseña *</label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                required
-                minLength={8}
-                className="input-elegant"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Confirmar contraseña *</label>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repite la contraseña"
-                required
-                minLength={8}
-                className="input-elegant"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">País *</label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {COUNTRY_OPTIONS.map((opt) => (
-                    <option key={opt.code} value={opt.code}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Zona horaria *</label>
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {TIMEZONE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Teléfono (opcional)</label>
-              <Input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+34 600 000 000"
-                className="input-elegant"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Dirección del negocio (opcional)</label>
-              <Input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Calle Mayor 1, Madrid"
-                className="input-elegant"
-              />
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="terms"
-                checked={acceptedTerms}
-                onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
-              />
-              <label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed">
-                He leído y acepto los{" "}
-                <Link href="/legal/terms" className="underline hover:text-foreground">
-                  Términos de uso
-                </Link>{" "}
-                y la{" "}
-                <Link href="/legal/privacy" className="underline hover:text-foreground">
-                  Política de privacidad
-                </Link>
-                .
-              </label>
-            </div>
-
-            {fieldError && (
-              <p className="text-sm text-destructive" role="alert">
-                {fieldError}
-              </p>
-            )}
-
-            <Button
-              type="submit"
-              disabled={registerBusiness.isPending || !registrationAvailable}
-              className="w-full btn-primary"
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-900">País *</label>
+            <select
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2 text-sm"
             >
-              {registerBusiness.isPending ? "Creando negocio..." : "Registrar negocio"}
-            </Button>
-          </form>
-        </Card>
-      </div>
-    </div>
+              {COUNTRY_OPTIONS.map((opt) => (
+                <option key={opt.code} value={opt.code}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-900">Zona horaria *</label>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2 text-sm"
+            >
+              {TIMEZONE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Teléfono (opcional)</label>
+          <Input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+34 600 000 000"
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-900">Dirección del negocio (opcional)</label>
+          <Input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Calle Mayor 1, Madrid"
+            className="border-blue-100 bg-blue-50/40"
+          />
+        </div>
+
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="terms"
+            checked={acceptedTerms}
+            onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+          />
+          <label htmlFor="terms" className="text-sm leading-relaxed text-slate-600">
+            He leído y acepto los{" "}
+            <Link href="/legal/terms" className="underline hover:text-blue-800">
+              Términos de uso
+            </Link>{" "}
+            y la{" "}
+            <Link href="/legal/privacy" className="underline hover:text-blue-800">
+              Política de privacidad
+            </Link>
+            .
+          </label>
+        </div>
+
+        {fieldError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {fieldError}
+          </p>
+        ) : null}
+
+        <Button
+          type="submit"
+          disabled={registerBusiness.isPending || !registrationAvailable}
+          className="h-11 w-full bg-blue-700 hover:bg-blue-800"
+        >
+          {registerBusiness.isPending ? "Creando negocio..." : "Registrar negocio"}
+        </Button>
+      </form>
+    </AccessPageShell>
   );
 }

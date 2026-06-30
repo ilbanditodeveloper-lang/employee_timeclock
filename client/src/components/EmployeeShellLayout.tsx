@@ -1,33 +1,10 @@
 import { type ReactNode } from "react";
-import { useLocation } from "wouter";
-import { Calendar, CalendarDays, Clock, House, Palmtree } from "lucide-react";
-import AppShellLayout, { type AppShellNavItem } from "@/components/AppShellLayout";
+import { Button } from "@/components/ui/button";
+import { Clock, LogOut } from "lucide-react";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
-
-export const EMPLOYEE_NAV: AppShellNavItem[] = [
-  { id: "home", label: "Inicio", icon: House },
-  { id: "timeoff", label: "Vacaciones", icon: Palmtree },
-  { id: "calendar", label: "Calendario", icon: Calendar },
-  { id: "schedule", label: "Horario", icon: CalendarDays },
-];
-
-const NAV_TO_PATH: Record<string, string> = {
-  home: "/employee",
-  timeoff: "/employee/time-off",
-  calendar: "/employee/calendar",
-  schedule: "/employee/schedule",
-};
-
-function pathToNav(path: string): string {
-  if (path === "/employee" || path === "/employee/incident") return "home";
-  if (path.startsWith("/employee/calculator")) return "calendar";
-  if (path.startsWith("/employee/time-off")) return "timeoff";
-  if (path.startsWith("/employee/calendar")) return "calendar";
-  if (path.startsWith("/employee/schedule")) return "schedule";
-  return "home";
-}
+import { useLocation } from "wouter";
 
 type EmployeeShellLayoutProps = {
   pageTitle: string;
@@ -39,13 +16,13 @@ type EmployeeShellLayoutProps = {
 
 export default function EmployeeShellLayout({
   pageTitle,
-  pageSubtitle = "Fichaje y consulta de horas",
+  pageSubtitle,
   children,
-  contentClassName = "container mx-auto max-w-4xl py-8 pb-28 md:pb-8",
+  contentClassName = "container mx-auto max-w-4xl px-4 py-8 pb-28 md:pb-8",
   showBottomMenu = true,
 }: EmployeeShellLayoutProps) {
-  const [location, setLocation] = useLocation();
-  const { employeeSession, clearAllSessions, setEmployeeSession } = useAuthContext();
+  const [, setLocation] = useLocation();
+  const { clearAllSessions, setEmployeeSession } = useAuthContext();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
 
   const handleLogout = async () => {
@@ -60,25 +37,38 @@ export default function EmployeeShellLayout({
   };
 
   return (
-    <>
-      <AppShellLayout
-        brandLabel={employeeSession?.displayName ?? "Empleado"}
-        brandIcon={<Clock className="size-5" />}
-        pageTitle={pageTitle}
-        pageSubtitle={pageSubtitle}
-        userName={employeeSession?.displayName ?? "Empleado"}
-        userEmail={employeeSession?.username}
-        navItems={EMPLOYEE_NAV}
-        activeNavId={pathToNav(location)}
-        onNavChange={(id) => {
-          const path = NAV_TO_PATH[id];
-          if (path) setLocation(path);
-        }}
-        onLogout={() => void handleLogout()}
-      >
+    <div className="flex min-h-screen flex-col bg-[#f4f7f6]">
+      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+        <div className="container flex items-center justify-between gap-3 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-800 text-white shadow-sm">
+              <Clock className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold text-slate-900 sm:text-xl">{pageTitle}</h1>
+              {pageSubtitle ? (
+                <p className="truncate text-xs text-slate-500 sm:text-sm">{pageSubtitle}</p>
+              ) : null}
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleLogout()}
+            className="shrink-0 gap-2 text-slate-600 hover:text-slate-900"
+          >
+            <LogOut className="size-4" />
+            <span className="hidden sm:inline">Cerrar sesión</span>
+          </Button>
+        </div>
+      </header>
+
+      <main className="min-h-0 flex-1 overflow-y-auto">
         <div className={contentClassName}>{children}</div>
-      </AppShellLayout>
+      </main>
+
       {showBottomMenu ? <EmployeeBottomMenu /> : null}
-    </>
+    </div>
   );
 }
