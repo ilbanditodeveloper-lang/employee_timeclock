@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LandingHeroBackground } from "@/components/LandingHeroBackground";
+import LandingDashboardMockup from "@/components/LandingDashboardMockup";
 
 const WHATSAPP_MSG = "Hola, me gustaría una demo de TimeClock para mi negocio.";
 
@@ -112,51 +113,6 @@ function PhoneMockup() {
           </div>
           <div className="rounded-xl border border-slate-200 text-slate-400 text-center py-3 text-sm">
             Fichar salida
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DashboardMockup() {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
-      <div className="flex min-h-[280px]">
-        <div className="w-36 shrink-0 bg-slate-900 p-3 space-y-2 hidden sm:block">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 px-2">Menú</p>
-          {["Dashboard", "Empleados", "Horas", "Vacaciones", "Ajustes"].map((item, i) => (
-            <div
-              key={item}
-              className={cn(
-                "rounded-lg px-2 py-1.5 text-[11px]",
-                i === 0 ? "bg-blue-700 text-white" : "text-slate-400"
-              )}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-        <div className="flex-1 p-4 bg-slate-50">
-          <p className="text-sm font-bold text-slate-900 mb-3">Dashboard · Seguimiento en vivo</p>
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-lg bg-blue-100 border border-blue-200 p-2">
-              <p className="text-[10px] text-blue-800">Trabajando</p>
-              <p className="text-lg font-bold text-blue-900">4</p>
-            </div>
-            <div className="rounded-lg bg-amber-100 border border-amber-200 p-2">
-              <p className="text-[10px] text-amber-800">En pausa</p>
-              <p className="text-lg font-bold text-amber-900">1</p>
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-2 h-24 flex items-end gap-1">
-            {[40, 65, 55, 80, 70, 90, 60].map((h, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-t bg-blue-600/80"
-                style={{ height: `${h}%` }}
-              />
-            ))}
           </div>
         </div>
       </div>
@@ -296,8 +252,8 @@ export default function LandingPage() {
             </ul>
           </div>
           <div className="relative flex justify-center lg:justify-end">
-            <div className="absolute -right-4 top-8 hidden lg:block scale-90 opacity-95">
-              <DashboardMockup />
+            <div className="absolute -right-4 top-8 hidden lg:block scale-[0.85] opacity-95">
+              <LandingDashboardMockup compact />
             </div>
             <div className="relative z-10 -rotate-2 lg:mr-32">
               <PhoneMockup />
@@ -412,7 +368,7 @@ export default function LandingPage() {
               </Button>
             </Link>
           </div>
-          <DashboardMockup />
+          <LandingDashboardMockup />
         </div>
       </section>
 
@@ -422,6 +378,11 @@ export default function LandingPage() {
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Planes y precios</h2>
             <p className="mt-3 text-slate-600">{config.trialHeadline}</p>
+            {stripeEnabled ? (
+              <p className="mt-2 text-sm text-slate-500">
+                ¿Tienes un código de descuento? Podrás aplicarlo en la pantalla de pago seguro.
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-6 md:grid-cols-3 mb-16">

@@ -71,6 +71,18 @@ async function stripeGetRequest<T>(path: string): Promise<T> {
   return json;
 }
 
+/** Busca un código promocional activo por el texto que escribe el cliente (ej. SOCIO20). */
+export async function findStripePromotionCodeId(customerCode: string): Promise<string | null> {
+  const code = customerCode.trim();
+  if (!code) return null;
+
+  const result = await stripeGetRequest<{ data: Array<{ id: string; active: boolean }> }>(
+    `/promotion_codes?code=${encodeURIComponent(code)}&active=true&limit=1`
+  );
+  const promo = result.data[0];
+  return promo?.active ? promo.id : null;
+}
+
 export function getAppBaseUrl(): string {
   const url =
     process.env.FRONTEND_URL?.split(",")[0]?.trim() ||
@@ -124,6 +136,7 @@ export async function createStripeCheckoutSession(params: {
   email?: string | null;
   successPath?: string;
   cancelPath?: string;
+  promotionCode?: string | null;
 }): Promise<{ url: string }> {
   if (!isStripeConfigured()) {
     throw new Error("Stripe no está configurado en el servidor");
@@ -144,19 +157,35 @@ export async function createStripeCheckoutSession(params: {
   });
 
   const baseUrl = getAppBaseUrl();
-  const session = await stripeFormRequest<StripeCheckoutSession>("/checkout/sessions", {
+  const sessionParams: Record<string, string> = {
     mode: "subscription",
     customer: customerId,
     "line_items[0][price]": priceId,
     "line_items[0][quantity]": "1",
     success_url: `${baseUrl}${params.successPath ?? "/admin?billing=success"}`,
     cancel_url: `${baseUrl}${params.cancelPath ?? "/admin?billing=cancel"}`,
-    allow_promotion_codes: "true",
     "metadata[companyId]": String(company.id),
     "metadata[plan]": params.plan,
     "subscription_data[metadata][companyId]": String(company.id),
     "subscription_data[metadata][plan]": params.plan,
-  });
+  };
+
+  const promoInput = params.promotionCode?.trim();
+  if (promoInput) {
+    const promotionCodeId = await findStripePromotionCodeId(promoInput);
+    if (!promotionCodeId) {
+      throw new Error("Código promocional no válido o caducado");
+    }
+    sessionParams["discounts[0][promotion_code]"] = promotionCodeId;
+  } else {
+    // Campo «¿Tienes un código promocional?» en la página de pago de Stripe
+    sessionParams.allow_promotion_codes = "true";
+  }
+
+  const session = await stripeFormRequest<StripeCheckoutSession>(
+    "/checkout/sessions",
+    sessionParams
+  );
 
   if (!session.url) {
     throw new Error("No se pudo crear la sesión de pago");

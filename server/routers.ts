@@ -624,6 +624,7 @@ export const appRouter = router({
       .input(
         optionalCreds.extend({
           plan: z.enum(CHECKOUT_PLANS),
+          promotionCode: z.string().max(64).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -635,6 +636,7 @@ export const appRouter = router({
           companyId: company.id,
           plan: input.plan,
           email: admin.email,
+          promotionCode: input.promotionCode,
         });
         return session;
       }),

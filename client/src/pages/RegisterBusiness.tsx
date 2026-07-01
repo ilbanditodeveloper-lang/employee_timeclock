@@ -32,9 +32,15 @@ export default function RegisterBusiness() {
   const registerBusiness = trpc.publicApi.registerBusiness.useMutation();
   const checkout = trpc.publicApi.createCheckoutSession.useMutation();
   const selectedPlan = useMemo(() => {
-    const plan = new URLSearchParams(window.location.search).get("plan");
+    const params = new URLSearchParams(window.location.search);
+    const plan = params.get("plan");
     return plan && isCheckoutPlan(plan) ? (plan as CheckoutPlan) : null;
   }, []);
+  const initialPromo = useMemo(() => {
+    return new URLSearchParams(window.location.search).get("promo")?.trim() ?? "";
+  }, []);
+
+  const [promotionCode, setPromotionCode] = useState(initialPromo);
 
   const [businessName, setBusinessName] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -91,10 +97,16 @@ export default function RegisterBusiness() {
 
       if (selectedPlan && configQuery.data?.stripe?.enabled) {
         try {
-          const { url } = await checkout.mutateAsync({ plan: selectedPlan });
+          const { url } = await checkout.mutateAsync({
+            plan: selectedPlan,
+            promotionCode: promotionCode.trim() || undefined,
+          });
           window.location.href = url;
           return;
-        } catch {
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "No se pudo iniciar el pago";
+          toast.error(message);
           toast.message("Cuenta creada. Puedes contratar el plan desde Ajustes → Facturación.");
         }
       }
@@ -336,6 +348,25 @@ export default function RegisterBusiness() {
           <p className="text-sm text-destructive" role="alert">
             {fieldError}
           </p>
+        ) : null}
+
+        {selectedPlan && configQuery.data?.stripe?.enabled ? (
+          <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-2">
+            <label className="block text-sm font-medium text-slate-900" htmlFor="promo-code">
+              Código promocional (opcional)
+            </label>
+            <Input
+              id="promo-code"
+              value={promotionCode}
+              onChange={(e) => setPromotionCode(e.target.value.toUpperCase())}
+              placeholder="Ej. SOCIO20"
+              className="border-blue-100 bg-white uppercase"
+              autoComplete="off"
+            />
+            <p className="text-xs text-slate-600">
+              Si no lo tienes ahora, podrás introducirlo en la pantalla de pago de Stripe.
+            </p>
+          </div>
         ) : null}
 
         <Button

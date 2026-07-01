@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { CreditCard, ExternalLink } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { adminApiInput } from "@/lib/adminContext";
@@ -30,6 +32,7 @@ export default function AdminBillingPanel({
   trialDaysRemaining,
   showBillingBanner,
 }: Props) {
+  const [promotionCode, setPromotionCode] = useState("");
   const checkout = trpc.publicApi.createCheckoutSession.useMutation();
   const portal = trpc.publicApi.createBillingPortalSession.useMutation();
 
@@ -38,6 +41,7 @@ export default function AdminBillingPanel({
       const { url } = await checkout.mutateAsync({
         ...adminApiInput(),
         plan: checkoutPlan,
+        promotionCode: promotionCode.trim() || undefined,
       });
       window.location.href = url;
     } catch (error) {
@@ -89,6 +93,23 @@ export default function AdminBillingPanel({
           Tu suscripción requiere atención. Actualiza el método de pago para seguir usando TimeClock.
         </div>
       ) : null}
+
+      <div className="max-w-sm space-y-2">
+        <label className="text-sm font-medium text-foreground" htmlFor="billing-promo">
+          Código promocional (opcional)
+        </label>
+        <Input
+          id="billing-promo"
+          value={promotionCode}
+          onChange={(e) => setPromotionCode(e.target.value.toUpperCase())}
+          placeholder="Ej. SOCIO20"
+          className="uppercase"
+          autoComplete="off"
+        />
+        <p className="text-xs text-muted-foreground">
+          Se aplica al contratar un plan. También puedes añadirlo en la pantalla de pago de Stripe.
+        </p>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {UPGRADE_PLANS.map((p) => (

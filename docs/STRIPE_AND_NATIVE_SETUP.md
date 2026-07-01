@@ -46,7 +46,22 @@ En Stripe → **Developers → Webhooks → Add endpoint**:
 - **Eventos:** `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
 - Copia el **Signing secret** → `STRIPE_WEBHOOK_SECRET`
 
-### 2.4 Probar flujo
+### 2.5 Códigos promocionales (descuentos para negocios)
+
+En el **pago con Stripe Checkout** el cliente puede usar un código promocional:
+
+1. Stripe → **Productos → Cupones** → crea un cupón (ej. 20 % de descuento, 3 meses gratis, etc.).
+2. **Cupones → Códigos promocionales** → **Crear código** (ej. `SOCIO20`, `AMIGO50`).
+3. Asocia el código al cupón y, si quieres, limita usos o fecha de caducidad.
+
+En la app:
+
+- Al contratar desde la landing o **Admin → Ajustes → Facturación**, hay un campo opcional para el código.
+- Si no lo rellenan, en la página de pago de Stripe verán **«Añadir código promocional»**.
+
+No hace falta configurar nada más en Render: ya está activado en el checkout.
+
+### 2.6 Probar flujo
 
 1. Landing → plan → registro → redirección a Stripe Checkout.
 2. Admin → **Ajustes → Suscripción y facturación** → contratar o abrir portal.
