@@ -821,7 +821,7 @@ export default function AdminDashboard() {
     }
     clearAllSessions();
     setAdminSession(null);
-    setLocation('/');
+    setLocation('/acceso');
   };
 
   const handleSaveRestaurant = async () => {

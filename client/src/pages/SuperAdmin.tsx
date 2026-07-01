@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
 import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
+import AccessPageShell from "@/components/AccessPageShell";
 import AppShellLayout, {
   AppShellKpiCard,
   AppShellPanel,
@@ -221,7 +221,7 @@ export default function SuperAdmin() {
       // cookie cleared or session already ended
     }
     setIsAuthed(false);
-    setLocation("/");
+    setLocation("/acceso");
   };
 
   const pageMeta = SUPERADMIN_PAGE_TITLES[activeTab];
@@ -229,44 +229,56 @@ export default function SuperAdmin() {
   return (
     <div className="min-h-screen bg-[#f4f7f6]">
       {!isAuthed ? (
-        <div className="flex min-h-screen items-center justify-center px-4 py-8">
-          <Card className="w-full max-w-md p-8 shadow-lg">
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-accent rounded-2xl mb-4 shadow-lg">
-                <Shield className="w-7 h-7 text-accent-foreground" />
-              </div>
-              <h1 className="text-2xl font-bold text-foreground mb-2">Superadmin</h1>
-              <p className="text-sm text-muted-foreground">Control comercial multiempresa</p>
+        <AccessPageShell
+          backHref="/acceso"
+          backLabel="Volver al acceso"
+          icon={Shield}
+          title="Superadmin"
+          subtitle="Control comercial multiempresa"
+          badge="Plataforma"
+        >
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <Label htmlFor="sa-user" className="mb-2 block text-sm font-medium text-slate-900">
+                Usuario
+              </Label>
+              <Input
+                id="sa-user"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="border-blue-100 bg-blue-50/40 focus-visible:ring-blue-600"
+              />
             </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="sa-user">Usuario</Label>
-                <Input
-                  id="sa-user"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="input-elegant mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="sa-pass">Contraseña</Label>
-                <Input
-                  id="sa-pass"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="input-elegant mt-1"
-                />
-              </div>
-              <Button type="submit" className="w-full btn-primary" disabled={loginMutation.isPending}>
-                {loginMutation.isPending ? "Validando..." : "Entrar"}
-              </Button>
-            </form>
-          </Card>
-        </div>
+            <div>
+              <Label htmlFor="sa-pass" className="mb-2 block text-sm font-medium text-slate-900">
+                Contraseña
+              </Label>
+              <Input
+                id="sa-pass"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="border-blue-100 bg-blue-50/40 focus-visible:ring-blue-600"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="h-11 w-full bg-blue-700 text-base hover:bg-blue-800"
+              disabled={loginMutation.isPending}
+            >
+              {loginMutation.isPending ? "Validando..." : "Entrar"}
+            </Button>
+          </form>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-950">
+              <strong>Acceso restringido:</strong> solo personal autorizado de la plataforma TimeClock.
+            </p>
+          </div>
+        </AccessPageShell>
       ) : (
         <AppShellLayout
           brandLabel="Superadmin"

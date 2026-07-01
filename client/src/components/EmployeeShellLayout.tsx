@@ -33,7 +33,7 @@ export default function EmployeeShellLayout({
     }
     clearAllSessions();
     setEmployeeSession(null);
-    setLocation("/");
+    setLocation("/acceso");
   };
 
   return (
