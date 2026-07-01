@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 export type EmployeeScheduleDay = {
   entry1: string;
   entry2: string;
+  exit1?: string;
+  exit2?: string;
   isActive: boolean;
 };
 

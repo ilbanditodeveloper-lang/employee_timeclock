@@ -524,6 +524,7 @@ export function getDemoScheduleRows(employeeId: number) {
       employeeId,
       dayOfWeek,
       entryTime: isWorkDay ? "09:00" : "",
+      exitTime: isWorkDay ? "17:00" : null,
       isWorkDay,
       entrySlot: 1,
       createdAt: new Date(),

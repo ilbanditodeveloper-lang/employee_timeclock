@@ -4,6 +4,7 @@ import {
   getClockWindowMinutes,
   parseScheduleEntryTime,
 } from "@shared/scheduleClockWindow";
+import { rowsToScheduleMap, buildScheduleInsertRows } from "@shared/scheduleMap";
 import {
   getDayOfWeekInTimeZone,
   getMinutesSinceMidnightInTimeZone,
@@ -801,6 +802,8 @@ export const appRouter = router({
             z.object({
               entry1: z.string().optional(),
               entry2: z.string().optional(),
+              exit1: z.string().optional(),
+              exit2: z.string().optional(),
               isActive: z.boolean(),
             }),
           ])
@@ -839,57 +842,12 @@ export const appRouter = router({
       }
       const employee = await getEmployeeByUsername(input.employeeUsername, restaurant.companyId);
       if (!employee) return { success: true };
-      const dayMap: Record<string, number> = {
-        sunday: 0,
-        monday: 1,
-        tuesday: 2,
-        wednesday: 3,
-        thursday: 4,
-        friday: 5,
-        saturday: 6,
-      };
-      for (const [dayKey, rawValue] of Object.entries(input.schedule)) {
-        const value =
-          typeof rawValue === "string"
-            ? {
-                entry1: rawValue,
-                entry2: "",
-                isActive: rawValue.trim().length > 0,
-              }
-            : rawValue;
-        const dayOfWeek = dayMap[dayKey];
-        if (dayOfWeek === undefined) continue;
-        if (!value.isActive) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: employee.id,
-            dayOfWeek,
-            entryTime: "00:00",
-            isWorkDay: false,
-            entrySlot: 1,
-          });
-          continue;
-        }
-        if (value.entry1) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: employee.id,
-            dayOfWeek,
-            entryTime: value.entry1,
-            isWorkDay: true,
-            entrySlot: 1,
-          });
-        }
-        if (value.entry2) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: employee.id,
-            dayOfWeek,
-            entryTime: value.entry2,
-            isWorkDay: true,
-            entrySlot: 2,
-          });
-        }
+      for (const row of buildScheduleInsertRows({
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        schedule: input.schedule,
+      })) {
+        await db.insert(schedules).values(row);
       }
       await deactivateCompanyIfSubscriptionViolated(company.id);
       return { success: true };
@@ -913,6 +871,8 @@ export const appRouter = router({
             z.object({
               entry1: z.string().optional(),
               entry2: z.string().optional(),
+              exit1: z.string().optional(),
+              exit2: z.string().optional(),
               isActive: z.boolean(),
             }),
           ])
@@ -950,57 +910,12 @@ export const appRouter = router({
       await db.update(employees).set(updateData).where(eq(employees.id, input.employeeId));
 
       await db.delete(schedules).where(eq(schedules.employeeId, input.employeeId));
-      const dayMap: Record<string, number> = {
-        sunday: 0,
-        monday: 1,
-        tuesday: 2,
-        wednesday: 3,
-        thursday: 4,
-        friday: 5,
-        saturday: 6,
-      };
-      for (const [dayKey, rawValue] of Object.entries(input.schedule)) {
-        const value =
-          typeof rawValue === "string"
-            ? {
-                entry1: rawValue,
-                entry2: "",
-                isActive: rawValue.trim().length > 0,
-              }
-            : rawValue;
-        const dayOfWeek = dayMap[dayKey];
-        if (dayOfWeek === undefined) continue;
-        if (!value.isActive) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: input.employeeId,
-            dayOfWeek,
-            entryTime: "00:00",
-            isWorkDay: false,
-            entrySlot: 1,
-          });
-          continue;
-        }
-        if (value.entry1) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: input.employeeId,
-            dayOfWeek,
-            entryTime: value.entry1,
-            isWorkDay: true,
-            entrySlot: 1,
-          });
-        }
-        if (value.entry2) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: input.employeeId,
-            dayOfWeek,
-            entryTime: value.entry2,
-            isWorkDay: true,
-            entrySlot: 2,
-          });
-        }
+      for (const row of buildScheduleInsertRows({
+        companyId: employee.companyId,
+        employeeId: input.employeeId,
+        schedule: input.schedule,
+      })) {
+        await db.insert(schedules).values(row);
       }
       return { success: true };
     }),
@@ -1447,22 +1362,7 @@ export const appRouter = router({
       }
 
       const scheduleRows = await getSchedulesByEmployee(targetEmployeeId, companyId);
-      const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      const scheduleMap: Record<string, { entry1: string; entry2: string; isActive: boolean }> = {};
-      for (const row of scheduleRows) {
-        const key = dayKeys[row.dayOfWeek] ?? "monday";
-        if (!scheduleMap[key]) {
-          scheduleMap[key] = { entry1: "", entry2: "", isActive: row.isWorkDay };
-        }
-        if (!row.isWorkDay) {
-          scheduleMap[key].isActive = false;
-        } else if (row.entrySlot === 2) {
-          scheduleMap[key].entry2 = row.entryTime;
-        } else {
-          scheduleMap[key].entry1 = row.entryTime;
-        }
-      }
-      return scheduleMap;
+      return rowsToScheduleMap(scheduleRows);
     }),
 
     updateEmployeeSchedule: publicProcedure.input(
@@ -1477,6 +1377,8 @@ export const appRouter = router({
             z.object({
               entry1: z.string().optional(),
               entry2: z.string().optional(),
+              exit1: z.string().optional(),
+              exit2: z.string().optional(),
               isActive: z.boolean(),
             }),
           ])
@@ -1495,59 +1397,13 @@ export const appRouter = router({
       );
 
       await db.delete(schedules).where(eq(schedules.employeeId, input.employeeId));
-      const dayMap: Record<string, number> = {
-        sunday: 0,
-        monday: 1,
-        tuesday: 2,
-        wednesday: 3,
-        thursday: 4,
-        friday: 5,
-        saturday: 6,
-      };
 
-      for (const [dayKey, rawValue] of Object.entries(input.schedule)) {
-        const value =
-          typeof rawValue === "string"
-            ? {
-                entry1: rawValue,
-                entry2: "",
-                isActive: rawValue.trim().length > 0,
-              }
-            : rawValue;
-        const dayOfWeek = dayMap[dayKey];
-        if (dayOfWeek === undefined) continue;
-
-        if (!value.isActive) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: input.employeeId,
-            dayOfWeek,
-            entryTime: "00:00",
-            isWorkDay: false,
-            entrySlot: 1,
-          });
-          continue;
-        }
-        if (value.entry1) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: input.employeeId,
-            dayOfWeek,
-            entryTime: value.entry1,
-            isWorkDay: true,
-            entrySlot: 1,
-          });
-        }
-        if (value.entry2) {
-          await db.insert(schedules).values({
-            companyId: employee.companyId,
-            employeeId: input.employeeId,
-            dayOfWeek,
-            entryTime: value.entry2,
-            isWorkDay: true,
-            entrySlot: 2,
-          });
-        }
+      for (const row of buildScheduleInsertRows({
+        companyId: employee.companyId,
+        employeeId: input.employeeId,
+        schedule: input.schedule,
+      })) {
+        await db.insert(schedules).values(row);
       }
 
       return { success: true };
@@ -1561,21 +1417,7 @@ export const appRouter = router({
     ).mutation(async ({ ctx, input }) => {
       const employee = await resolveEmployeeAuth(ctx, input);
       const scheduleRows = await getSchedulesByEmployee(employee.id, employee.companyId);
-      const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      const scheduleMap: Record<string, { entry1: string; entry2: string; isActive: boolean }> = {};
-      for (const row of scheduleRows) {
-        const key = dayKeys[row.dayOfWeek] ?? "monday";
-        if (!scheduleMap[key]) {
-          scheduleMap[key] = { entry1: "", entry2: "", isActive: row.isWorkDay };
-        }
-        if (!row.isWorkDay) {
-          scheduleMap[key].isActive = false;
-        } else if (row.entrySlot === 2) {
-          scheduleMap[key].entry2 = row.entryTime;
-        } else {
-          scheduleMap[key].entry1 = row.entryTime;
-        }
-      }
+      const scheduleMap = rowsToScheduleMap(scheduleRows);
       const company = await getCompanyById(employee.companyId);
       const acceptance = await getLegalAcceptance(
         employee.id,

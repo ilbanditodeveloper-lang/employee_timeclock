@@ -33,6 +33,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LandingHeroBackground } from "@/components/LandingHeroBackground";
 
 const WHATSAPP_MSG = "Hola, me gustaría una demo de TimeClock para mi negocio.";
 
@@ -246,15 +247,16 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 text-white">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2 lg:items-center lg:px-8 lg:py-24">
+      <section className="relative overflow-hidden text-white">
+        <LandingHeroBackground />
+        <div className="relative z-10 mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2 lg:items-center lg:px-8 lg:py-24">
           <div>
-            <p className="mb-4 inline-block rounded-full bg-blue-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100">
+            <p className="mb-4 inline-block rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100 backdrop-blur-sm">
               {hero.badge}
             </p>
             <h1 className="text-4xl font-bold leading-tight sm:text-5xl lg:text-[3.25rem]">
               {hero.titleMain}{" "}
-              <span className="text-blue-300">{hero.titleHighlight}</span>
+              <span className="text-sky-200">{hero.titleHighlight}</span>
             </h1>
             <p className="mt-5 text-lg text-blue-100/90 max-w-xl">{hero.subtitle}</p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -305,7 +307,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section id="funciones" className="py-20 bg-slate-50">
+      <section id="funciones" className="relative z-10 py-20 bg-white">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">

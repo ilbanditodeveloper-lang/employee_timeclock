@@ -593,27 +593,33 @@ export default function AdminDashboard() {
     if (shiftType === 'off') {
       setShiftSchedule(prev => ({
         ...prev,
-        [day]: { entry1: '', entry2: '', isActive: false },
+        [day]: { entry1: '', entry2: '', exit1: '', exit2: '', isActive: false },
       }));
       return;
     }
     if (shiftType === 'split') {
       setShiftSchedule(prev => ({
         ...prev,
-        [day]: { entry1: '09:00', entry2: '16:00', isActive: true },
+        [day]: {
+          entry1: '09:00',
+          exit1: '16:00',
+          entry2: '16:00',
+          exit2: '22:00',
+          isActive: true,
+        },
       }));
       return;
     }
     if (shiftType === 'morning') {
       setShiftSchedule(prev => ({
         ...prev,
-        [day]: { entry1: '09:00', entry2: '', isActive: true },
+        [day]: { entry1: '09:00', entry2: '', exit1: '17:00', exit2: '', isActive: true },
       }));
       return;
     }
     setShiftSchedule(prev => ({
       ...prev,
-      [day]: { entry1: '16:00', entry2: '', isActive: true },
+      [day]: { entry1: '16:00', entry2: '', exit1: '22:00', exit2: '', isActive: true },
     }));
   };
 
@@ -1592,7 +1598,10 @@ export default function AdminDashboard() {
           {/* Shifts Tab */}
           <TabsContent value="shifts" className="mt-0 space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Configuración de Turnos</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">Configuración de Turnos</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Los empleados reciben notificaciones push 5 min antes y a la hora de entrada y salida según el turno guardado.
+              </p>
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">

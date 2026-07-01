@@ -1,4 +1,10 @@
-export type DaySchedule = { entry1: string; entry2: string; isActive: boolean };
+export type DaySchedule = {
+  entry1: string;
+  entry2: string;
+  exit1: string;
+  exit2: string;
+  isActive: boolean;
+};
 export type WeekSchedule = {
   monday: DaySchedule;
   tuesday: DaySchedule;
@@ -10,14 +16,21 @@ export type WeekSchedule = {
 };
 
 export function createEmptySchedule(): WeekSchedule {
+  const emptyDay = (): DaySchedule => ({
+    entry1: "",
+    entry2: "",
+    exit1: "",
+    exit2: "",
+    isActive: true,
+  });
   return {
-    monday: { entry1: "", entry2: "", isActive: true },
-    tuesday: { entry1: "", entry2: "", isActive: true },
-    wednesday: { entry1: "", entry2: "", isActive: true },
-    thursday: { entry1: "", entry2: "", isActive: true },
-    friday: { entry1: "", entry2: "", isActive: true },
-    saturday: { entry1: "", entry2: "", isActive: true },
-    sunday: { entry1: "", entry2: "", isActive: true },
+    monday: emptyDay(),
+    tuesday: emptyDay(),
+    wednesday: emptyDay(),
+    thursday: emptyDay(),
+    friday: emptyDay(),
+    saturday: emptyDay(),
+    sunday: emptyDay(),
   };
 }
 
@@ -25,10 +38,10 @@ export function createEmptySchedule(): WeekSchedule {
 export function createDefaultEmployeeSchedule(): WeekSchedule {
   const schedule = createEmptySchedule();
   for (const day of ["monday", "tuesday", "wednesday", "thursday", "friday"] as const) {
-    schedule[day] = { entry1: "09:00", entry2: "", isActive: true };
+    schedule[day] = { entry1: "09:00", entry2: "", exit1: "17:00", exit2: "", isActive: true };
   }
-  schedule.saturday = { entry1: "", entry2: "", isActive: false };
-  schedule.sunday = { entry1: "", entry2: "", isActive: false };
+  schedule.saturday = { entry1: "", entry2: "", exit1: "", exit2: "", isActive: false };
+  schedule.sunday = { entry1: "", entry2: "", exit1: "", exit2: "", isActive: false };
   return schedule;
 }
 
