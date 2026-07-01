@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { isCheckoutPlan } from "@shared/stripeConfig";
 import {
   DEFAULT_LANDING_PAGE_CONFIG,
+  buildVisitorSupportWhatsAppHref,
   resolveFaqAnswer,
   type LandingPageConfig,
 } from "@shared/landingConfig";
@@ -26,6 +27,7 @@ import {
   FileDown,
   LayoutDashboard,
   MapPin,
+  MessageCircle,
   Play,
   Shield,
   Smartphone,
@@ -33,9 +35,11 @@ import {
 import { cn } from "@/lib/utils";
 import { LandingHeroBackground } from "@/components/LandingHeroBackground";
 import LandingDashboardMockup from "@/components/LandingDashboardMockup";
+import WhatsAppFloatButton from "@/components/WhatsAppFloatButton";
 
 const REGISTER_NOW_LABEL = "Registra tu negocio ahora";
 const PRICING_SECTION_ID = "precios";
+const CONTACT_SECTION_ID = "contacto";
 
 const features = [
   {
@@ -130,6 +134,11 @@ export default function LandingPage() {
   const pricingCtaHref = (packId: string) =>
     isCheckoutPlan(packId) ? `/register-business?plan=${packId}` : "/register-business";
 
+  const supportWhatsAppHref = useMemo(
+    () => buildVisitorSupportWhatsAppHref(config.whatsappNumber),
+    [config.whatsappNumber]
+  );
+
   useEffect(() => {
     if (isAuthLoading) return;
     if (adminSession) setLocation("/admin");
@@ -163,6 +172,11 @@ export default function LandingPage() {
             <a href="#para-quien" className="hover:text-blue-800">Para quién es</a>
             <a href="#precios" className="hover:text-blue-800">Precios</a>
             <a href="#faq" className="hover:text-blue-800">FAQ</a>
+            {supportWhatsAppHref ? (
+              <a href={`#${CONTACT_SECTION_ID}`} className="hover:text-blue-800">
+                Contacto
+              </a>
+            ) : null}
           </nav>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Link href="/acceso">
@@ -430,6 +444,37 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Contact */}
+      {supportWhatsAppHref ? (
+        <section id={CONTACT_SECTION_ID} className="py-20 bg-white">
+          <div className="mx-auto max-w-3xl px-4 text-center lg:px-8">
+            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">¿Tienes dudas?</h2>
+            <p className="mt-4 text-slate-600 leading-relaxed">
+              Si quieres aclarar algo antes de registrarte o necesitas ayuda para elegir plan,
+              escríbenos por WhatsApp. Te respondemos lo antes posible.
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              Para contratar, usa los packs de la sección de precios — el WhatsApp es solo para
+              soporte y consultas.
+            </p>
+            <a
+              href={supportWhatsAppHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-8 inline-block"
+            >
+              <Button
+                size="lg"
+                className="bg-[#25D366] hover:bg-[#20bd5a] text-white gap-2 shadow-md"
+              >
+                <MessageCircle className="size-5" />
+                Escribir por WhatsApp
+              </Button>
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       {/* CTA */}
       <section className="relative overflow-hidden bg-blue-950 py-20 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_right,_var(--tw-gradient-stops))] from-blue-800/40 via-transparent to-transparent" />
@@ -457,7 +502,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer id="contacto" className="border-t border-slate-200 bg-white py-12">
+      <footer className="border-t border-slate-200 bg-white py-12">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <div className="flex flex-col gap-8 md:flex-row md:justify-between">
             <div className="max-w-sm">
@@ -479,6 +524,13 @@ export default function LandingPage() {
                   <li><a href="#funciones" className="hover:text-blue-800">Funciones</a></li>
                   <li><a href="#precios" className="hover:text-blue-800">Precios</a></li>
                   <li><Link href="/acceso" className="hover:text-blue-800">Acceder</Link></li>
+                  {supportWhatsAppHref ? (
+                    <li>
+                      <a href={`#${CONTACT_SECTION_ID}`} className="hover:text-blue-800">
+                        Contacto
+                      </a>
+                    </li>
+                  ) : null}
                 </ul>
               </div>
               <div>
@@ -500,6 +552,10 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {supportWhatsAppHref ? (
+        <WhatsAppFloatButton href={supportWhatsAppHref} />
+      ) : null}
     </div>
   );
 }

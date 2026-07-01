@@ -231,3 +231,21 @@ export function buildWhatsAppHref(number: string, message: string): string | nul
   if (!digits) return null;
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
+
+export const SUPPORT_WHATSAPP_VISITOR_MSG =
+  "Hola, me interesa TimeClock y tengo algunas dudas.";
+
+export function buildVisitorSupportWhatsAppHref(number: string): string | null {
+  return buildWhatsAppHref(number, SUPPORT_WHATSAPP_VISITOR_MSG);
+}
+
+export function buildAdminSupportWhatsAppHref(
+  number: string,
+  companyName: string
+): string | null {
+  const name = companyName.trim() || "mi negocio";
+  return buildWhatsAppHref(
+    number,
+    `Hola, soy administrador de ${name}. Necesito ayuda con TimeClock.`
+  );
+}

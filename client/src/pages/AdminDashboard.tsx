@@ -19,6 +19,7 @@ import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
 import AdminBillingPanel from '@/components/AdminBillingPanel';
 import AdminLocationsPanel from '@/components/AdminLocationsPanel';
+import AdminSupportPanel from '@/components/AdminSupportPanel';
 import AppShellLayout, { type AppShellNavItem } from '@/components/AppShellLayout';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
@@ -2336,6 +2337,8 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="settings" className="mt-0 space-y-6">
+            <AdminSupportPanel companyName={onboardingQuery.data?.company?.name} />
+
             {subscription ? (
               <AdminBillingPanel
                 plan={subscription.plan}

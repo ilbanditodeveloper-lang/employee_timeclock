@@ -425,7 +425,7 @@ export default function SuperAdmin() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="wa-number">WhatsApp (solo números, con prefijo país)</Label>
+                    <Label htmlFor="wa-number">WhatsApp de soporte (prefijo país + número)</Label>
                     <Input
                       id="wa-number"
                       placeholder="34600111222"
@@ -436,7 +436,9 @@ export default function SuperAdmin() {
                       className="mt-1"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Ejemplo España: 34 + 9 dígitos. Si está vacío, los botones llevan al registro.
+                      Mismo número para visitantes (dudas en la web) y administradores (soporte en
+                      Ajustes). Ejemplo España: 34 + 9 dígitos. Si está vacío, no se muestran los
+                      botones de WhatsApp.
                     </p>
                   </div>
                   <div>
