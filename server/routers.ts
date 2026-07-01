@@ -336,9 +336,11 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         await resolveSuperAdminAuth(ctx, input);
+        const landing = await getLandingPageConfig();
+        const pricingPacks = landing.pricingPacks;
         if (isDemoModeEnabled()) {
           return getDemoSuperCompanies().map((company) =>
-            enrichSuperAdminCompany(company, company.employeeCount ?? 0, 1)
+            enrichSuperAdminCompany(company, company.employeeCount ?? 0, 1, new Date(), pricingPacks)
           );
         }
         await syncAllCompaniesSubscriptionEnforcement();
@@ -369,7 +371,9 @@ export const appRouter = router({
               adminLastSignedIn: admin?.lastSignedIn ?? null,
             },
             employeeCounts.get(company.id) ?? 0,
-            locationCounts.get(company.id) ?? 0
+            locationCounts.get(company.id) ?? 0,
+            new Date(),
+            pricingPacks
           );
         });
       }),
@@ -2190,6 +2194,7 @@ export const appRouter = router({
         : [];
       const locationCount = await countRestaurantsByCompany(company.id);
       const stripe = getPublicStripeConfig();
+      const landing = await getLandingPageConfig();
       return {
         onboardingCompleted: company.onboardingCompleted,
         onboardingSkippedAt: company.onboardingSkippedAt,
@@ -2204,6 +2209,7 @@ export const appRouter = router({
         subscription: getSubscriptionAccessStatus(company, employeeList.length, new Date(), {
           stripeEnabled: stripe.enabled,
           locationCount,
+          pricingPacks: landing.pricingPacks,
         }),
       };
     }),

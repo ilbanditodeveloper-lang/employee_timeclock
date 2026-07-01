@@ -88,7 +88,12 @@ function toDatetimeLocal(value: Date | string | null | undefined) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function SuperAdminCompaniesPanel() {
+export default function SuperAdminCompaniesPanel({
+  planLabels: planLabelsProp,
+}: {
+  planLabels?: Record<SubscriptionPlan, string>;
+} = {}) {
+  const planLabels = planLabelsProp ?? SUBSCRIPTION_PLAN_LABELS;
   const listCompanies = trpc.publicApi.superAdminListCompanies.useQuery(emptyCreds);
   const setStatus = trpc.publicApi.superAdminSetCompanyStatus.useMutation();
   const createCompany = trpc.publicApi.superAdminCreateCompany.useMutation();
@@ -412,7 +417,7 @@ export default function SuperAdminCompaniesPanel() {
             <option value="all">Todos los planes</option>
             {SUBSCRIPTION_PLANS.map((p) => (
               <option key={p} value={p}>
-                {SUBSCRIPTION_PLAN_LABELS[p]}
+                {planLabels[p]}
               </option>
             ))}
           </select>
@@ -681,7 +686,7 @@ export default function SuperAdminCompaniesPanel() {
                           >
                             {SUBSCRIPTION_PLANS.map((plan) => (
                               <option key={plan} value={plan}>
-                                {SUBSCRIPTION_PLAN_LABELS[plan]}
+                                {planLabels[plan]}
                               </option>
                             ))}
                           </select>

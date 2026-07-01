@@ -4,8 +4,9 @@ import {
   getTrialDaysRemaining,
   isTrialExpired,
   getSuperAdminSubscriptionLabel,
-  SUBSCRIPTION_PLAN_LABELS,
+  getSubscriptionPlanLabel,
   type SubscriptionPlan,
+  type PricingPackNameSource,
 } from "@shared/subscriptionPlans";
 import type { CrmStage } from "@shared/crmStages";
 
@@ -35,7 +36,8 @@ export function enrichSuperAdminCompany(
   },
   employeeCount: number,
   locationCount = 1,
-  now = new Date()
+  now = new Date(),
+  pricingPacks?: PricingPackNameSource[] | null
 ): SuperAdminCompanyRow {
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
   const employeeLimit = getPlanEmployeeLimit(plan);
@@ -55,7 +57,7 @@ export function enrichSuperAdminCompany(
     employeeCount,
     locationCount,
     planLabel: getSuperAdminSubscriptionLabel(plan),
-    planName: SUBSCRIPTION_PLAN_LABELS[plan],
+    planName: getSubscriptionPlanLabel(plan, pricingPacks),
     planEmployeeLimit: employeeLimit,
     trialDaysRemaining: plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt, now) : null,
     trialExpired: isTrialExpired(plan, company.trialEndsAt, now),

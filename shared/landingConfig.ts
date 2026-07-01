@@ -109,8 +109,8 @@ export const DEFAULT_LANDING_PAGE_CONFIG: LandingPageConfig = {
   pricingPacks: [
     {
       id: "starter",
-      name: "Starter",
-      price: "19€",
+      name: "Micro",
+      price: "12",
       priceSuffix: "/mes",
       description: "Para equipos pequeños que empiezan con el control horario digital.",
       features: [
@@ -124,7 +124,7 @@ export const DEFAULT_LANDING_PAGE_CONFIG: LandingPageConfig = {
     },
     {
       id: "pro",
-      name: "Pro",
+      name: "Pyme",
       price: "29€",
       priceSuffix: "/mes",
       description: "El plan más elegido para negocios en crecimiento.",
@@ -141,7 +141,7 @@ export const DEFAULT_LANDING_PAGE_CONFIG: LandingPageConfig = {
     {
       id: "enterprise",
       name: "Enterprise",
-      price: "79€",
+      price: "59€",
       priceSuffix: "/mes",
       description: "Para cadenas y empresas con varios centros o muchos empleados.",
       features: [

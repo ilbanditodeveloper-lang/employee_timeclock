@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CreditCard, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { adminApiInput } from "@/lib/adminContext";
@@ -18,11 +18,7 @@ type Props = {
   showBillingBanner: boolean;
 };
 
-const UPGRADE_PLANS: { id: CheckoutPlan; label: string; price: string }[] = [
-  { id: "starter", label: "Starter", price: "19€/mes" },
-  { id: "pro", label: "Pro", price: "29€/mes" },
-  { id: "enterprise", label: "Enterprise", price: "79€/mes" },
-];
+const CHECKOUT_PLAN_IDS: CheckoutPlan[] = ["starter", "pro", "enterprise"];
 
 export default function AdminBillingPanel({
   plan,
@@ -33,6 +29,19 @@ export default function AdminBillingPanel({
   showBillingBanner,
 }: Props) {
   const [promotionCode, setPromotionCode] = useState("");
+  const landingQuery = trpc.publicApi.getLandingPageConfig.useQuery();
+  const upgradePlans = useMemo(() => {
+    const packs = landingQuery.data?.pricingPacks ?? [];
+    return CHECKOUT_PLAN_IDS.map((id) => {
+      const pack = packs.find((p) => p.id === id);
+      const price = pack ? `${pack.price}${pack.priceSuffix}` : "";
+      return {
+        id,
+        label: pack?.name ?? SUBSCRIPTION_PLAN_LABELS[id],
+        price,
+      };
+    });
+  }, [landingQuery.data?.pricingPacks]);
   const checkout = trpc.publicApi.createCheckoutSession.useMutation();
   const portal = trpc.publicApi.createBillingPortalSession.useMutation();
 
@@ -112,7 +121,7 @@ export default function AdminBillingPanel({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {UPGRADE_PLANS.map((p) => (
+        {upgradePlans.map((p) => (
           <Button
             key={p.id}
             type="button"

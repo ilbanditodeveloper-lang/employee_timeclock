@@ -13,13 +13,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const MOCK_BUSINESSES: { id: string; name: string; active?: boolean }[] = [
-  { id: "sol", name: "Cafetería Sol", active: true },
-  { id: "bandito", name: "Il Bandito" },
-  { id: "mar", name: "Restaurante Mar" },
-  { id: "luna", name: "Panadería Luna" },
-];
-
 const NAV_ITEMS: { label: string; icon: LucideIcon; active?: boolean }[] = [
   { label: "Dashboard", icon: LayoutDashboard, active: true },
   { label: "Empleados", icon: Users },
@@ -70,33 +63,6 @@ export default function LandingDashboardMockup({ compact = false, className }: P
             </div>
           </div>
 
-          {!compact ? (
-            <div className="border-b border-white/10 p-3">
-              <div className="flex items-center gap-2">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#3b82f6] text-xs font-bold">
-                  T
-                </div>
-                <p className="truncate text-xs font-semibold">TimeClock</p>
-              </div>
-              <div className="mt-3 space-y-1">
-                <p className="text-[10px] uppercase tracking-wide text-slate-400 px-1">Negocios</p>
-                {MOCK_BUSINESSES.map((biz) => (
-                  <div
-                    key={biz.id}
-                    className={cn(
-                      "truncate rounded-lg px-2 py-1.5 text-[10px]",
-                      biz.active
-                        ? "bg-[#3b82f6] font-medium text-white"
-                        : "text-slate-400"
-                    )}
-                  >
-                    {biz.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           <nav className="space-y-0.5 p-2">
             {NAV_ITEMS.slice(0, compact ? 4 : NAV_ITEMS.length).map((item) => {
               const Icon = item.icon;
@@ -135,12 +101,7 @@ export default function LandingDashboardMockup({ compact = false, className }: P
             <p className="mb-2 text-[10px] font-bold text-slate-900">Dashboard · En vivo</p>
           )}
 
-          <div
-            className={cn(
-              "grid gap-2",
-              compact ? "grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-4"
-            )}
-          >
+          <div className="grid grid-cols-1 gap-2">
             <MockKpiCard
               compact={compact}
               tone="emerald"
@@ -199,7 +160,7 @@ function MockKpiCard({
   };
 
   return (
-    <div className={cn("rounded-xl border p-2.5", tones[tone], compact ? "min-h-[72px]" : "min-h-[120px]")}>
+    <div className={cn("rounded-xl border p-2.5", tones[tone], compact ? "min-h-[56px]" : "min-h-0")}>
       <div className="mb-1.5 flex items-center justify-between gap-1">
         <p className={cn("font-semibold", compact ? "text-[9px]" : "text-xs")}>{title}</p>
         <span className="rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-slate-700">

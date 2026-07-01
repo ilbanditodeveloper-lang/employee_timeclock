@@ -23,6 +23,7 @@ import {
   type LandingFaq,
 } from "@shared/landingConfig";
 import { cn } from "@/lib/utils";
+import { buildSubscriptionPlanLabels } from "@shared/subscriptionPlans";
 import SuperAdminCompaniesPanel from "@/components/SuperAdminCompaniesPanel";
 
 type SuperAdminTab = "dashboard" | "companies" | "landing";
@@ -89,6 +90,11 @@ export default function SuperAdmin() {
       onTrial: active.filter((c) => c.subscriptionPlan === "trial").length,
     };
   }, [companies]);
+
+  const planLabels = useMemo(
+    () => buildSubscriptionPlanLabels(landingQuery.data?.pricingPacks),
+    [landingQuery.data?.pricingPacks]
+  );
 
   useEffect(() => {
     if (sessionQuery.data?.session?.type === "superadmin") {
@@ -393,7 +399,7 @@ export default function SuperAdmin() {
             </div>
           ) : null}
 
-          {activeTab === "companies" ? <SuperAdminCompaniesPanel /> : null}
+          {activeTab === "companies" ? <SuperAdminCompaniesPanel planLabels={planLabels} /> : null}
 
           {activeTab === "landing" ? (
             <div className="w-full">

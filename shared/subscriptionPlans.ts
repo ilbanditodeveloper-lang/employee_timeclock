@@ -5,11 +5,34 @@ export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
 
 export const SUBSCRIPTION_PLAN_LABELS: Record<SubscriptionPlan, string> = {
   trial: "Trial (14 días)",
-  starter: "Starter",
-  pro: "Pro",
+  starter: "Micro",
+  pro: "Pyme",
   enterprise: "Enterprise",
   legacy: "Legacy (sin límite)",
 };
+
+export type PricingPackNameSource = { id: string; name: string };
+
+/** Nombres visibles de planes: packs de la landing (starter/pro/enterprise) + trial/legacy por defecto. */
+export function buildSubscriptionPlanLabels(
+  pricingPacks?: PricingPackNameSource[] | null
+): Record<SubscriptionPlan, string> {
+  const labels = { ...SUBSCRIPTION_PLAN_LABELS };
+  if (!pricingPacks?.length) return labels;
+  for (const pack of pricingPacks) {
+    if ((SUBSCRIPTION_PLANS as readonly string[]).includes(pack.id)) {
+      labels[pack.id as SubscriptionPlan] = pack.name;
+    }
+  }
+  return labels;
+}
+
+export function getSubscriptionPlanLabel(
+  plan: SubscriptionPlan,
+  pricingPacks?: PricingPackNameSource[] | null
+): string {
+  return buildSubscriptionPlanLabels(pricingPacks)[plan];
+}
 
 /** Etiqueta corta para el panel superadmin (Trial / Mensual / Anual). */
 export function getSuperAdminSubscriptionLabel(plan: SubscriptionPlan): string {
@@ -165,7 +188,11 @@ export function getSubscriptionAccessStatus(
   },
   employeeCount: number,
   now = new Date(),
-  options?: { stripeEnabled?: boolean; locationCount?: number }
+  options?: {
+    stripeEnabled?: boolean;
+    locationCount?: number;
+    pricingPacks?: PricingPackNameSource[] | null;
+  }
 ): SubscriptionAccessStatus {
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
   const employeeLimit = getPlanEmployeeLimit(plan);
@@ -203,7 +230,7 @@ export function getSubscriptionAccessStatus(
 
   return {
     plan,
-    planLabel: SUBSCRIPTION_PLAN_LABELS[plan],
+    planLabel: getSubscriptionPlanLabel(plan, options?.pricingPacks),
     employeeCount,
     employeeLimit,
     locationLimit,
