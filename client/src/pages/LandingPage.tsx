@@ -33,6 +33,7 @@ import {
   MessageCircle,
   Palmtree,
   Pause,
+  Play,
   Shield,
   Smartphone,
 } from "lucide-react";
