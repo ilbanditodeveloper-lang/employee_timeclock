@@ -42,20 +42,20 @@ export default function LandingDashboardMockup({ compact = false, className }: P
         className
       )}
     >
-      <div className={cn("flex", compact ? "min-h-[220px]" : "min-h-[420px]")}>
+      <div className={cn("flex", compact ? "min-h-[220px]" : "min-h-[380px] sm:min-h-[420px]")}>
         <aside
           className={cn(
             "app-shell-sidebar shrink-0 text-white",
-            compact ? "w-[88px]" : "w-[200px] hidden sm:block"
+            compact ? "w-[88px]" : "w-[72px] sm:w-[200px]"
           )}
         >
-          <div className="border-b border-white/10 p-3">
-            <div className="flex items-center gap-2">
+          <div className="border-b border-white/10 p-2 sm:p-3">
+            <div className="flex items-center justify-center gap-2 sm:justify-start">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
                 <Clock className="size-4" />
               </div>
               {!compact ? (
-                <div className="min-w-0">
+                <div className="min-w-0 hidden sm:block">
                   <p className="truncate text-xs font-bold uppercase tracking-wide">TimeClock</p>
                   <p className="truncate text-[10px] text-slate-300">Fichaje de empleados</p>
                 </div>
@@ -63,28 +63,31 @@ export default function LandingDashboardMockup({ compact = false, className }: P
             </div>
           </div>
 
-          <nav className="space-y-0.5 p-2">
+          <nav className="space-y-0.5 p-1.5 sm:p-2">
             {NAV_ITEMS.slice(0, compact ? 4 : NAV_ITEMS.length).map((item) => {
               const Icon = item.icon;
               return (
                 <div
                   key={item.label}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[10px] font-medium",
+                    "flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[10px] font-medium sm:px-2",
                     item.active
                       ? "bg-[#3b82f6] text-white"
-                      : "text-slate-300"
+                      : "text-slate-300",
+                    !compact && "justify-center sm:justify-start"
                   )}
                 >
                   <Icon className="size-3 shrink-0" />
-                  {!compact ? <span className="truncate">{item.label}</span> : null}
+                  {!compact ? (
+                    <span className="truncate hidden sm:inline">{item.label}</span>
+                  ) : null}
                 </div>
               );
             })}
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1 p-3 sm:p-4">
+        <div className="min-w-0 flex-1 p-2.5 sm:p-4">
           {!compact ? (
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>

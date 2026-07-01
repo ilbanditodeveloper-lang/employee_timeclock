@@ -164,16 +164,24 @@ export default function LandingPage() {
             <a href="#precios" className="hover:text-blue-800">Precios</a>
             <a href="#faq" className="hover:text-blue-800">FAQ</a>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Link href="/acceso">
-              <Button variant="ghost" size="sm" className="hidden sm:inline-flex text-slate-700">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-700 px-2 sm:px-3 text-xs sm:text-sm"
+              >
                 Acceder
               </Button>
             </Link>
             <a href={`#${PRICING_SECTION_ID}`}>
-              <Button size="sm" className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5">
-                <Building2 className="size-4" />
-                <span className="hidden sm:inline">{REGISTER_NOW_LABEL}</span>
+              <Button
+                size="sm"
+                className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5 px-2 sm:px-3"
+              >
+                <Building2 className="size-4 shrink-0" />
+                <span className="hidden md:inline">{REGISTER_NOW_LABEL}</span>
+                <span className="md:hidden text-xs">Registrar</span>
               </Button>
             </a>
           </div>
@@ -337,7 +345,9 @@ export default function LandingPage() {
               </Button>
             </Link>
           </div>
-          <LandingDashboardMockup />
+          <div className="w-full min-w-0 overflow-x-auto pb-1 lg:overflow-visible">
+            <LandingDashboardMockup className="min-w-[min(100%,340px)]" />
+          </div>
         </div>
       </section>
 
