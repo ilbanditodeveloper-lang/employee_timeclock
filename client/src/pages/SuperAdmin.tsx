@@ -492,7 +492,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Botón WhatsApp / demo</Label>
+                      <Label>Texto botón principal (hero / cabecera)</Label>
                       <Input
                         value={landingDraft.hero.ctaWhatsappLabel}
                         onChange={(e) => updateHero({ ctaWhatsappLabel: e.target.value })}

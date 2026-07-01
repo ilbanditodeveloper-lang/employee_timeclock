@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,7 +13,6 @@ import { trpc } from "@/lib/trpc";
 import { isCheckoutPlan } from "@shared/stripeConfig";
 import {
   DEFAULT_LANDING_PAGE_CONFIG,
-  buildWhatsAppHref,
   resolveFaqAnswer,
   type LandingPageConfig,
 } from "@shared/landingConfig";
@@ -27,7 +26,6 @@ import {
   FileDown,
   LayoutDashboard,
   MapPin,
-  MessageCircle,
   Play,
   Shield,
   Smartphone,
@@ -36,7 +34,8 @@ import { cn } from "@/lib/utils";
 import { LandingHeroBackground } from "@/components/LandingHeroBackground";
 import LandingDashboardMockup from "@/components/LandingDashboardMockup";
 
-const WHATSAPP_MSG = "Hola, me gustaría una demo de TimeClock para mi negocio.";
+const REGISTER_NOW_LABEL = "Registra tu negocio ahora";
+const PRICING_SECTION_ID = "precios";
 
 const features = [
   {
@@ -126,22 +125,10 @@ export default function LandingPage() {
   const config = useLandingConfig();
   const appConfig = trpc.publicApi.getAppConfig.useQuery();
   const stripeEnabled = appConfig.data?.stripe?.enabled ?? false;
-
-  const waHref = useMemo(
-    () => buildWhatsAppHref(config.whatsappNumber, WHATSAPP_MSG) ?? "/register-business",
-    [config.whatsappNumber]
-  );
-  const waExternal = waHref.startsWith("http");
   const { hero } = config;
 
-  const pricingCtaHref = (packId: string) => {
-    if (stripeEnabled && isCheckoutPlan(packId)) {
-      return `/register-business?plan=${packId}`;
-    }
-    return waExternal ? waHref : "/register-business";
-  };
-  const pricingCtaExternal = (packId: string) =>
-    !(stripeEnabled && isCheckoutPlan(packId)) && waExternal;
+  const pricingCtaHref = (packId: string) =>
+    isCheckoutPlan(packId) ? `/register-business?plan=${packId}` : "/register-business";
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -183,21 +170,12 @@ export default function LandingPage() {
                 Acceder
               </Button>
             </Link>
-            {waExternal ? (
-              <a href={waHref} target="_blank" rel="noreferrer">
-                <Button size="sm" className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5">
-                  <MessageCircle className="size-4" />
-                  <span className="hidden sm:inline">{hero.ctaWhatsappLabel}</span>
-                </Button>
-              </a>
-            ) : (
-              <Link href="/register-business">
-                <Button size="sm" className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5">
-                  <MessageCircle className="size-4" />
-                  <span className="hidden sm:inline">Probar gratis</span>
-                </Button>
-              </Link>
-            )}
+            <a href={`#${PRICING_SECTION_ID}`}>
+              <Button size="sm" className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5">
+                <Building2 className="size-4" />
+                <span className="hidden sm:inline">{REGISTER_NOW_LABEL}</span>
+              </Button>
+            </a>
           </div>
         </div>
       </header>
@@ -216,21 +194,12 @@ export default function LandingPage() {
             </h1>
             <p className="mt-5 text-lg text-blue-100/90 max-w-xl">{hero.subtitle}</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              {waExternal ? (
-                <a href={waHref} target="_blank" rel="noreferrer">
-                  <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
-                    <MessageCircle className="size-5" />
-                    {hero.ctaWhatsappLabel}
-                  </Button>
-                </a>
-              ) : (
-                <Link href="/register-business">
-                  <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
-                    {hero.ctaTrialLabel}
-                    <ArrowRight className="size-4" />
-                  </Button>
-                </Link>
-              )}
+              <a href={`#${PRICING_SECTION_ID}`}>
+                <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
+                  <Building2 className="size-5" />
+                  {REGISTER_NOW_LABEL}
+                </Button>
+              </a>
               <a href="#funciones">
                 <Button
                   size="lg"
@@ -373,7 +342,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing + FAQ */}
-      <section id="precios" className="py-20 bg-slate-50">
+      <section id={PRICING_SECTION_ID} className="py-20 bg-slate-50">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Planes y precios</h2>
@@ -415,33 +384,18 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                {pricingCtaExternal(pack.id) ? (
-                  <a href={pricingCtaHref(pack.id)} target="_blank" rel="noreferrer" className="w-full">
-                    <Button
-                      className={cn(
-                        "w-full",
-                        pack.highlighted
-                          ? "bg-blue-700 hover:bg-blue-800"
-                          : "bg-slate-900 hover:bg-slate-800"
-                      )}
-                    >
-                      {pack.ctaLabel}
-                    </Button>
-                  </a>
-                ) : (
-                  <Link href={pricingCtaHref(pack.id)}>
-                    <Button
-                      className={cn(
-                        "w-full",
-                        pack.highlighted
-                          ? "bg-blue-700 hover:bg-blue-800"
-                          : "bg-slate-900 hover:bg-slate-800"
-                      )}
-                    >
-                      {stripeEnabled && isCheckoutPlan(pack.id) ? "Contratar plan" : pack.ctaLabel}
-                    </Button>
-                  </Link>
-                )}
+                <Link href={pricingCtaHref(pack.id)}>
+                  <Button
+                    className={cn(
+                      "w-full",
+                      pack.highlighted
+                        ? "bg-blue-700 hover:bg-blue-800"
+                        : "bg-slate-900 hover:bg-slate-800"
+                    )}
+                  >
+                    {pack.ctaLabel}
+                  </Button>
+                </Link>
               </Card>
             ))}
           </div>
@@ -473,23 +427,17 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold mb-4 sm:text-4xl">{hero.footerTitle}</h2>
           <p className="text-blue-100 mb-8">{hero.footerSubtitle}</p>
           <div className="flex flex-wrap justify-center gap-3">
-            {waExternal ? (
-              <a href={waHref} target="_blank" rel="noreferrer">
-                <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
-                  <MessageCircle className="size-5" />
-                  {hero.ctaWhatsappLabel}
-                </Button>
-              </a>
-            ) : null}
+            <a href={`#${PRICING_SECTION_ID}`}>
+              <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
+                <Building2 className="size-5" />
+                {REGISTER_NOW_LABEL}
+              </Button>
+            </a>
             <Link href="/register-business">
               <Button
                 size="lg"
-                variant={waExternal ? "outline" : "default"}
-                className={cn(
-                  waExternal
-                    ? "border-blue-400 text-white hover:bg-blue-800"
-                    : "bg-white text-blue-900 hover:bg-blue-50"
-                )}
+                variant="outline"
+                className="border-blue-400 text-white hover:bg-blue-800"
               >
                 {hero.footerCtaRegisterLabel}
               </Button>

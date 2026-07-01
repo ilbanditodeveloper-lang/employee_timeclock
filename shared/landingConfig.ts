@@ -33,8 +33,8 @@ export const landingHeroSchema = z.object({
     .default(
       "Tus empleados fichan desde el móvil, tablet o PC. Tú tienes un panel claro con seguimiento en vivo, informes y vacaciones."
     ),
-  ctaWhatsappLabel: z.string().default("Pedir demo por WhatsApp"),
-  ctaTrialLabel: z.string().default("Empezar prueba gratis"),
+  ctaWhatsappLabel: z.string().default("Registra tu negocio ahora"),
+  ctaTrialLabel: z.string().default("Registra tu negocio ahora"),
   ctaSecondaryLabel: z.string().default("Ver cómo funciona"),
   trustBadges: z.array(z.string().min(1)).min(1).max(6),
   footerTitle: z
@@ -42,7 +42,7 @@ export const landingHeroSchema = z.object({
     .default("Empieza a controlar los horarios de tu equipo hoy mismo"),
   footerSubtitle: z
     .string()
-    .default("Regístrate en minutos o contacta con nosotros para una demo personalizada."),
+    .default("Regístrate en minutos: elige tu plan y empieza la prueba gratis."),
   footerCtaRegisterLabel: z.string().default("Crear cuenta gratis"),
 });
 
