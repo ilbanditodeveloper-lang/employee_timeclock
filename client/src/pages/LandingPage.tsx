@@ -19,16 +19,20 @@ import {
 } from "@shared/landingConfig";
 import {
   ArrowRight,
+  AlertCircle,
   BarChart3,
   Building2,
+  Calendar,
   CalendarDays,
   Check,
   Clock,
   FileDown,
+  House,
   LayoutDashboard,
   MapPin,
   MessageCircle,
-  Play,
+  Palmtree,
+  Pause,
   Shield,
   Smartphone,
 } from "lucide-react";
@@ -98,26 +102,78 @@ function useLandingConfig(): LandingPageConfig {
 }
 
 function PhoneMockup() {
+  const navItems = [
+    { label: "Inicio", icon: House, active: true },
+    { label: "Vacaciones", icon: Palmtree },
+    { label: "Calendario", icon: Calendar },
+    { label: "Horario", icon: CalendarDays },
+  ] as const;
+
   return (
     <div className="relative mx-auto w-[220px] rounded-[2rem] border-[6px] border-slate-800 bg-slate-900 p-2 shadow-2xl">
-      <div className="rounded-[1.4rem] bg-gradient-to-b from-blue-50 to-white p-4 min-h-[360px]">
-        <div className="text-center mb-4">
-          <div className="inline-flex size-10 items-center justify-center rounded-xl bg-blue-700 text-white mb-2">
-            <Clock className="size-5" />
-          </div>
-          <p className="text-xs font-semibold text-slate-800">TimeClock</p>
-          <p className="text-[10px] text-slate-500">martes, 30 jun</p>
-        </div>
-        <p className="text-3xl font-bold text-center text-slate-900 mb-1">09:02</p>
-        <p className="text-[10px] text-center text-slate-500 mb-6">Horario de Madrid</p>
-        <div className="space-y-2">
-          <div className="rounded-xl bg-blue-700 text-white text-center py-3 text-sm font-semibold">
-            Fichar entrada
-          </div>
-          <div className="rounded-xl border border-slate-200 text-slate-400 text-center py-3 text-sm">
-            Fichar salida
+      <div className="flex min-h-[440px] flex-col overflow-hidden rounded-[1.4rem] bg-white">
+        <div className="border-b border-slate-100 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-800 text-white">
+              <Clock className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-slate-900">Fichaje</p>
+              <p className="text-[8px] text-slate-500">Entrada, salida y pausas</p>
+            </div>
           </div>
         </div>
+
+        <div className="flex flex-1 flex-col px-3 py-3">
+          <div className="mb-3 text-center">
+            <p className="text-[26px] font-bold leading-none text-slate-900">09:02</p>
+            <p className="mt-1 text-[9px] text-slate-500">martes, 30 jun</p>
+            <p className="text-[8px] text-slate-400">Horario de Madrid</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-blue-700 py-2.5 text-white">
+              <Clock className="size-3.5" />
+              <span className="text-[10px] font-semibold">Entrada</span>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-blue-200 bg-white py-2.5 text-blue-900">
+              <Pause className="size-3.5" />
+              <span className="text-[10px] font-semibold">Pausa</span>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-slate-200 bg-white py-2.5 text-slate-800">
+              <Clock className="size-3.5" />
+              <span className="text-[10px] font-semibold">Salida</span>
+            </div>
+            <div className="flex items-center justify-center gap-1 rounded-xl border-2 border-blue-200 bg-white py-2 text-blue-900">
+              <AlertCircle className="size-3.5 shrink-0" />
+              <span className="text-[9px] font-semibold">Reportar Incidencia</span>
+            </div>
+          </div>
+
+          <div className="mt-auto rounded-lg bg-blue-50 px-2 py-1.5 text-center text-[8px] text-slate-600">
+            Estado actual: <span className="font-semibold text-slate-800">No fichado</span>
+          </div>
+        </div>
+
+        <nav className="grid grid-cols-4 gap-0.5 border-t border-blue-100 bg-white p-1.5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.label}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-[7px] font-medium",
+                  item.active
+                    ? "bg-blue-600 text-white"
+                    : "text-slate-600"
+                )}
+              >
+                <Icon className="size-3" />
+                {item.label}
+              </div>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );
