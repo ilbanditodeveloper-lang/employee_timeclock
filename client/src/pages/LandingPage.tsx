@@ -119,7 +119,7 @@ function PhoneMockup() {
               <Clock className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-bold text-slate-900">Fichaje</p>
+              <p className="text-[11px] font-bold text-slate-900">TimeClock</p>
               <p className="text-[8px] text-slate-500">Entrada, salida y pausas</p>
             </div>
           </div>
