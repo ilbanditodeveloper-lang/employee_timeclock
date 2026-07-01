@@ -144,7 +144,6 @@ export default function SuperAdminCompaniesPanel({
     const active = companies.filter((c) => c.isActive);
     const trialsExpiring = active.filter(
       (c) =>
-        c.subscriptionPlan === "trial" &&
         c.trialDaysRemaining != null &&
         c.trialDaysRemaining <= 7 &&
         !c.trialExpired
@@ -484,10 +483,12 @@ export default function SuperAdminCompaniesPanel({
                           <AlertTriangle className="size-3" /> Seguimiento vencido
                         </span>
                       ) : null}
-                      {company.trialDaysRemaining != null && company.trialDaysRemaining <= 3 ? (
-                        <span className="text-xs text-sky-700">
-                          Trial: {company.trialDaysRemaining}d
+                      {company.trialDaysRemaining != null && !company.trialExpired ? (
+                        <span className="text-xs text-sky-700 font-medium">
+                          {company.trialDaysRemaining}d para pagar
                         </span>
+                      ) : company.trialExpired ? (
+                        <span className="text-xs text-red-700">Prueba vencida</span>
                       ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -690,14 +691,17 @@ export default function SuperAdminCompaniesPanel({
                               </option>
                             ))}
                           </select>
-                          {subscriptionForm.plan === "trial" ? (
-                            <Input
-                              type="datetime-local"
-                              value={subscriptionForm.trialEndsAt}
-                              onChange={(e) =>
-                                setSubscriptionForm((p) => ({ ...p, trialEndsAt: e.target.value }))
-                              }
-                            />
+                          {subscriptionForm.plan !== "legacy" ? (
+                            <div className="space-y-1">
+                              <Label className="text-xs">Fin periodo de prueba / pago</Label>
+                              <Input
+                                type="datetime-local"
+                                value={subscriptionForm.trialEndsAt}
+                                onChange={(e) =>
+                                  setSubscriptionForm((p) => ({ ...p, trialEndsAt: e.target.value }))
+                                }
+                              />
+                            </div>
                           ) : null}
                           <Input
                             placeholder="Estado facturación"

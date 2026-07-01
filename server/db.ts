@@ -383,7 +383,9 @@ export type RegisterBusinessParams = {
   country: string;
   timezone: string;
   address?: string;
+  phone?: string;
   trialDays?: number;
+  selectedPlan?: "starter" | "pro" | "enterprise";
 };
 
 export type RegisterBusinessResult = {
@@ -412,6 +414,7 @@ export async function registerBusinessTenant(
   const baseUsername = sanitizeAdminUsernameFromEmail(normalizedEmail);
   const restaurantAddress = params.address?.trim() || "Pendiente de configurar";
   const now = new Date();
+  const subscriptionPlan = params.selectedPlan ?? "starter";
 
   try {
     return await db.transaction(async (tx) => {
@@ -429,8 +432,11 @@ export async function registerBusinessTenant(
         dataRetentionYears: 4,
         termsAcceptedAt: now,
         onboardingCompleted: false,
-        subscriptionPlan: "trial",
+        subscriptionPlan,
         trialEndsAt: addTrialDays(now, params.trialDays && params.trialDays > 0 ? params.trialDays : undefined),
+        crmStage: "trial",
+        crmContactName: params.adminName.trim(),
+        crmContactPhone: params.phone?.trim() || null,
         isActive: true,
       })
       .returning();

@@ -223,6 +223,7 @@ export const appRouter = router({
             timezone: z.string().trim().min(1).default("Europe/Madrid"),
             phone: z.string().trim().optional(),
             address: z.string().trim().optional(),
+            selectedPlan: z.enum(CHECKOUT_PLANS).optional(),
             acceptedTerms: z.boolean().refine((value) => value === true, {
               message: "Debes aceptar los términos y la política de privacidad",
             }),
@@ -253,7 +254,9 @@ export const appRouter = router({
             country: input.country,
             timezone: input.timezone,
             address: input.address,
+            phone: input.phone,
             trialDays: landing.trialDays,
+            selectedPlan: input.selectedPlan,
           });
         } catch (error) {
           if (isUniqueViolation(error)) {
@@ -498,7 +501,7 @@ export const appRouter = router({
           .update(companies)
           .set({
             subscriptionPlan: plan,
-            trialEndsAt: plan === "trial" ? trialEndsAt : null,
+            trialEndsAt,
             ...(input.billingStatus !== undefined ? { billingStatus: input.billingStatus } : {}),
             ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
             updatedAt: new Date(),

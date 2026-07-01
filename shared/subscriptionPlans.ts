@@ -114,12 +114,53 @@ export function getTrialDaysRemaining(trialEndsAt: Date | null | undefined, now 
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }
 
+export function hasPaidSubscriptionActive(company: {
+  stripeSubscriptionId?: string | null;
+  billingStatus?: string | null;
+}): boolean {
+  if (!company.stripeSubscriptionId?.trim()) return false;
+  const status = company.billingStatus ?? "";
+  return status === "active" || status === "trialing";
+}
+
+/** Periodo de prueba gratis antes del primer pago (trial genérico o plan elegido sin Stripe). */
+export function isInFreeTrialCountdown(
+  company: {
+    subscriptionPlan?: string | null;
+    trialEndsAt?: Date | null;
+    stripeSubscriptionId?: string | null;
+    billingStatus?: string | null;
+  },
+  now = new Date()
+): boolean {
+  if (hasPaidSubscriptionActive(company)) return false;
+  const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
+  if (plan === "legacy") return false;
+  if (!company.trialEndsAt) return false;
+  return company.trialEndsAt.getTime() > now.getTime();
+}
+
+export function getTrialDaysRemainingForCompany(
+  company: {
+    subscriptionPlan?: string | null;
+    trialEndsAt?: Date | null;
+    stripeSubscriptionId?: string | null;
+    billingStatus?: string | null;
+  },
+  now = new Date()
+): number | null {
+  if (!isInFreeTrialCountdown(company, now)) return null;
+  return getTrialDaysRemaining(company.trialEndsAt, now);
+}
+
 export function isTrialExpired(
   plan: SubscriptionPlan,
   trialEndsAt: Date | null | undefined,
-  now = new Date()
+  now = new Date(),
+  billing?: { stripeSubscriptionId?: string | null; billingStatus?: string | null }
 ): boolean {
-  if (plan !== "trial") return false;
+  if (billing && hasPaidSubscriptionActive(billing)) return false;
+  if (plan === "legacy") return false;
   if (!trialEndsAt) return false;
   return trialEndsAt.getTime() <= now.getTime();
 }
@@ -149,7 +190,7 @@ export function getSubscriptionViolationReason(
     return "billing_blocked";
   }
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
-  if (isTrialExpired(plan, company.trialEndsAt, now)) {
+  if (isTrialExpired(plan, company.trialEndsAt, now, company)) {
     return "trial_expired";
   }
   const limit = getPlanEmployeeLimit(plan);
@@ -198,16 +239,15 @@ export function getSubscriptionAccessStatus(
   const employeeLimit = getPlanEmployeeLimit(plan);
   const locationLimit = getPlanLocationLimit(plan);
   const billingBlocked = isBillingAccessBlocked(company);
-  const trialDaysRemaining =
-    plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt, now) : null;
-  const trialExpired = isTrialExpired(plan, company.trialEndsAt, now);
+  const trialDaysRemaining = getTrialDaysRemainingForCompany(company, now);
+  const trialExpired = isTrialExpired(plan, company.trialEndsAt, now, company);
   const atEmployeeLimit = employeeLimit != null && employeeCount >= employeeLimit;
   const accessBlocked = trialExpired || atEmployeeLimit || billingBlocked;
 
   let bannerMessage: string | null = null;
   if (billingBlocked) {
     bannerMessage = BILLING_BLOCKED_MSG;
-  } else if (plan === "trial" && !trialExpired && trialDaysRemaining != null) {
+  } else if (trialDaysRemaining != null && !trialExpired) {
     if (trialDaysRemaining === 0) {
       bannerMessage = "Tu periodo de prueba termina hoy.";
     } else if (trialDaysRemaining === 1) {
@@ -241,7 +281,8 @@ export function getSubscriptionAccessStatus(
     billingBlocked,
     stripeEnabled: options?.stripeEnabled ?? false,
     accessBlocked,
-    showTrialBanner: plan === "trial" && !trialExpired && trialDaysRemaining != null && !billingBlocked,
+    showTrialBanner:
+      trialDaysRemaining != null && !trialExpired && !billingBlocked,
     showLimitBanner: atEmployeeLimit && !trialExpired && !billingBlocked,
     showBillingBanner: billingBlocked,
     bannerMessage,
@@ -267,7 +308,7 @@ export function assertSubscriptionAllowsAccess(company: {
   }
   assertBillingAllowsAccess(company);
   const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
-  if (isTrialExpired(plan, company.trialEndsAt)) {
+  if (isTrialExpired(plan, company.trialEndsAt, undefined, company)) {
     throw new Error(SUBSCRIPTION_TRIAL_EXPIRED_MSG);
   }
 }

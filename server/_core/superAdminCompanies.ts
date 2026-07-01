@@ -1,10 +1,10 @@
 import type { Company } from "../../drizzle/schema";
 import {
   getPlanEmployeeLimit,
-  getTrialDaysRemaining,
   isTrialExpired,
   getSuperAdminSubscriptionLabel,
   getSubscriptionPlanLabel,
+  getTrialDaysRemainingForCompany,
   type SubscriptionPlan,
   type PricingPackNameSource,
 } from "@shared/subscriptionPlans";
@@ -59,8 +59,8 @@ export function enrichSuperAdminCompany(
     planLabel: getSuperAdminSubscriptionLabel(plan),
     planName: getSubscriptionPlanLabel(plan, pricingPacks),
     planEmployeeLimit: employeeLimit,
-    trialDaysRemaining: plan === "trial" ? getTrialDaysRemaining(company.trialEndsAt, now) : null,
-    trialExpired: isTrialExpired(plan, company.trialEndsAt, now),
+    trialDaysRemaining: getTrialDaysRemainingForCompany(company, now),
+    trialExpired: isTrialExpired(plan, company.trialEndsAt, now, company),
     billingStatus: company.billingStatus ?? null,
     stripeCustomerId: company.stripeCustomerId ?? null,
     crmStage: (company.crmStage ?? "trial") as CrmStage,

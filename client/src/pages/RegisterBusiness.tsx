@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Building2, CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +8,8 @@ import AccessPageShell from "@/components/AccessPageShell";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { isCheckoutPlan, type CheckoutPlan } from "@shared/stripeConfig";
+import { CHECKOUT_PLANS, isCheckoutPlan, type CheckoutPlan } from "@shared/stripeConfig";
+import { cn } from "@/lib/utils";
 
 type SuccessData = {
   companySlug: string;
@@ -29,9 +30,10 @@ export default function RegisterBusiness() {
   const [, setLocation] = useLocation();
   const { setAdminSession, setEmployeeSession } = useAuthContext();
   const configQuery = trpc.publicApi.getAppConfig.useQuery();
+  const landingQuery = trpc.publicApi.getLandingPageConfig.useQuery();
   const registerBusiness = trpc.publicApi.registerBusiness.useMutation();
   const checkout = trpc.publicApi.createCheckoutSession.useMutation();
-  const selectedPlan = useMemo(() => {
+  const planFromUrl = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const plan = params.get("plan");
     return plan && isCheckoutPlan(plan) ? (plan as CheckoutPlan) : null;
@@ -41,6 +43,34 @@ export default function RegisterBusiness() {
   }, []);
 
   const [promotionCode, setPromotionCode] = useState(initialPromo);
+  const [selectedPlan, setSelectedPlan] = useState<CheckoutPlan>("pro");
+
+  const checkoutPlans = useMemo(() => {
+    const packs = landingQuery.data?.pricingPacks ?? [];
+    return CHECKOUT_PLANS.map((id) => {
+      const pack = packs.find((p) => p.id === id);
+      return {
+        id,
+        name: pack?.name ?? id,
+        price: pack ? `${pack.price}${pack.priceSuffix}` : "",
+        description: pack?.description ?? "",
+        highlighted: pack?.highlighted ?? false,
+      };
+    });
+  }, [landingQuery.data?.pricingPacks]);
+
+  const trialDays = landingQuery.data?.trialDays ?? 14;
+  const trialHeadline =
+    landingQuery.data?.trialHeadline ?? `${trialDays} días de prueba gratis`;
+
+  useEffect(() => {
+    if (planFromUrl) {
+      setSelectedPlan(planFromUrl);
+      return;
+    }
+    const highlighted = checkoutPlans.find((p) => p.highlighted);
+    if (highlighted) setSelectedPlan(highlighted.id);
+  }, [planFromUrl, checkoutPlans]);
 
   const [businessName, setBusinessName] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -86,6 +116,7 @@ export default function RegisterBusiness() {
         timezone,
         phone: phone.trim() || undefined,
         address: address.trim() || undefined,
+        selectedPlan,
         acceptedTerms: true,
       });
 
@@ -95,7 +126,7 @@ export default function RegisterBusiness() {
       });
       setEmployeeSession(null);
 
-      if (selectedPlan && configQuery.data?.stripe?.enabled) {
+      if (planFromUrl && configQuery.data?.stripe?.enabled) {
         try {
           const { url } = await checkout.mutateAsync({
             plan: selectedPlan,
@@ -325,6 +356,53 @@ export default function RegisterBusiness() {
           />
         </div>
 
+        <div>
+          <p className="mb-2 block text-sm font-medium text-slate-900">Plan de suscripción *</p>
+          <p className="mb-3 text-xs text-slate-600">
+            {trialHeadline}. Elige el plan que quieres contratar después de la prueba.
+          </p>
+          <div className="space-y-2">
+            {checkoutPlans.map((plan) => (
+              <label
+                key={plan.id}
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors",
+                  selectedPlan === plan.id
+                    ? "border-blue-500 bg-blue-50/60 ring-1 ring-blue-500/30"
+                    : "border-blue-100 bg-blue-50/30 hover:border-blue-200"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="subscription-plan"
+                  value={plan.id}
+                  checked={selectedPlan === plan.id}
+                  onChange={() => setSelectedPlan(plan.id)}
+                  className="mt-1"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-slate-900">{plan.name}</span>
+                    {plan.price ? (
+                      <span className="text-sm text-slate-600">{plan.price}</span>
+                    ) : null}
+                    {plan.highlighted ? (
+                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">
+                        Popular
+                      </span>
+                    ) : null}
+                  </span>
+                  {plan.description ? (
+                    <span className="mt-1 block text-xs text-slate-600 line-clamp-2">
+                      {plan.description}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-start gap-3">
           <Checkbox
             id="terms"
@@ -350,7 +428,7 @@ export default function RegisterBusiness() {
           </p>
         ) : null}
 
-        {selectedPlan && configQuery.data?.stripe?.enabled ? (
+        {planFromUrl && configQuery.data?.stripe?.enabled ? (
           <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-2">
             <label className="block text-sm font-medium text-slate-900" htmlFor="promo-code">
               Código promocional (opcional)
