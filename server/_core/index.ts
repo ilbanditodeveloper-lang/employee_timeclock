@@ -122,26 +122,42 @@ async function startServer() {
 
   app.use(securityHeaders);
 
-  const corsOptions: CorsOptions = {
-    origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-        if (!origin) return callback(null, true);
-        if (!ENV.isProduction && localhostOriginRegex.test(origin)) {
-          return callback(null, true);
-        }
-        if (ENV.isProduction && allowedOrigins.length === 0) {
-          return callback(new Error("CORS blocked: configure FRONTEND_URL or VITE_APP_URL"));
-        }
-        if (!ENV.isProduction && allowedOrigins.length === 0) {
-          return callback(null, true);
-        }
-        return allowedOrigins.includes(origin)
-          ? callback(null, true)
-          : callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
-    credentials: true,
+  const isOriginAllowed = (
+    origin: string | undefined,
+    requestHost: string | undefined
+  ): boolean => {
+    if (!origin) return true;
+    if (!ENV.isProduction && localhostOriginRegex.test(origin)) return true;
+    if (allowedOrigins.includes(origin)) return true;
+    if (requestHost) {
+      try {
+        if (new URL(origin).host === requestHost) return true;
+      } catch {
+        // ignore malformed origin
+      }
+    }
+    if (!ENV.isProduction && allowedOrigins.length === 0) return true;
+    return false;
   };
 
-  app.use(cors(corsOptions));
+  // CORS solo en /api — el middleware global rompía assets con atributo crossorigin.
+  app.use("/api", (req, res, next) => {
+    const corsOptions: CorsOptions = {
+      origin(origin, callback) {
+        if (ENV.isProduction && allowedOrigins.length === 0 && !origin) {
+          callback(new Error("CORS blocked: configure FRONTEND_URL or VITE_APP_URL"));
+          return;
+        }
+        if (isOriginAllowed(origin, req.get("host") ?? undefined)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`CORS blocked for origin: ${origin}`));
+      },
+      credentials: true,
+    };
+    cors(corsOptions)(req, res, next);
+  });
 
   app.post(
     "/api/stripe/webhook",

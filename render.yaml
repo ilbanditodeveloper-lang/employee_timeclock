@@ -28,3 +28,5 @@ services:
         sync: false
       - key: VITE_APP_URL
         sync: false
+      # En Render, usa ambos dominios si aplica:
+      # FRONTEND_URL=https://timeclockapp.es,https://employee-timeclock-1.onrender.com
