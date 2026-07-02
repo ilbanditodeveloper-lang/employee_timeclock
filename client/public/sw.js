@@ -1,4 +1,4 @@
-const CACHE_NAME = "timeclock-v3";
+const CACHE_NAME = "timeclock-v4";
 const PRECACHE_URLS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", event => {
@@ -47,8 +47,10 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+          }
           return response;
         })
         .catch(() =>
