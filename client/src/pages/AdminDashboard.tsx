@@ -252,10 +252,8 @@ export default function AdminDashboard() {
   );
   const updateTimeclock = trpc.publicApi.updateTimeclock.useMutation();
   const adminForceClockOut = trpc.publicApi.adminForceClockOut.useMutation();
-  const deleteTimeclock = trpc.publicApi.deleteTimeclock.useMutation();
   const deactivateEmployee = trpc.publicApi.deactivateEmployee.useMutation();
   const sendTestNotification = trpc.publicApi.sendTestNotification.useMutation();
-  const clearAllTimeclocks = trpc.publicApi.clearAllTimeclocks.useMutation();
   const clearAllIncidents = trpc.publicApi.clearAllIncidents.useMutation();
   const decideIncident = trpc.publicApi.decideIncident.useMutation({
     onSuccess: (_data, variables) => {
@@ -783,42 +781,13 @@ export default function AdminDashboard() {
         correctionReason: editingCorrectionReason.trim(),
       })
       .then(() => {
-        toast.success('Fichaje corregido (queda registrado en auditoría)');
+        toast.success('Fichaje actualizado (queda registrado en auditoría)');
         handleCancelTimeclockEdit();
         setEditingCorrectionReason('');
         timeclocksQuery.refetch();
       })
       .catch((error) => {
         toast.error(error?.message || 'No se pudo actualizar el fichaje');
-        console.error(error);
-      });
-  };
-
-  const handleDeleteTimeclock = (entry: { id: number; entryTime?: string | Date | null }) => {
-    const when = entry.entryTime ? new Date(entry.entryTime).toLocaleString("es-ES") : `#${entry.id}`;
-    const voidReason = window.prompt(
-      `Motivo de anulación del fichaje (${when}). El registro no se borra, queda anulado con trazabilidad:`
-    );
-    if (!voidReason || voidReason.trim().length < 3) {
-      if (voidReason !== null) toast.error('Debes indicar un motivo de al menos 3 caracteres');
-      return;
-    }
-
-    deleteTimeclock
-      .mutateAsync({
-        ...adminApiInput(),
-        timeclockId: entry.id,
-        voidReason: voidReason.trim(),
-      })
-      .then(async () => {
-        if (editingTimeclockId === entry.id) {
-          handleCancelTimeclockEdit();
-        }
-        await timeclocksQuery.refetch();
-        toast.success('Fichaje anulado (conservado para auditoría)');
-      })
-      .catch((error) => {
-        toast.error(error?.message || 'No se pudo anular el fichaje');
         console.error(error);
       });
   };
@@ -838,47 +807,6 @@ export default function AdminDashboard() {
       })
       .catch((error) => {
         toast.error(error?.message || 'No se pudo enviar la notificación');
-        console.error(error);
-      });
-  };
-
-  const handleClearAllTimeclocks = () => {
-    const voidReason = window.prompt(
-      'Motivo de anulación masiva de fichajes (obligatorio). Los registros no se borran físicamente:'
-    );
-    if (!voidReason || voidReason.trim().length < 10) {
-      if (voidReason !== null) toast.error('Indica un motivo de al menos 10 caracteres');
-      return;
-    }
-
-    clearAllTimeclocks
-      .mutateAsync({
-        ...adminApiInput(),
-        employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
-        rangeStart: rangeStart || undefined,
-        rangeEnd: rangeEnd || undefined,
-        voidReason: voidReason.trim(),
-      })
-      .then(async (result) => {
-        const refetchResult = await timeclocksQuery.refetch();
-        if (refetchResult.error) {
-          throw refetchResult.error;
-        }
-        const voided = typeof result?.voided === 'number' ? result.voided : null;
-        if (voided === 0) {
-          toast.info('No había fichajes para anular');
-        } else {
-          toast.success(
-            voided ? `Se anularon ${voided} registros (conservados en auditoría)` : 'Fichajes anulados'
-          );
-        }
-        setEditingTimeclockId(null);
-        setEditingEntryTime('');
-        setEditingExitTime('');
-        setEditingCorrectionReason('');
-      })
-      .catch((error) => {
-        toast.error(error?.message || 'No se pudieron anular las horas');
         console.error(error);
       });
   };
@@ -1866,14 +1794,6 @@ export default function AdminDashboard() {
                   >
                     {sendTestNotification.isPending ? "Enviando..." : "Notificación de prueba"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={handleClearAllTimeclocks}
-                    disabled={clearAllTimeclocks.isPending}
-                  >
-                    {clearAllTimeclocks.isPending ? "Anulando..." : "Anular fichajes (masivo)"}
-                  </Button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1906,7 +1826,7 @@ export default function AdminDashboard() {
               <Accordion type="single" collapsible defaultValue="hours-register">
                 <AccordionItem value="hours-register">
                   <AccordionTrigger className="text-sm font-semibold text-foreground">
-                    Registro de horas ({filteredTimeclocks.length} fichajes, {totalHours.toFixed(2)} h sin anulados)
+                    Registro de horas ({filteredTimeclocks.length} fichajes, {totalHours.toFixed(2)} h)
                   </AccordionTrigger>
                   <AccordionContent className="pt-2">
                     <div className="space-y-2">
@@ -1949,23 +1869,13 @@ export default function AdminDashboard() {
                         )}
                         {editingTimeclockId !== entry.id && entry.status !== "voided" && (
                           <div className="mt-2">
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditTimeclock(entry)}
-                              >
-                                Corregir fichaje
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteTimeclock(entry)}
-                                disabled={deleteTimeclock.isPending}
-                              >
-                                Anular fichaje
-                              </Button>
-                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditTimeclock(entry)}
+                            >
+                              {entry.exitTime ? "Modificar fichaje" : "Completar entrada o salida"}
+                            </Button>
                           </div>
                         )}
                         {editingTimeclockId === entry.id && (
@@ -2048,12 +1958,12 @@ export default function AdminDashboard() {
                                 />
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
-                                Deja vacío si no hay salida registrada.
+                                Si olvidó fichar salida, indica aquí la hora de fin de jornada.
                               </p>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-foreground mb-1">
-                                Motivo de la corrección (obligatorio)
+                                Motivo del cambio (obligatorio)
                               </label>
                               <input
                                 type="text"
