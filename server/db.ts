@@ -1050,9 +1050,16 @@ export async function listAuditLogsByCompany(companyId: number, limit = 100) {
     .limit(limit);
 }
 
+export type WorkforceActiveClockRow = {
+  employeeId: number;
+  employeeName: string;
+  entryTime: string | null;
+  timeclockId: number;
+};
+
 export type WorkforceTodaySnapshot = {
-  working: { employeeId: number; employeeName: string; entryTime: string | null }[];
-  onBreak: { employeeId: number; employeeName: string; entryTime: string | null }[];
+  working: WorkforceActiveClockRow[];
+  onBreak: WorkforceActiveClockRow[];
   notClockedIn: { employeeId: number; employeeName: string }[];
   onTimeOff: { employeeId: number; employeeName: string; kind: string }[];
   finishedToday: { employeeId: number; employeeName: string; exitTime: string | null }[];
@@ -1084,6 +1091,7 @@ export async function getAdminWorkforceToday(
           employeeId: emp.id,
           employeeName: emp.name,
           entryTime: open.entryTime ? new Date(open.entryTime).toISOString() : null,
+          timeclockId: open.id,
         };
         if (getDemoOpenBreak(open.id)) onBreak.push(item);
         else working.push(item);
@@ -1143,6 +1151,7 @@ export async function getAdminWorkforceToday(
       employeeId: tc.employeeId,
       employeeName: nameById.get(tc.employeeId) ?? "—",
       entryTime: tc.entryTime ? new Date(tc.entryTime).toISOString() : null,
+      timeclockId: tc.id,
     };
     const openBreak = await getOpenBreakForTimeclock(tc.id, companyId);
     if (openBreak) onBreak.push(item);

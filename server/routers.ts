@@ -124,6 +124,7 @@ import {
   demoAcceptPrivacy,
   demoClockIn,
   demoClockOut,
+  demoAdminForceClockOut,
   demoPauseClock,
   demoResumeClock,
   demoCreateSuperCompany,
@@ -1234,6 +1235,72 @@ export const appRouter = router({
         oldValue: timeclock,
         newValue: { ...timeclock, ...updateData },
         reason: input.correctionReason,
+        performedByType: "admin",
+        performedById: admin.id,
+      });
+
+      return { success: true };
+    }),
+
+    adminForceClockOut: publicProcedure.input(
+      optionalCreds.extend({
+        timeclockId: z.number(),
+        exitTime: z.string().datetime().optional(),
+        reason: z.string().min(3).max(500),
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const { admin, company } = await resolveAdminAuth(ctx, input);
+      if (isDemoRequestActive()) {
+        const exitAt = input.exitTime ? new Date(input.exitTime) : new Date();
+        return demoAdminForceClockOut(input.timeclockId, input.reason.trim(), exitAt);
+      }
+      const restaurant = await resolveAdminRestaurantForCompany(
+        admin.id,
+        company.id,
+        (input as { restaurantId?: number }).restaurantId
+      );
+      if (!restaurant) throwBusinessError("Negocio no encontrado");
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
+      const employeeIds = new Set(restaurantEmployees.map((employee) => employee.id));
+
+      const timeclock = await getTimeclockById(input.timeclockId, company.id);
+      if (!timeclock || !employeeIds.has(timeclock.employeeId) || timeclock.status === "voided") {
+        throwBusinessError("Fichaje no encontrado");
+      }
+      if (timeclock.exitTime) {
+        throwBusinessError("Este fichaje ya tiene salida registrada");
+      }
+
+      const exitAt = input.exitTime ? new Date(input.exitTime) : new Date();
+      if (Number.isNaN(exitAt.getTime())) {
+        throwBusinessError("Fecha de salida inválida");
+      }
+      if (timeclock.entryTime && exitAt <= new Date(timeclock.entryTime)) {
+        throwBusinessError("La salida debe ser posterior a la entrada");
+      }
+
+      await closeOpenBreakForTimeclock(timeclock.id, company.id, exitAt);
+
+      const updateData = {
+        exitTime: exitAt,
+        status: "corrected" as const,
+        correctionReason: input.reason.trim(),
+        correctedByUserId: admin.id,
+        correctedAt: new Date(),
+      };
+
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(timeclocks).set(updateData).where(eq(timeclocks.id, input.timeclockId));
+
+      await writeAuditLog({
+        companyId: company.id,
+        entityType: "timeclock",
+        entityId: input.timeclockId,
+        action: "correct",
+        oldValue: timeclock,
+        newValue: { ...timeclock, ...updateData },
+        reason: input.reason.trim(),
         performedByType: "admin",
         performedById: admin.id,
       });

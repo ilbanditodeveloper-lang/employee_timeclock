@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings, Plus, ArrowLeft } from 'lucide-react';
+import { MapPin, Users, Calendar, AlertCircle, Clock3, Palmtree, Scale, ClipboardList, ChevronDown, LayoutDashboard, Settings, Plus, ArrowLeft, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
@@ -233,6 +233,7 @@ export default function AdminDashboard() {
     { enabled: isAdminAuthenticated }
   );
   const updateTimeclock = trpc.publicApi.updateTimeclock.useMutation();
+  const adminForceClockOut = trpc.publicApi.adminForceClockOut.useMutation();
   const deleteTimeclock = trpc.publicApi.deleteTimeclock.useMutation();
   const deactivateEmployee = trpc.publicApi.deactivateEmployee.useMutation();
   const sendTestNotification = trpc.publicApi.sendTestNotification.useMutation();
@@ -675,6 +676,33 @@ export default function AdminDashboard() {
     setEditingTimeclockId(null);
     setEditingEntryTime('');
     setEditingExitTime('');
+  };
+
+  const handleAdminForceClockOut = (row: { timeclockId: number; employeeName: string }) => {
+    if (!window.confirm(`¿Registrar salida manual para ${row.employeeName}?`)) return;
+    const reason = window.prompt(
+      'Motivo del cierre manual (mín. 3 caracteres):',
+      'Empleado terminó jornada sin fichar salida'
+    );
+    if (!reason || reason.trim().length < 3) {
+      if (reason !== null) toast.error('Debes indicar un motivo de al menos 3 caracteres');
+      return;
+    }
+    adminForceClockOut
+      .mutateAsync({
+        ...adminApiInput(),
+        timeclockId: row.timeclockId,
+        reason: reason.trim(),
+      })
+      .then(() => {
+        toast.success(`Salida registrada para ${row.employeeName}`);
+        void workforceTodayQuery.refetch();
+        void timeclocksQuery.refetch();
+        void trpcUtils.publicApi.getAdminTodayActivity.invalidate();
+      })
+      .catch((error) => {
+        toast.error(error?.message || 'No se pudo registrar la salida');
+      });
   };
 
   const handleSaveTimeclock = () => {
@@ -1163,12 +1191,25 @@ export default function AdminDashboard() {
                       {(workforceTodayQuery.data?.working ?? []).map((row) => (
                         <li
                           key={row.employeeId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-background/80 px-3 py-2"
+                          className="flex flex-col gap-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-background/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                         >
-                          <span className="font-medium text-foreground">{row.employeeName}</span>
-                          <span className="text-sm text-muted-foreground">
-                            Entrada {formatClockTime(row.entryTime)}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="font-medium text-foreground">{row.employeeName}</span>
+                            <span className="block text-sm text-muted-foreground sm:inline sm:ml-2">
+                              Entrada {formatClockTime(row.entryTime)}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            disabled={adminForceClockOut.isPending}
+                            onClick={() => handleAdminForceClockOut(row)}
+                          >
+                            <LogOut className="w-3.5 h-3.5 mr-1" />
+                            Fichar salida
+                          </Button>
                         </li>
                       ))}
                     </ul>
@@ -1190,12 +1231,25 @@ export default function AdminDashboard() {
                       {(workforceTodayQuery.data?.onBreak ?? []).map((row) => (
                         <li
                           key={row.employeeId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-background/80 px-3 py-2"
+                          className="flex flex-col gap-2 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-background/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                         >
-                          <span className="font-medium text-foreground">{row.employeeName}</span>
-                          <span className="text-sm text-muted-foreground">
-                            Entrada {formatClockTime(row.entryTime)}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="font-medium text-foreground">{row.employeeName}</span>
+                            <span className="block text-sm text-muted-foreground sm:inline sm:ml-2">
+                              Entrada {formatClockTime(row.entryTime)} · En pausa
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            disabled={adminForceClockOut.isPending}
+                            onClick={() => handleAdminForceClockOut(row)}
+                          >
+                            <LogOut className="w-3.5 h-3.5 mr-1" />
+                            Fichar salida
+                          </Button>
                         </li>
                       ))}
                     </ul>

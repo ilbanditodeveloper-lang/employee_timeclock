@@ -407,6 +407,23 @@ export function demoClockOut(employeeId: number) {
   return { success: true };
 }
 
+export function demoAdminForceClockOut(
+  timeclockId: number,
+  reason: string,
+  exitAt = new Date()
+) {
+  const open = timeclocks.find(
+    (t) => t.id === timeclockId && !t.exitTime && t.status !== "voided"
+  );
+  if (!open) throw new Error("Fichaje no encontrado o ya cerrado");
+  closeDemoOpenBreak(open.id, exitAt);
+  open.exitTime = exitAt;
+  open.status = "corrected";
+  open.correctionReason = reason;
+  open.updatedAt = new Date();
+  return { success: true };
+}
+
 export function demoAcceptPrivacy(employeeId: number, ip: string | null) {
   const existing = privacyAcceptances.find(
     (a) => a.employeeId === employeeId && a.documentVersion === EMPLOYEE_PRIVACY_NOTICE_VERSION
