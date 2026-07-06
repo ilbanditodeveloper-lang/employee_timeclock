@@ -22,7 +22,7 @@ import { getClientIp } from "./requestIp";
 import { GENERIC_AUTH_FAILURE_MSG, SESSION_AUTH_ERR_MSG, SESSION_INVALID_ERR_MSG } from "@shared/const";
 import { assertSubscriptionAllowsAccess } from "@shared/subscriptionPlans";
 import { loadCompanyAfterSubscriptionSync } from "./subscriptionEnforcement";
-import { throwAuthError } from "./errors";
+import { throwAuthError, throwBusinessError } from "./errors";
 import {
   getDemoAdmin,
   getDemoCompany,
@@ -55,12 +55,12 @@ export function requireSuperAdminCredentials(params: { username: string; passwor
   const expectedUsername = process.env.SUPERADMIN_USERNAME;
   const expectedPassword = process.env.SUPERADMIN_PASSWORD;
   if (!expectedUsername || !expectedPassword) {
-    throw new Error(
+    throwBusinessError(
       "Superadmin no configurado. Define SUPERADMIN_USERNAME y SUPERADMIN_PASSWORD en el entorno."
     );
   }
   if (params.username !== expectedUsername || params.password !== expectedPassword) {
-    throw new Error(GENERIC_AUTH_FAILURE_MSG);
+    throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
   }
 }
 
@@ -85,7 +85,7 @@ export async function requireAdminUser(params: {
     const normalizedEmail = raw.toLowerCase();
     const existingAdmin = await getAdminUserByEmail(normalizedEmail);
     if (!existingAdmin) {
-      throw new Error(GENERIC_AUTH_FAILURE_MSG);
+      throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
     }
     const company = await getCompanyById(existingAdmin.companyId);
     if (!company || !company.isActive) {
@@ -94,7 +94,7 @@ export async function requireAdminUser(params: {
 
     const check = verifyPassword(params.password, existingAdmin.password);
     if (!check.isValid) {
-      throw new Error(GENERIC_AUTH_FAILURE_MSG);
+      throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
     }
 
     if (check.needsUpgrade) {
@@ -120,7 +120,7 @@ export async function requireAdminUser(params: {
       const { user: existingAdmin, company } = matches[0];
       const check = verifyPassword(params.password, existingAdmin.password);
       if (!check.isValid) {
-        throw new Error(GENERIC_AUTH_FAILURE_MSG);
+        throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
       }
       if (check.needsUpgrade) {
         const db = await getDb();
@@ -150,12 +150,12 @@ export async function requireAdminUser(params: {
   }
 
   if ((existingAdmin.name ?? "") !== scoped.username) {
-    throw new Error(GENERIC_AUTH_FAILURE_MSG);
+    throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
   }
 
   const check = verifyPassword(params.password, existingAdmin.password);
   if (!check.isValid) {
-    throw new Error(GENERIC_AUTH_FAILURE_MSG);
+    throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
   }
 
   if (check.needsUpgrade) {
@@ -198,7 +198,7 @@ export async function validateEmployeeCredentials(params: {
         }
         const check = verifyPassword(params.password, employee.password);
         if (!check.isValid) {
-          throw new Error("Credenciales inválidas");
+          throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
         }
         if (check.needsUpgrade) {
           const db = await getDb();
@@ -242,7 +242,7 @@ export async function validateEmployeeCredentials(params: {
       return employee;
     }
 
-    throw new Error(GENERIC_AUTH_FAILURE_MSG);
+    throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
   }
 
   if (raw.includes("::") || params.companySlug) {
@@ -262,7 +262,7 @@ export async function validateEmployeeCredentials(params: {
 
     const check = verifyPassword(params.password, employee.password);
     if (!check.isValid) {
-      throw new Error("Credenciales inválidas");
+      throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
     }
 
     if (check.needsUpgrade) {
@@ -279,7 +279,7 @@ export async function validateEmployeeCredentials(params: {
     return employee;
   }
 
-  throw new Error(GENERIC_AUTH_FAILURE_MSG);
+  throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
 }
 
 type CredentialInput = { username?: string; password?: string };
