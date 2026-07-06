@@ -238,6 +238,16 @@ export default function AdminDashboard() {
   const sendTestNotification = trpc.publicApi.sendTestNotification.useMutation();
   const clearAllTimeclocks = trpc.publicApi.clearAllTimeclocks.useMutation();
   const clearAllIncidents = trpc.publicApi.clearAllIncidents.useMutation();
+  const decideIncident = trpc.publicApi.decideIncident.useMutation({
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.decision === "approved" ? "Incidencia aprobada" : "Incidencia rechazada"
+      );
+      void listIncidents.refetch();
+      void trpcUtils.publicApi.getAdminNotificationCenter.invalidate();
+    },
+    onError: (error) => toast.error(error.message || "No se pudo actualizar la incidencia"),
+  });
   const timeOffPendingQuery = trpc.publicApi.listTimeOffRequests.useQuery(
     { ...adminApiInput(), status: 'pending' },
     { enabled: Boolean(adminSession) }
@@ -2320,10 +2330,15 @@ export default function AdminDashboard() {
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h4 className="font-semibold text-foreground">
-                            {incident.type === "late_arrival" ? "Retraso en la entrada" : "Incidencia"}
+                            {incident.type === "late_arrival"
+                              ? "Retraso en la entrada"
+                              : incident.type === "early_exit"
+                              ? "Salida anticipada"
+                              : "Incidencia"}
                           </h4>
                           <p className="text-sm text-muted-foreground">
-                            Empleado #{incident.employeeId} - {formatClockDateShort(incident.createdAt)}
+                            {employeeNameById.get(incident.employeeId) || `Empleado #${incident.employeeId}`}{" "}
+                            · {formatClockDateShort(incident.createdAt)}
                           </p>
                         </div>
                         <span className={incident.status === "pending" ? "badge-warning" : incident.status === "approved" ? "badge-success" : "badge-error"}>
@@ -2331,6 +2346,40 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                       <p className="text-sm text-foreground mb-3">{incident.reason}</p>
+                      {incident.status === "pending" ? (
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            disabled={decideIncident.isPending}
+                            onClick={() =>
+                              decideIncident.mutate({
+                                ...adminApiInput(),
+                                incidentId: incident.id,
+                                decision: "approved",
+                              })
+                            }
+                          >
+                            Aprobar
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={decideIncident.isPending}
+                            onClick={() =>
+                              decideIncident.mutate({
+                                ...adminApiInput(),
+                                incidentId: incident.id,
+                                decision: "rejected",
+                              })
+                            }
+                          >
+                            Rechazar
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (

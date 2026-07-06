@@ -1007,6 +1007,49 @@ export const appRouter = router({
       return { success: true };
     }),
 
+    decideIncident: publicProcedure.input(
+      optionalCreds.extend({
+        incidentId: z.number(),
+        decision: z.enum(["approved", "rejected"]),
+      })
+    ).mutation(async ({ ctx, input }) => {
+      if (isDemoRequestActive()) {
+        await resolveAdminAuth(ctx, input);
+        return demoMutationSuccess();
+      }
+      const { admin, company } = await resolveAdminAuth(ctx, input);
+      const restaurant = await resolveAdminRestaurantForCompany(
+        admin.id,
+        company.id,
+        (input as { restaurantId?: number }).restaurantId
+      );
+      if (!restaurant) throw new Error("Negocio no encontrado");
+      const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
+      const employeeIds = new Set(restaurantEmployees.map((e) => e.id));
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [row] = await db
+        .select()
+        .from(incidents)
+        .where(
+          and(eq(incidents.id, input.incidentId), eq(incidents.companyId, company.id))
+        )
+        .limit(1);
+      if (!row) throw new Error("Incidencia no encontrada");
+      if (!employeeIds.has(row.employeeId)) throw new Error("No autorizado");
+      if (row.status !== "pending") {
+        throw new Error("Esta incidencia ya fue revisada");
+      }
+      await db
+        .update(incidents)
+        .set({
+          status: input.decision,
+          updatedAt: new Date(),
+        })
+        .where(eq(incidents.id, input.incidentId));
+      return { success: true };
+    }),
+
     listTimeclocks: publicProcedure.input(
       z.object({
         username: z.string().min(1).optional(),

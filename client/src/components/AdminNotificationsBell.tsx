@@ -55,8 +55,21 @@ export default function AdminNotificationsBell({
       toast.error(error.message || "No se pudo actualizar la solicitud");
     },
   });
+  const decideIncident = trpc.publicApi.decideIncident.useMutation({
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.decision === "approved" ? "Incidencia aprobada" : "Incidencia rechazada"
+      );
+      void query.refetch();
+      void trpcUtils.publicApi.listIncidents.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message || "No se pudo actualizar la incidencia");
+    },
+  });
   const total = query.data?.totalCount ?? 0;
-  const decidingId = decideTimeOff.isPending ? decideTimeOff.variables?.requestId : null;
+  const decidingTimeOffId = decideTimeOff.isPending ? decideTimeOff.variables?.requestId : null;
+  const decidingIncidentId = decideIncident.isPending ? decideIncident.variables?.incidentId : null;
 
   return (
     <Popover>
@@ -133,7 +146,7 @@ export default function AdminNotificationsBell({
                             type="button"
                             size="sm"
                             className="h-7 bg-emerald-600 px-2 text-xs text-white hover:bg-emerald-700"
-                            disabled={decidingId === item.id}
+                            disabled={decidingTimeOffId === item.id}
                             onClick={() =>
                               decideTimeOff.mutate({
                                 ...adminApiInput(),
@@ -149,7 +162,7 @@ export default function AdminNotificationsBell({
                             size="sm"
                             variant="destructive"
                             className="h-7 px-2 text-xs"
-                            disabled={decidingId === item.id}
+                            disabled={decidingTimeOffId === item.id}
                             onClick={() =>
                               decideTimeOff.mutate({
                                 ...adminApiInput(),
@@ -186,25 +199,55 @@ export default function AdminNotificationsBell({
                       </button>
                     ) : null}
                   </div>
-                  <ul className="space-y-1">
+                  <ul className="space-y-2">
                     {(query.data?.incidents ?? []).map((item) => (
-                      <li key={`inc-${item.id}`}>
-                        <button
-                          type="button"
-                          className="w-full rounded-lg px-2 py-2 text-left hover:bg-muted/70"
-                          onClick={onOpenIncidents}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-medium text-foreground">{item.employeeName}</p>
-                            <Badge variant="outline" className="shrink-0 text-[10px]">
-                              Pendiente
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {INCIDENT_TYPE_LABELS[item.type] ?? item.type}
-                            {item.reason ? ` · ${item.reason}` : ""}
-                          </p>
-                        </button>
+                      <li
+                        key={`inc-${item.id}`}
+                        className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-foreground">{item.employeeName}</p>
+                          <Badge variant="outline" className="shrink-0 text-[10px]">
+                            Pendiente
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {INCIDENT_TYPE_LABELS[item.type] ?? item.type}
+                          {item.reason ? ` · ${item.reason}` : ""}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 bg-emerald-600 px-2 text-xs text-white hover:bg-emerald-700"
+                            disabled={decidingIncidentId === item.id}
+                            onClick={() =>
+                              decideIncident.mutate({
+                                ...adminApiInput(),
+                                incidentId: item.id,
+                                decision: "approved",
+                              })
+                            }
+                          >
+                            Aprobar
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 px-2 text-xs"
+                            disabled={decidingIncidentId === item.id}
+                            onClick={() =>
+                              decideIncident.mutate({
+                                ...adminApiInput(),
+                                incidentId: item.id,
+                                decision: "rejected",
+                              })
+                            }
+                          >
+                            Rechazar
+                          </Button>
+                        </div>
                       </li>
                     ))}
                   </ul>
