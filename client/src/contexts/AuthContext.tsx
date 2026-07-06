@@ -29,6 +29,8 @@ export type EmployeeSession = {
 type AuthContextValue = {
   adminSession: AdminSession | null;
   employeeSession: EmployeeSession | null;
+  isAdminAuthenticated: boolean;
+  isEmployeeAuthenticated: boolean;
   setAdminSession: (session: AdminSession | null) => void;
   setEmployeeSession: (session: EmployeeSession | null) => void;
   clearAllSessions: () => void;
@@ -44,8 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const sessionQuery = trpc.publicApi.getSession.useQuery(undefined, {
     retry: false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
+
+  const serverSession = sessionQuery.data?.session ?? null;
+  const isAdminAuthenticated = serverSession?.type === "admin";
+  const isEmployeeAuthenticated = serverSession?.type === "employee";
 
   useEffect(() => {
     if (!sessionQuery.isFetched) return;
@@ -91,12 +97,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       adminSession,
       employeeSession,
+      isAdminAuthenticated,
+      isEmployeeAuthenticated,
       setAdminSession,
       setEmployeeSession,
       clearAllSessions,
       isAuthLoading: !hydrated && (sessionQuery.isLoading || sessionQuery.isFetching),
     }),
-    [adminSession, employeeSession, hydrated, sessionQuery.isLoading, sessionQuery.isFetching]
+    [
+      adminSession,
+      employeeSession,
+      isAdminAuthenticated,
+      isEmployeeAuthenticated,
+      hydrated,
+      sessionQuery.isLoading,
+      sessionQuery.isFetching,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

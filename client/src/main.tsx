@@ -1,24 +1,33 @@
 import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
+import { isSessionAuthErrorMessage } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 
 const queryClient = new QueryClient();
+
+function getAuthRedirectPath(): string {
+  const path = window.location.pathname;
+  if (path.startsWith("/admin")) return "/admin-login";
+  if (path.startsWith("/employee")) return "/employee-login";
+  if (path.startsWith("/superadmin")) return "/superadmin";
+  return "/acceso";
+}
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  const code = (error as TRPCClientError<unknown> & { data?: { code?: string } }).data?.code;
+  const isUnauthorized =
+    code === "UNAUTHORIZED" || isSessionAuthErrorMessage(error.message);
 
   if (!isUnauthorized) return;
 
-  window.location.href = getLoginUrl();
+  window.location.href = getAuthRedirectPath();
 };
 
 queryClient.getQueryCache().subscribe(event => {

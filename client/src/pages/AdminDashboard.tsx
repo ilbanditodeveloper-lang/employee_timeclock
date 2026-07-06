@@ -162,12 +162,12 @@ export default function AdminDashboard() {
     return `${date}T${time}`;
   };
 
-  const { adminSession, setAdminSession, clearAllSessions } = useAuthContext();
+  const { adminSession, setAdminSession, clearAllSessions, isAdminAuthenticated, isAuthLoading } = useAuthContext();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
 
   const adminInput = adminApiInput();
   const onboardingQuery = trpc.publicApi.getOnboardingStatus.useQuery(adminInput, {
-    enabled: Boolean(adminSession),
+    enabled: isAdminAuthenticated,
   });
   const appTimeZone = resolveAppTimeZone(onboardingQuery.data?.company?.timezone);
 
@@ -196,41 +196,41 @@ export default function AdminDashboard() {
   };
 
   const getRestaurant = trpc.publicApi.getRestaurant.useQuery(adminInput, {
-    enabled: Boolean(adminSession),
+    enabled: isAdminAuthenticated,
   });
   const upsertRestaurant = trpc.publicApi.upsertRestaurant.useMutation();
   const createEmployee = trpc.publicApi.createEmployee.useMutation();
   const listEmployees = trpc.publicApi.listEmployees.useQuery(
     { ...adminApiInput() },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
     {
       employeeId: editingEmployeeId ?? 0,
     },
-    { enabled: Boolean(adminSession && editingEmployeeId) }
+    { enabled: isAdminAuthenticated && Boolean(editingEmployeeId) }
   );
   const shiftScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
     {
       employeeId: shiftEmployeeId ? Number(shiftEmployeeId) : 0,
     },
-    { enabled: Boolean(adminSession && shiftEmployeeId) }
+    { enabled: isAdminAuthenticated && Boolean(shiftEmployeeId) }
   );
   const updateEmployee = trpc.publicApi.updateEmployee.useMutation();
   const updateEmployeeSchedule = trpc.publicApi.updateEmployeeSchedule.useMutation();
   const listIncidents = trpc.publicApi.listIncidents.useQuery(
     { ...adminApiInput() },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const timeclocksQuery = trpc.publicApi.listTimeclocks.useQuery(
     { ...adminApiInput() },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const notificationLogsQuery = trpc.publicApi.listNotificationLogs.useQuery(
     {
       employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
     },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const updateTimeclock = trpc.publicApi.updateTimeclock.useMutation();
   const deleteTimeclock = trpc.publicApi.deleteTimeclock.useMutation();
@@ -250,11 +250,11 @@ export default function AdminDashboard() {
   });
   const timeOffPendingQuery = trpc.publicApi.listTimeOffRequests.useQuery(
     { ...adminApiInput(), status: 'pending' },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const timeOffAllQuery = trpc.publicApi.listTimeOffRequests.useQuery(
     { ...adminApiInput(), status: 'all' },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const timeOffCalendarQuery = trpc.publicApi.getTimeOffCalendarMonth.useQuery(
     {
@@ -262,10 +262,10 @@ export default function AdminDashboard() {
       year: timeOffCalMonth.getFullYear(),
       month: timeOffCalMonth.getMonth() + 1,
     },
-    { enabled: Boolean(adminSession) }
+    { enabled: isAdminAuthenticated }
   );
   const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(adminApiInput(), {
-    enabled: Boolean(adminSession),
+    enabled: isAdminAuthenticated,
     refetchInterval: activeTab === 'dashboard' ? 30_000 : false,
   });
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
@@ -1028,7 +1028,8 @@ export default function AdminDashboard() {
   }, [getRestaurant.data]);
 
   useEffect(() => {
-    if (!adminSession) {
+    if (isAuthLoading) return;
+    if (!isAdminAuthenticated) {
       setLocation('/admin-login');
       return;
     }
@@ -1037,7 +1038,7 @@ export default function AdminDashboard() {
     if (!ob.onboardingSkippedAt) {
       setLocation('/admin/onboarding');
     }
-  }, [adminSession, onboardingQuery.data, setLocation]);
+  }, [isAdminAuthenticated, isAuthLoading, onboardingQuery.data, setLocation]);
 
   useEffect(() => {
     if (activeTab !== 'employees') {
@@ -1077,6 +1078,10 @@ export default function AdminDashboard() {
   }, []);
   const activeNav = ADMIN_NAV.find((item) => item.id === activeTab);
 
+  if (isAuthLoading || !isAdminAuthenticated) {
+    return null;
+  }
+
   return (
     <AppShellLayout
       brandLabel={adminSession?.displayName ?? adminSession?.companySlug ?? 'Mi negocio'}
@@ -1092,6 +1097,7 @@ export default function AdminDashboard() {
       headerActions={
         <>
           <AdminNotificationsBell
+            enabled={isAdminAuthenticated}
             onOpenTimeOff={() => setActiveTab('timeoff')}
             onOpenIncidents={() => setActiveTab('incidents')}
           />

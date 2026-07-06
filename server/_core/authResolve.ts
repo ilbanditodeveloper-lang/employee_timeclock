@@ -19,9 +19,10 @@ import { employees, users } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
 import { checkRateLimit, checkRateLimitWithIp } from "./rateLimit";
 import { getClientIp } from "./requestIp";
-import { GENERIC_AUTH_FAILURE_MSG } from "@shared/const";
+import { GENERIC_AUTH_FAILURE_MSG, SESSION_AUTH_ERR_MSG, SESSION_INVALID_ERR_MSG } from "@shared/const";
 import { assertSubscriptionAllowsAccess } from "@shared/subscriptionPlans";
 import { loadCompanyAfterSubscriptionSync } from "./subscriptionEnforcement";
+import { throwAuthError } from "./errors";
 import {
   getDemoAdmin,
   getDemoCompany,
@@ -291,7 +292,7 @@ export async function resolveAdminAuth(ctx: TrpcContext, input?: CredentialInput
     const company = await getCompanyById(ctx.session.companyId);
     const admin = await getLocalAdminByCompany(ctx.session.companyId);
     if (!company?.isActive || !admin) {
-      throw new Error("Sesión inválida. Inicia sesión de nuevo.");
+      throwAuthError(SESSION_INVALID_ERR_MSG);
     }
     const syncedCompany = await ensureCompanySubscriptionAccess(company);
     return { company: syncedCompany, admin };
@@ -303,7 +304,7 @@ export async function resolveAdminAuth(ctx: TrpcContext, input?: CredentialInput
       clientIp: getClientIp(ctx.req),
     });
   }
-  throw new Error("No autorizado. Inicia sesión de nuevo.");
+  throwAuthError(SESSION_AUTH_ERR_MSG);
 }
 
 export async function resolveSuperAdminAuth(ctx: TrpcContext, input?: CredentialInput) {
@@ -317,7 +318,7 @@ export async function resolveSuperAdminAuth(ctx: TrpcContext, input?: Credential
     requireSuperAdminCredentials({ username: input.username, password: input.password });
     return { success: true as const };
   }
-  throw new Error("No autorizado");
+  throwAuthError("No autorizado");
 }
 
 export async function resolveEmployeeAuth(
@@ -328,7 +329,7 @@ export async function resolveEmployeeAuth(
     const employee = getDemoEmployeeById(ctx.session.employeeId);
     if (!employee?.isActive) throw new Error("Cuenta de empleado desactivada.");
     if (input.employeeId !== undefined && input.employeeId !== employee.id) {
-      throw new Error("No autorizado para este empleado.");
+      throwAuthError("No autorizado para este empleado.");
     }
     return employee;
   }
@@ -338,7 +339,7 @@ export async function resolveEmployeeAuth(
       throw new Error("Cuenta de empleado desactivada.");
     }
     if (input.employeeId !== undefined && input.employeeId !== employee.id) {
-      throw new Error("No autorizado para este empleado.");
+      throwAuthError("No autorizado para este empleado.");
     }
     const company = await getCompanyById(ctx.session.companyId);
     if (!company?.isActive) {
@@ -355,7 +356,7 @@ export async function resolveEmployeeAuth(
       clientIp: getClientIp(ctx.req),
     });
   }
-  throw new Error("No autorizado. Inicia sesión de nuevo.");
+  throwAuthError(SESSION_AUTH_ERR_MSG);
 }
 
 export async function assertEmployeeBelongsToAdminCompany(

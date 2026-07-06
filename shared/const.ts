@@ -27,6 +27,20 @@ export const DUPLICATE_EMPLOYEE_EMAIL_MSG =
 
 export const GENERIC_AUTH_FAILURE_MSG = "Credenciales inválidas";
 
+/** Mensajes de sesión caducada o no válida (admin/empleado). */
+export const SESSION_AUTH_ERR_MSG = "No autorizado. Inicia sesión de nuevo.";
+export const SESSION_INVALID_ERR_MSG = "Sesión inválida. Inicia sesión de nuevo.";
+
+export function isSessionAuthErrorMessage(message: string): boolean {
+  return (
+    message === UNAUTHED_ERR_MSG ||
+    message === SESSION_AUTH_ERR_MSG ||
+    message === SESSION_INVALID_ERR_MSG ||
+    message.startsWith("No autorizado") ||
+    message.startsWith("Sesión inválida")
+  );
+}
+
 export const RATE_LIMIT_MSG = "Demasiados intentos. Espera un minuto e inténtalo de nuevo.";
 
 export const GENERIC_SERVER_ERROR_MSG = "Ha ocurrido un error. Inténtalo de nuevo más tarde.";

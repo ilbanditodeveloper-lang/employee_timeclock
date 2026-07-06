@@ -14,6 +14,7 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const adminLogin = trpc.publicApi.adminLogin.useMutation();
+  const trpcUtils = trpc.useUtils();
   const { setAdminSession, setEmployeeSession } = useAuthContext();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -25,9 +26,14 @@ export default function AdminLogin() {
         ? username.trim().toLowerCase()
         : username.trim();
       const result = await adminLogin.mutateAsync({ username: loginId, password });
+      await trpcUtils.publicApi.getSession.invalidate();
+      const sessionResult = await trpcUtils.publicApi.getSession.fetch();
+      if (sessionResult.session?.type !== "admin") {
+        throw new Error("No se pudo establecer la sesión. Prueba de nuevo.");
+      }
       setAdminSession({
         companySlug: result.companySlug,
-        displayName: username.trim(),
+        displayName: sessionResult.session.displayName ?? username.trim(),
       });
       setEmployeeSession(null);
 

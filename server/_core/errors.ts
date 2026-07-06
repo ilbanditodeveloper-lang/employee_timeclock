@@ -40,6 +40,11 @@ export function throwBusinessError(message: string): never {
   throw new TRPCError({ code: "BAD_REQUEST", message });
 }
 
+/** Sesión ausente o caducada — debe responder 401, no 500. */
+export function throwAuthError(message: string): never {
+  throw new TRPCError({ code: "UNAUTHORIZED", message });
+}
+
 /** PostgreSQL unique_violation */
 export function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;

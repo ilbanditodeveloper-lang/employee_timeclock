@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type AdminNotificationsBellProps = {
+  enabled?: boolean;
   onOpenTimeOff?: () => void;
   onOpenIncidents?: () => void;
 };
@@ -32,12 +33,14 @@ function formatShortDate(value: string | Date | null | undefined): string {
 }
 
 export default function AdminNotificationsBell({
+  enabled = true,
   onOpenTimeOff,
   onOpenIncidents,
 }: AdminNotificationsBellProps) {
   const trpcUtils = trpc.useUtils();
   const query = trpc.publicApi.getAdminNotificationCenter.useQuery(adminApiInput(), {
-    refetchInterval: 60_000,
+    enabled,
+    refetchInterval: enabled ? 60_000 : false,
   });
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
     onSuccess: (_data, variables) => {
