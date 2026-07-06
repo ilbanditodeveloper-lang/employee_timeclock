@@ -4,7 +4,12 @@ import {
   getClockWindowMinutes,
   parseScheduleEntryTime,
 } from "@shared/scheduleClockWindow";
-import { rowsToScheduleMap, buildScheduleInsertRows } from "@shared/scheduleMap";
+import { rowsToScheduleMap, buildScheduleInsertRows, SCHEDULE_DAY_KEYS } from "@shared/scheduleMap";
+import {
+  getEffectiveEntryTimeForSlot,
+  resolveClockEntrySlot,
+  shouldEnforceClockWindow,
+} from "@shared/scheduleFlexibility";
 import {
   getDayOfWeekInTimeZone,
   getMinutesSinceMidnightInTimeZone,
@@ -18,8 +23,6 @@ import { getDb } from "./db";
 import {
   getRestaurantByAdmin, 
   getEmployeesByRestaurant, 
-  getScheduleByEmployeeAndDay,
-  getScheduleByEmployeeDayAndSlot,
   getTimeclocksByEmployee,
   getIncidentsByEmployee,
   getEmployeeById,
@@ -1405,6 +1408,9 @@ export const appRouter = router({
         restaurant.id
       );
 
+      const previousRows = await getSchedulesByEmployee(input.employeeId, company.id);
+      const previousSchedule = rowsToScheduleMap(previousRows);
+
       await db.delete(schedules).where(eq(schedules.employeeId, input.employeeId));
 
       for (const row of buildScheduleInsertRows({
@@ -1414,6 +1420,17 @@ export const appRouter = router({
       })) {
         await db.insert(schedules).values(row);
       }
+
+      await writeAuditLog({
+        companyId: company.id,
+        entityType: "employee",
+        entityId: input.employeeId,
+        action: "update_schedule",
+        oldValue: previousSchedule,
+        newValue: input.schedule,
+        performedByType: "admin",
+        performedById: admin.id,
+      });
 
       return { success: true };
     }),
@@ -1505,19 +1522,16 @@ export const appRouter = router({
         tz
       );
       const completedShifts = todayTimeclocks.filter(tc => tc.exitTime).length;
-      const schedule =
-        completedShifts === 0
-          ? await getScheduleByEmployeeAndDay(input.employeeId, dayOfWeek, employee.companyId)
-          : completedShifts === 1
-          ? await getScheduleByEmployeeDayAndSlot(
-              input.employeeId,
-              dayOfWeek,
-              2,
-              employee.companyId
-            )
-          : undefined;
-      if (schedule && schedule.isWorkDay && schedule.entryTime !== "00:00") {
-        const parsed = parseScheduleEntryTime(schedule.entryTime);
+      const scheduleRows = await getSchedulesByEmployee(input.employeeId, employee.companyId);
+      const scheduleMap = rowsToScheduleMap(scheduleRows);
+      const dayKey = SCHEDULE_DAY_KEYS[dayOfWeek] ?? "monday";
+      const entrySlot = resolveClockEntrySlot({ completedShiftsToday: completedShifts });
+      if (
+        entrySlot &&
+        shouldEnforceClockWindow(scheduleMap, dayKey, entrySlot)
+      ) {
+        const entryTime = getEffectiveEntryTimeForSlot(scheduleMap[dayKey], entrySlot);
+        const parsed = entryTime ? parseScheduleEntryTime(entryTime) : null;
         if (parsed) {
           const { earliest, latest } = getClockWindowMinutes(
             parsed.hour,
@@ -1936,6 +1950,89 @@ export const appRouter = router({
           todayStr
         );
         return { date: todayStr, ...snapshot };
+      }),
+
+    getAdminNotificationCenter: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        const restaurant = await resolveAdminRestaurantForCompany(
+          admin.id,
+          company.id,
+          (input as { restaurantId?: number }).restaurantId
+        );
+        if (!restaurant) {
+          return { totalCount: 0, timeOff: [], incidents: [] };
+        }
+        const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
+        const employeeIds = restaurantEmployees.map((e) => e.id);
+        const nameById = new Map(restaurantEmployees.map((e) => [e.id, e.name]));
+        if (employeeIds.length === 0) {
+          return { totalCount: 0, timeOff: [], incidents: [] };
+        }
+
+        const db = await getDb();
+        if (!db) return { totalCount: 0, timeOff: [], incidents: [] };
+
+        const timeOffRows = await db
+          .select()
+          .from(timeOffRequests)
+          .where(
+            and(
+              inArray(timeOffRequests.employeeId, employeeIds),
+              eq(timeOffRequests.companyId, company.id),
+              eq(timeOffRequests.status, "pending")
+            )
+          )
+          .orderBy(desc(timeOffRequests.createdAt))
+          .limit(20);
+
+        const incidentRows = (await listIncidentsForEmployeeIds(employeeIds, company.id))
+          .filter((row) => row.status === "pending")
+          .slice(0, 20);
+
+        const timeOff = timeOffRows.map((row) => ({
+          id: row.id,
+          employeeId: row.employeeId,
+          employeeName: nameById.get(row.employeeId) ?? "—",
+          kind: row.kind,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          createdAt: row.createdAt,
+        }));
+
+        const incidents = incidentRows.map((row) => ({
+          id: row.id,
+          employeeId: row.employeeId,
+          employeeName: nameById.get(row.employeeId) ?? "—",
+          type: row.type,
+          reason: row.reason,
+          createdAt: row.createdAt,
+        }));
+
+        return {
+          totalCount: timeOff.length + incidents.length,
+          timeOff,
+          incidents,
+        };
+      }),
+
+    getAdminTodayActivity: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        const tz = company.timezone || "Europe/Madrid";
+        const todayStr = todayYmdInTimeZone(tz);
+        const logs = await listAuditLogsFiltered({
+          companyId: company.id,
+          dateFrom: todayStr,
+          dateTo: todayStr,
+          limit: 100,
+        });
+        const items = logs.filter((log) =>
+          ["correct", "void", "void_bulk", "update_schedule"].includes(log.action)
+        );
+        return { date: todayStr, items };
       }),
 
     pushNotifications: router({

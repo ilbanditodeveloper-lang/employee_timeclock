@@ -13,6 +13,11 @@ import {
   getClockWindowMinutes,
   parseScheduleEntryTime,
 } from "@shared/scheduleClockWindow";
+import { SCHEDULE_DAY_KEYS, type DaySchedulePayload } from "@shared/scheduleMap";
+import {
+  resolveClockEntrySlot,
+  shouldEnforceClockWindow,
+} from "@shared/scheduleFlexibility";
 import {
   APP_TIMEZONE,
   formatDateInTimeZone,
@@ -124,8 +129,9 @@ export default function EmployeeDashboard() {
   const [isLate, setIsLate] = useState(false);
   const [isTooEarly, setIsTooEarly] = useState(false);
   const [scheduledEntryLabel, setScheduledEntryLabel] = useState<string | null>(null);
-  const [isWorkDay, setIsWorkDay] = useState(true);
-  const [lastClockOut, setLastClockOut] = useState<Date | null>(null);
+  const [clockWindowEnforced, setClockWindowEnforced] = useState(false);
+  const [flexibleClockIn, setFlexibleClockIn] = useState(false);
+  const [completedShiftsToday, setCompletedShiftsToday] = useState(0);
   const notificationWarningShown = useRef(false);
   const pushSubscriptionAttempted = useRef(false);
 
@@ -234,14 +240,13 @@ export default function EmployeeDashboard() {
     const openRecord = timeclocks.find((entry) => entry.entryTime && !entry.exitTime);
     setIsClockedIn(Boolean(openRecord));
     const todayYmd = todayYmdInTimeZone(appTimeZone);
-    const todayExit = timeclocks
-      .filter((entry) => {
+    setCompletedShiftsToday(
+      timeclocks.filter((entry) => {
         if (!entry.exitTime) return false;
         const exitYmd = todayYmdInTimeZone(appTimeZone, new Date(entry.exitTime));
         return exitYmd === todayYmd;
-      })
-      .sort((a, b) => new Date(b.exitTime || 0).getTime() - new Date(a.exitTime || 0).getTime())[0];
-    setLastClockOut(todayExit?.exitTime ? new Date(todayExit.exitTime) : null);
+      }).length
+    );
   }, [employeeTimeclocks.data, appTimeZone]);
 
   useEffect(() => {
@@ -255,35 +260,40 @@ export default function EmployeeDashboard() {
     if (isClockedIn) {
       setIsLate(false);
       setIsTooEarly(false);
+      setClockWindowEnforced(false);
+      setFlexibleClockIn(false);
       return;
     }
 
+    const scheduleMap = (employeeScheduleQuery.data ??
+      employeeSession?.schedule ??
+      {}) as Record<string, DaySchedulePayload | undefined>;
     const scheduleKey = weekdayKeys[getDayOfWeekInTimeZone(currentTime, appTimeZone)];
-    const daySchedule =
-      employeeScheduleQuery.data?.[scheduleKey] ?? employeeSession?.schedule?.[scheduleKey];
-    const entry1 = daySchedule?.entry1 || null;
-    const entry2 = daySchedule?.entry2 || null;
-    const dayActive = daySchedule?.isActive ?? true;
-    const isSameDayClockOut =
-      lastClockOut &&
-      lastClockOut.getFullYear() === currentTime.getFullYear() &&
-      lastClockOut.getMonth() === currentTime.getMonth() &&
-      lastClockOut.getDate() === currentTime.getDate();
+    const daySchedule = scheduleMap[scheduleKey];
+    const entrySlot = resolveClockEntrySlot({ completedShiftsToday });
+    const enforceWindow =
+      entrySlot !== null &&
+      shouldEnforceClockWindow(scheduleMap, scheduleKey, entrySlot);
 
-    setIsWorkDay(dayActive);
-    if (!dayActive) {
+    setClockWindowEnforced(enforceWindow);
+    setFlexibleClockIn(!enforceWindow);
+
+    if (!enforceWindow) {
       setIsLate(false);
       setIsTooEarly(false);
       setScheduledEntryLabel(null);
       return;
     }
 
-    const entryTime = isSameDayClockOut && entry2 ? entry2 : entry1;
+    const entryTime =
+      entrySlot === 2 ? daySchedule?.entry2 || null : daySchedule?.entry1 || null;
 
     if (!entryTime) {
       setIsLate(false);
       setIsTooEarly(false);
       setScheduledEntryLabel(null);
+      setClockWindowEnforced(false);
+      setFlexibleClockIn(true);
       return;
     }
 
@@ -292,6 +302,8 @@ export default function EmployeeDashboard() {
       setIsLate(false);
       setIsTooEarly(false);
       setScheduledEntryLabel(null);
+      setClockWindowEnforced(false);
+      setFlexibleClockIn(true);
       return;
     }
 
@@ -311,8 +323,9 @@ export default function EmployeeDashboard() {
     isClockedIn,
     employeeSession?.schedule,
     employeeScheduleQuery.data,
-    lastClockOut,
+    completedShiftsToday,
     appTimeZone,
+    employeeSession?.lateGraceMinutes,
   ]);
 
   useEffect(() => {
@@ -469,7 +482,10 @@ export default function EmployeeDashboard() {
     );
   }
 
-  const canClockIn = !isClockedIn && !loading && isWorkDay && !isLate && !isTooEarly;
+  const canClockIn =
+    !isClockedIn &&
+    !loading &&
+    (!clockWindowEnforced || (!isLate && !isTooEarly));
   const canClockOut = isClockedIn && !loading;
 
   return (
@@ -495,17 +511,17 @@ export default function EmployeeDashboard() {
                   ? 'Se validará tu ubicación al pulsar Entrada o Salida'
                   : 'Fichaje sin geolocalización (configuración de tu empresa)'}
               </p>
-              {!isWorkDay && (
-                <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
-                  Día no laborable
+              {flexibleClockIn && !isClockedIn && (
+                <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-2">
+                  Fichaje libre: no tienes horario asignado para hoy
                 </p>
               )}
-              {isTooEarly && isWorkDay && scheduledEntryLabel && !isClockedIn && (
+              {isTooEarly && clockWindowEnforced && scheduledEntryLabel && !isClockedIn && (
                 <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
                   Fichaje disponible desde {EARLY_CLOCK_MINUTES} min antes de las {scheduledEntryLabel}
                 </p>
               )}
-              {isLate && isWorkDay && !isClockedIn && (
+              {isLate && clockWindowEnforced && !isClockedIn && (
                 <p className="text-sm text-red-600 dark:text-red-400 mt-2">
                   Fichaje bloqueado: superaste los {employeeSession?.lateGraceMinutes ?? 5} min de gracia
                 </p>

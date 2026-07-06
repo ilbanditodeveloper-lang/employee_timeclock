@@ -250,6 +250,7 @@ export function summarizeAuditChange(
   if (action === "deactivate") return "Empleado desactivado";
   if (action === "update_legal") return "Datos legales actualizados";
   if (action === "complete_onboarding") return "Onboarding completado";
+  if (action === "update_schedule") return "Horario de empleado actualizado";
   return action;
 }
 

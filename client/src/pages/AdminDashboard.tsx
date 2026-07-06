@@ -20,6 +20,8 @@ import SubscriptionBanner from '@/components/SubscriptionBanner';
 import AdminBillingPanel from '@/components/AdminBillingPanel';
 import AdminLocationsPanel from '@/components/AdminLocationsPanel';
 import AdminSupportPanel from '@/components/AdminSupportPanel';
+import AdminNotificationsBell from '@/components/AdminNotificationsBell';
+import AdminTodayActivityPanel from '@/components/AdminTodayActivityPanel';
 import AppShellLayout, { type AppShellNavItem } from '@/components/AppShellLayout';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
@@ -1078,14 +1080,20 @@ export default function AdminDashboard() {
       onNavChange={setActiveTab}
       onLogout={() => void handleLogout()}
       headerActions={
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setLocation('/admin/onboarding')}
-        >
-          Configuración inicial
-        </Button>
+        <>
+          <AdminNotificationsBell
+            onOpenTimeOff={() => setActiveTab('timeoff')}
+            onOpenIncidents={() => setActiveTab('incidents')}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setLocation('/admin/onboarding')}
+          >
+            Configuración inicial
+          </Button>
+        </>
       }
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1249,6 +1257,10 @@ export default function AdminDashboard() {
                   </ul>
                 </section>
               ) : null}
+
+              <div className="mt-6">
+                <AdminTodayActivityPanel />
+              </div>
             </Card>
           </TabsContent>
 

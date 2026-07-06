@@ -14,6 +14,7 @@ const ACTION_LABELS: Record<string, string> = {
   update_legal: "Actualización legal",
   complete_onboarding: "Onboarding completado",
   deactivate: "Desactivar empleado",
+  update_schedule: "Cambio de horario",
 };
 
 export default function AdminAuditLogPanel() {
