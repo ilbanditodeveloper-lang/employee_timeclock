@@ -22,6 +22,15 @@ import AdminLocationsPanel from '@/components/AdminLocationsPanel';
 import AdminSupportPanel from '@/components/AdminSupportPanel';
 import AdminNotificationsBell from '@/components/AdminNotificationsBell';
 import AdminTodayActivityPanel from '@/components/AdminTodayActivityPanel';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import AppShellLayout, { type AppShellNavItem } from '@/components/AppShellLayout';
 import { Badge } from '@/components/ui/badge';
 import { calendarMonthRange } from '@shared/laborReport';
@@ -106,6 +115,15 @@ export default function AdminDashboard() {
   const [editingCorrectionReason, setEditingCorrectionReason] = useState('');
   const [includeAuditHistory, setIncludeAuditHistory] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [forceClockOutTarget, setForceClockOutTarget] = useState<{
+    timeclockId: number;
+    employeeName: string;
+    entryTime: string | null;
+  } | null>(null);
+  const [forceClockOutExitTime, setForceClockOutExitTime] = useState('');
+  const [forceClockOutReason, setForceClockOutReason] = useState(
+    'Empleado terminó jornada sin fichar salida'
+  );
 
   const trpcUtils = trpc.useUtils();
   const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule>(() => createDefaultEmployeeSchedule());
@@ -678,24 +696,53 @@ export default function AdminDashboard() {
     setEditingExitTime('');
   };
 
-  const handleAdminForceClockOut = (row: { timeclockId: number; employeeName: string }) => {
-    if (!window.confirm(`¿Registrar salida manual para ${row.employeeName}?`)) return;
-    const reason = window.prompt(
-      'Motivo del cierre manual (mín. 3 caracteres):',
-      'Empleado terminó jornada sin fichar salida'
-    );
-    if (!reason || reason.trim().length < 3) {
-      if (reason !== null) toast.error('Debes indicar un motivo de al menos 3 caracteres');
+  const handleAdminForceClockOut = (row: {
+    timeclockId: number;
+    employeeName: string;
+    entryTime: string | null;
+  }) => {
+    setForceClockOutTarget(row);
+    setForceClockOutExitTime(formatDateTimeInput(new Date()));
+    setForceClockOutReason('Empleado terminó jornada sin fichar salida');
+  };
+
+  const closeForceClockOutDialog = () => {
+    if (adminForceClockOut.isPending) return;
+    setForceClockOutTarget(null);
+  };
+
+  const submitAdminForceClockOut = () => {
+    if (!forceClockOutTarget) return;
+    if (!forceClockOutReason.trim() || forceClockOutReason.trim().length < 3) {
+      toast.error('Indica un motivo de al menos 3 caracteres');
       return;
+    }
+    if (!forceClockOutExitTime) {
+      toast.error('Indica la hora de salida');
+      return;
+    }
+    const exitDate = new Date(forceClockOutExitTime);
+    if (Number.isNaN(exitDate.getTime())) {
+      toast.error('Hora de salida inválida');
+      return;
+    }
+    if (forceClockOutTarget.entryTime) {
+      const entryDate = new Date(forceClockOutTarget.entryTime);
+      if (!Number.isNaN(entryDate.getTime()) && exitDate <= entryDate) {
+        toast.error('La salida debe ser posterior a la entrada');
+        return;
+      }
     }
     adminForceClockOut
       .mutateAsync({
         ...adminApiInput(),
-        timeclockId: row.timeclockId,
-        reason: reason.trim(),
+        timeclockId: forceClockOutTarget.timeclockId,
+        exitTime: exitDate.toISOString(),
+        reason: forceClockOutReason.trim(),
       })
       .then(() => {
-        toast.success(`Salida registrada para ${row.employeeName}`);
+        toast.success(`Salida registrada para ${forceClockOutTarget.employeeName}`);
+        setForceClockOutTarget(null);
         void workforceTodayQuery.refetch();
         void timeclocksQuery.refetch();
         void trpcUtils.publicApi.getAdminTodayActivity.invalidate();
@@ -2556,6 +2603,98 @@ export default function AdminDashboard() {
           </TabsContent>
         </div>
       </Tabs>
+
+      <Dialog
+        open={forceClockOutTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) closeForceClockOutDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Fichar salida manual</DialogTitle>
+            <DialogDescription>
+              {forceClockOutTarget
+                ? `Registrar la salida de ${forceClockOutTarget.employeeName}. Puedes ajustar la hora si terminó antes.`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-1">
+            {forceClockOutTarget?.entryTime ? (
+              <p className="text-sm text-muted-foreground">
+                Entrada registrada: {formatClockTime(forceClockOutTarget.entryTime)}
+              </p>
+            ) : null}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Hora de salida
+              </label>
+              <input
+                type="datetime-local"
+                value={forceClockOutExitTime}
+                onChange={(event) => setForceClockOutExitTime(event.target.value)}
+                className="input-elegant hidden sm:block w-full"
+              />
+              <div className="grid grid-cols-2 gap-2 sm:hidden">
+                <input
+                  type="date"
+                  value={splitDateTimeInput(forceClockOutExitTime).date}
+                  onChange={(event) =>
+                    setForceClockOutExitTime(
+                      buildDateTimeInput(
+                        event.target.value,
+                        splitDateTimeInput(forceClockOutExitTime).time
+                      )
+                    )
+                  }
+                  className="input-elegant"
+                />
+                <input
+                  type="time"
+                  value={splitDateTimeInput(forceClockOutExitTime).time}
+                  onChange={(event) =>
+                    setForceClockOutExitTime(
+                      buildDateTimeInput(
+                        splitDateTimeInput(forceClockOutExitTime).date,
+                        event.target.value
+                      )
+                    )
+                  }
+                  className="input-elegant"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Motivo
+              </label>
+              <Textarea
+                value={forceClockOutReason}
+                onChange={(event) => setForceClockOutReason(event.target.value)}
+                rows={3}
+                placeholder="Motivo del cierre manual (mín. 3 caracteres)"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeForceClockOutDialog}
+              disabled={adminForceClockOut.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={submitAdminForceClockOut}
+              disabled={adminForceClockOut.isPending}
+            >
+              {adminForceClockOut.isPending ? 'Guardando…' : 'Registrar salida'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShellLayout>
   );
 }
