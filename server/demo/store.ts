@@ -17,6 +17,15 @@ export const demoCompany = {
   timezone: "Europe/Madrid",
   locationEnabled: false,
   dataRetentionYears: 4,
+  province: null as string | null,
+  legalContactName: null as string | null,
+  gpsJustification: null as string | null,
+  gpsJustificationCategory: null as string | null,
+  gpsActivatedBy: null as number | null,
+  gpsActivatedAt: null as Date | null,
+  legalHoldEnabled: false,
+  minimumRetentionYears: 4,
+  anonymizeAfterRetention: false,
   termsAcceptedAt: null,
   onboardingCompleted: true,
   onboardingCompletedAt: now,
@@ -201,6 +210,15 @@ type DemoSuperCompany = {
   timezone: string;
   locationEnabled: boolean;
   dataRetentionYears: number;
+  province: string | null;
+  legalContactName: string | null;
+  gpsJustification: string | null;
+  gpsJustificationCategory: string | null;
+  gpsActivatedBy: number | null;
+  gpsActivatedAt: Date | null;
+  legalHoldEnabled: boolean;
+  minimumRetentionYears: number;
+  anonymizeAfterRetention: boolean;
   termsAcceptedAt: Date | null;
   onboardingCompleted: boolean;
   onboardingCompletedAt: Date | null;
@@ -239,6 +257,15 @@ let superCompanies: DemoSuperCompany[] = [
     timezone: "Europe/Madrid",
     locationEnabled: false,
     dataRetentionYears: 4,
+    province: null,
+    legalContactName: null,
+    gpsJustification: null,
+    gpsJustificationCategory: null,
+    gpsActivatedBy: null,
+    gpsActivatedAt: null,
+    legalHoldEnabled: false,
+    minimumRetentionYears: 4,
+    anonymizeAfterRetention: false,
     termsAcceptedAt: null,
     onboardingCompleted: true,
     onboardingCompletedAt: now,
@@ -465,6 +492,15 @@ export function demoCreateSuperCompany(input: {
     timezone: "Europe/Madrid",
     locationEnabled: false,
     dataRetentionYears: 4,
+    province: null,
+    legalContactName: null,
+    gpsJustification: null,
+    gpsJustificationCategory: null,
+    gpsActivatedBy: null,
+    gpsActivatedAt: null,
+    legalHoldEnabled: false,
+    minimumRetentionYears: 4,
+    anonymizeAfterRetention: false,
     termsAcceptedAt: null,
     onboardingCompleted: false,
     onboardingCompletedAt: null,
@@ -569,6 +605,11 @@ export function getDemoTodayTimeclocks(employeeId: number) {
 
 export function getDemoOpenBreak(timeclockId: number) {
   return timeclockBreaks.find((b) => b.timeclockId === timeclockId && !b.endedAt);
+}
+
+export function getDemoBreaksForTimeclocks(timeclockIds: number[]) {
+  const ids = new Set(timeclockIds);
+  return timeclockBreaks.filter((b) => ids.has(b.timeclockId));
 }
 
 export function closeDemoOpenBreak(timeclockId: number, endedAt = new Date()) {

@@ -101,7 +101,7 @@ export default function AdminNotificationsBell({
         <div className="border-b px-4 py-3">
           <p className="text-sm font-semibold text-foreground">Notificaciones</p>
           <p className="text-xs text-muted-foreground">
-            Vacaciones e incidencias pendientes de revisar
+            Vacaciones, incidencias y solicitudes RGPD pendientes
           </p>
         </div>
         <div className="max-h-96 overflow-y-auto p-2">
@@ -111,6 +111,15 @@ export default function AdminNotificationsBell({
             <p className="px-2 py-4 text-sm text-muted-foreground">No hay pendientes.</p>
           ) : (
             <div className="space-y-3">
+              {(query.data?.gdprPending ?? 0) > 0 ? (
+                <section className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
+                  <p className="text-sm font-medium text-violet-900">
+                    {query.data?.gdprPending} solicitud(es) RGPD pendiente(s)
+                  </p>
+                  <p className="text-xs text-violet-800">Revíselas en Legal / RGPD</p>
+                </section>
+              ) : null}
+
               {(query.data?.timeOff ?? []).length > 0 ? (
                 <section>
                   <div className="mb-1 flex items-center justify-between gap-2 px-2">

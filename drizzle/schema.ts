@@ -33,6 +33,51 @@ export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
   "platform_terms",
 ]);
 
+export const contractTypeEnum = pgEnum("contract_type", [
+  "full_time",
+  "part_time",
+  "temporary",
+  "other",
+]);
+
+export const adminRoleEnum = pgEnum("admin_role", [
+  "owner",
+  "admin",
+  "hr_manager",
+  "accountant",
+  "read_only_auditor",
+]);
+
+export const gdprRequestTypeEnum = pgEnum("gdpr_request_type", [
+  "access",
+  "rectification",
+  "erasure",
+  "restriction",
+  "objection",
+  "portability",
+  "other",
+]);
+
+export const gdprRequestStatusEnum = pgEnum("gdpr_request_status", [
+  "received",
+  "in_review",
+  "resolved",
+  "rejected",
+]);
+
+export const legalDocumentCodeEnum = pgEnum("legal_document_code", [
+  "privacy_policy",
+  "terms_of_use",
+  "dpa",
+  "employee_notice",
+]);
+
+export const monthlyReportDeliveryTypeEnum = pgEnum("monthly_report_delivery_type", [
+  "admin_generated",
+  "employee_downloaded",
+  "admin_delivered",
+]);
+
 /**
  * Company/tenant for multi-business SaaS deployments.
  */
@@ -48,6 +93,15 @@ export const companies = pgTable("companies", {
   timezone: varchar("timezone", { length: 64 }).default("Europe/Madrid").notNull(),
   locationEnabled: boolean("locationEnabled").default(false).notNull(),
   dataRetentionYears: integer("dataRetentionYears").default(4).notNull(),
+  province: varchar("province", { length: 100 }),
+  legalContactName: varchar("legalContactName", { length: 255 }),
+  gpsJustification: text("gpsJustification"),
+  gpsJustificationCategory: varchar("gpsJustificationCategory", { length: 64 }),
+  gpsActivatedBy: integer("gpsActivatedBy"),
+  gpsActivatedAt: timestamp("gpsActivatedAt"),
+  legalHoldEnabled: boolean("legalHoldEnabled").default(false).notNull(),
+  minimumRetentionYears: integer("minimumRetentionYears").default(4).notNull(),
+  anonymizeAfterRetention: boolean("anonymizeAfterRetention").default(false).notNull(),
   termsAcceptedAt: timestamp("termsAcceptedAt"),
   onboardingCompleted: boolean("onboardingCompleted").default(false).notNull(),
   onboardingCompletedAt: timestamp("onboardingCompletedAt"),
@@ -88,6 +142,7 @@ export const users = pgTable(
     password: varchar("password", { length: 255 }), // For employee login
     loginMethod: varchar("loginMethod", { length: 64 }),
     role: userRoleEnum("role").default("employee").notNull(),
+    adminRole: adminRoleEnum("adminRole").default("admin"),
     employeeId: integer("employeeId"), // Reference to employee table
     restaurantId: integer("restaurantId"), // Reference to restaurant (for admin)
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -141,6 +196,9 @@ export const employees = pgTable(
     password: varchar("password", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 20 }),
     lateGraceMinutes: integer("lateGraceMinutes").default(5).notNull(),
+    contractType: contractTypeEnum("contractType").default("full_time").notNull(),
+    weeklyContractedHours: numeric("weeklyContractedHours", { precision: 5, scale: 2 }),
+    nationalId: varchar("nationalId", { length: 32 }),
     isActive: boolean("isActive").default(true).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -334,6 +392,10 @@ export const auditLogs = pgTable(
     performedByType: varchar("performedByType", { length: 32 }).notNull(),
     performedById: integer("performedById"),
     performedAt: timestamp("performedAt").defaultNow().notNull(),
+    ipAddress: varchar("ipAddress", { length: 64 }),
+    userAgent: text("userAgent"),
+    previousHash: varchar("previousHash", { length: 64 }),
+    currentHash: varchar("currentHash", { length: 64 }),
   },
   (table) => ({
     companyEntityIdx: index("audit_logs_company_entity_idx").on(
@@ -360,6 +422,8 @@ export const legalAcceptances = pgTable(
     documentVersion: varchar("documentVersion", { length: 32 }).notNull(),
     acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
     ipAddress: varchar("ipAddress", { length: 64 }),
+    userAgent: text("userAgent"),
+    documentHash: varchar("documentHash", { length: 64 }),
   },
   (table) => ({
     employeeDocIdx: uniqueIndex("legal_acceptances_employee_doc_idx").on(
@@ -399,3 +463,59 @@ export const platformSettings = pgTable("platform_settings", {
 });
 
 export type PlatformSetting = typeof platformSettings.$inferSelect;
+
+export const legalDocuments = pgTable(
+  "legal_documents",
+  {
+    id: serial("id").primaryKey(),
+    code: legalDocumentCodeEnum("code").notNull(),
+    version: varchar("version", { length: 32 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body").notNull(),
+    publishedAt: timestamp("publishedAt").defaultNow().notNull(),
+    active: boolean("active").default(true).notNull(),
+    documentHash: varchar("documentHash", { length: 64 }),
+  },
+  (table) => ({
+    codeVersionIdx: uniqueIndex("legal_documents_code_version_idx").on(table.code, table.version),
+  })
+);
+
+export const companyLegalAcceptances = pgTable("company_legal_acceptances", {
+  id: serial("id").primaryKey(),
+  companyId: integer("companyId").notNull(),
+  acceptedByUserId: integer("acceptedByUserId").notNull(),
+  documentCode: legalDocumentCodeEnum("documentCode").notNull(),
+  documentVersion: varchar("documentVersion", { length: 32 }).notNull(),
+  documentHash: varchar("documentHash", { length: 64 }),
+  acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
+  ipAddress: varchar("ipAddress", { length: 64 }),
+  userAgent: text("userAgent"),
+});
+
+export const gdprRequests = pgTable("gdpr_requests", {
+  id: serial("id").primaryKey(),
+  companyId: integer("companyId").notNull(),
+  employeeId: integer("employeeId").notNull(),
+  requestType: gdprRequestTypeEnum("requestType").notNull(),
+  message: text("message").notNull(),
+  status: gdprRequestStatusEnum("status").default("received").notNull(),
+  adminNotes: text("adminNotes"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const monthlyReportDeliveries = pgTable("monthly_report_deliveries", {
+  id: serial("id").primaryKey(),
+  companyId: integer("companyId").notNull(),
+  employeeId: integer("employeeId").notNull(),
+  periodYear: integer("periodYear").notNull(),
+  periodMonth: integer("periodMonth").notNull(),
+  reportType: varchar("reportType", { length: 64 }).default("monthly_summary").notNull(),
+  deliveryType: monthlyReportDeliveryTypeEnum("deliveryType").notNull(),
+  documentHash: varchar("documentHash", { length: 64 }),
+  ipAddress: varchar("ipAddress", { length: 64 }),
+  userAgent: text("userAgent"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});

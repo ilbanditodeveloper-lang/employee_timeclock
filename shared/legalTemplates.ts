@@ -91,6 +91,14 @@ export function buildBusinessPrivacyPolicy(company: LegalTemplateCompanyInfo): L
           "Los trabajadores pueden ejercer acceso, rectificación, supresión (cuando proceda), limitación, portabilidad y oposición " +
             `contactando con ${contact(company)}.`,
           "La supresión puede no ser procedente cuando exista obligación legal de conservar registros horarios.",
+          "Los trabajadores pueden descargar sus registros de jornada desde el portal del empleado.",
+        ],
+      },
+      {
+        heading: "8. Tiempo parcial",
+        paragraphs: [
+          "Para contratos a tiempo parcial, la empresa puede generar resúmenes mensuales con totalización de horas registradas y diferencia frente a las horas contratadas.",
+          "Este documento se facilita para ayudar a cumplir el deber de información; no sustituye asesoramiento laboral.",
         ],
       },
     ],

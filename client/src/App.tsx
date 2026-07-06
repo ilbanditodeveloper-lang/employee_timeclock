@@ -18,6 +18,7 @@ import EmployeeCalendar from "./pages/EmployeeCalendar";
 import EmployeeCalculator from "./pages/EmployeeCalculator";
 import EmployeeSchedule from "./pages/EmployeeSchedule";
 import EmployeeTimeOff from "./pages/EmployeeTimeOff";
+import EmployeeLegal from "./pages/EmployeeLegal";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminOnboarding from "./pages/AdminOnboarding";
 import SuperAdmin from "./pages/SuperAdmin";
@@ -43,6 +44,7 @@ function Router() {
       <Route path={"/employee/calculator"} component={EmployeeCalculator} />
       <Route path={"/employee/incident"} component={EmployeeIncident} />
       <Route path={"/employee/time-off"} component={EmployeeTimeOff} />
+      <Route path={"/employee/legal"} component={EmployeeLegal} />
       <Route path={"/legal/privacy"} component={PrivacyPolicy} />
       <Route path={"/legal/terms"} component={TermsOfUse} />
       <Route path={"/legal/dpa"} component={PlatformDpa} />

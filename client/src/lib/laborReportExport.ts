@@ -4,6 +4,9 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import type { LaborReportBundle } from "@shared/laborReport";
 import { OFFICIAL_REPORT_DISCLAIMER, laborReportRowsToCsv } from "@shared/laborReport";
+import type { MonthlyEmployeeSummary } from "@shared/monthlyLaborReport";
+import { monthlyReportToCsv } from "@shared/monthlyLaborReport";
+import { OFFICIAL_EXPORT_FOOTER } from "@shared/legalCompliance";
 
 function companyHeaderLines(bundle: LaborReportBundle): string[] {
   const c = bundle.company;
@@ -55,11 +58,13 @@ export function downloadOfficialLaborReportPdf(bundle: LaborReportBundle) {
         "Entrada",
         "Salida",
         "Pausas",
-        "Horas",
+        "H. brutas",
+        "H. netas",
         "Estado",
         "Retraso",
         "Modificado",
         "Motivo",
+        "Corregido el",
       ],
     ],
     body:
@@ -70,13 +75,17 @@ export function downloadOfficialLaborReportPdf(bundle: LaborReportBundle) {
             r.clockIn ?? "—",
             r.clockOut ?? "—",
             r.breakLabel,
+            r.grossHours != null ? r.grossHours.toFixed(2) : "—",
             r.totalHours != null ? r.totalHours.toFixed(2) : "—",
             r.status,
             r.isLate ? "Sí" : "No",
             r.modified ? (r.modifiedBy ?? "Sí") : "No",
             r.modificationReason ?? "",
+            r.correctedAt
+              ? new Date(r.correctedAt).toLocaleString("es-ES", { timeZone: bundle.company.timezone })
+              : "",
           ])
-        : [["Sin registros en el periodo", "", "", "", "", "", "", "", "", ""]],
+        : [["Sin registros en el periodo", "", "", "", "", "", "", "", "", "", "", ""]],
     styles: { fontSize: 7 },
     headStyles: { fillColor: [60, 60, 60] },
   });
@@ -86,10 +95,11 @@ export function downloadOfficialLaborReportPdf(bundle: LaborReportBundle) {
   doc.setFontSize(9);
   doc.text("Resumen", 14, finalY + 10);
   doc.setFontSize(8);
-  doc.text(`Total horas (sin anulados): ${bundle.summary.totalHours.toFixed(2)} h`, 14, finalY + 16);
-  doc.text(`Días con fichaje: ${bundle.summary.daysWithClock}`, 14, finalY + 21);
-  doc.text(`Incompletos: ${bundle.summary.incompleteDays} · Corregidos: ${bundle.summary.correctedCount} · Anulados: ${bundle.summary.voidedCount}`, 14, finalY + 26);
-  doc.text(`Incidencias en periodo: ${bundle.summary.incidentCount}`, 14, finalY + 31);
+  doc.text(`Total horas netas (sin anulados): ${bundle.summary.totalHours.toFixed(2)} h`, 14, finalY + 16);
+  doc.text(`Total horas brutas: ${bundle.summary.totalGrossHours.toFixed(2)} h · Pausas: ${bundle.summary.totalBreakMinutes} min`, 14, finalY + 21);
+  doc.text(`Días con fichaje: ${bundle.summary.daysWithClock}`, 14, finalY + 26);
+  doc.text(`Incompletos: ${bundle.summary.incompleteDays} · Corregidos: ${bundle.summary.correctedCount} · Anulados: ${bundle.summary.voidedCount}`, 14, finalY + 31);
+  doc.text(`Incidencias en periodo: ${bundle.summary.incidentCount} · Pausas abiertas: ${bundle.summary.openBreakCount}`, 14, finalY + 36);
 
   if (bundle.auditHistory.length > 0) {
     doc.addPage();
@@ -137,7 +147,9 @@ export function downloadEnhancedLaborReportExcel(
       {
         Empleado: bundle.employeeFilter,
         Periodo: `${bundle.period.from} → ${bundle.period.to}`,
-        Total_horas_sin_anulados: bundle.summary.totalHours.toFixed(2),
+        Total_horas_netas: bundle.summary.totalHours.toFixed(2),
+        Total_horas_brutas: bundle.summary.totalGrossHours.toFixed(2),
+        Total_minutos_pausa: bundle.summary.totalBreakMinutes,
         Dias_con_fichaje: bundle.summary.daysWithClock,
         Incompletos: bundle.summary.incompleteDays,
         Corregidos: bundle.summary.correctedCount,
@@ -159,12 +171,16 @@ export function downloadEnhancedLaborReportExcel(
         Entrada: r.clockIn ?? "",
         Salida: r.clockOut ?? "",
         Pausas: r.breakLabel,
-        Horas: r.totalHours ?? "",
+        Horas_brutas: r.grossHours ?? "",
+        Minutos_pausa: r.breakMinutes,
+        Horas_netas: r.totalHours ?? "",
         Estado: r.status,
         Retraso: r.isLate ? "Sí" : "No",
         Modificado: r.modified ? "Sí" : "No",
         Modificado_por: r.modifiedBy ?? "",
         Motivo: r.modificationReason ?? "",
+        Corregido_el: r.correctedAt ?? "",
+        Incidencia_pausa: r.hasOpenBreak ? "Sí" : "No",
       }))
     ),
     "Fichajes"
@@ -313,4 +329,36 @@ export function downloadEmployeeDataJson(data: unknown, employeeName: string) {
   a.download = `datos_empleado_${safe}_${format(new Date(), "yyyyMMdd")}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export function downloadMonthlyLaborReportCsv(summary: MonthlyEmployeeSummary) {
+  const csv = monthlyReportToCsv(summary);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `resumen_mensual_${summary.employee.username}_${summary.period.year}${String(summary.period.month).padStart(2, "0")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function downloadInspectionPackageBundle(payload: {
+  generatedAt: string;
+  checksum: string;
+  bundle: LaborReportBundle;
+  companyLegal: Record<string, unknown>;
+}) {
+  const manifest = {
+    ...payload,
+    disclaimer: OFFICIAL_EXPORT_FOOTER,
+    files: ["registro_horario.csv", "registro_horario.json", "datos_legales_empresa.json"],
+  };
+  const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `inspeccion_trabajo_${format(new Date(), "yyyyMMdd_HHmm")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  downloadLaborReportCsv(payload.bundle);
 }

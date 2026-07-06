@@ -37,6 +37,14 @@ export type LaborReportEmployeeInfo = {
   workplaceName: string;
 };
 
+export type LaborReportBreakDetail = {
+  id: number;
+  startLabel: string;
+  endLabel: string | null;
+  durationMinutes: number | null;
+  isOpen: boolean;
+};
+
 export type LaborReportDayRow = {
   timeclockId: number;
   employeeId: number;
@@ -46,9 +54,14 @@ export type LaborReportDayRow = {
   date: string;
   clockIn: string | null;
   clockOut: string | null;
-  breakStart: null;
-  breakEnd: null;
+  breaks: LaborReportBreakDetail[];
+  breakStart: string | null;
+  breakEnd: string | null;
   breakLabel: string;
+  grossMinutes: number | null;
+  grossHours: number | null;
+  breakMinutes: number;
+  breakHours: number;
   totalMinutes: number | null;
   totalHours: number | null;
   status: string;
@@ -57,6 +70,8 @@ export type LaborReportDayRow = {
   modified: boolean;
   modifiedBy: string | null;
   modificationReason: string | null;
+  correctedAt: string | null;
+  hasOpenBreak: boolean;
   notes: string | null;
 };
 
@@ -75,11 +90,14 @@ export type LaborReportAuditEntry = {
 
 export type LaborReportSummary = {
   totalHours: number;
+  totalGrossHours: number;
+  totalBreakMinutes: number;
   daysWithClock: number;
   incompleteDays: number;
   correctedCount: number;
   voidedCount: number;
   incidentCount: number;
+  openBreakCount: number;
 };
 
 export type LaborReportBundle = {
@@ -103,15 +121,21 @@ export const CSV_HEADERS = [
   "date",
   "clock_in",
   "clock_out",
+  "break_details",
   "break_start",
   "break_end",
-  "total_minutes",
-  "total_hours",
+  "break_minutes",
+  "gross_minutes",
+  "gross_hours",
+  "net_minutes",
+  "net_hours",
   "status",
   "is_late",
   "modified",
   "modified_by",
   "modification_reason",
+  "corrected_at",
+  "open_break_incident",
   "notes",
 ] as const;
 
@@ -184,14 +208,19 @@ export function rowStatusLabel(
 export function buildLaborReportSummary(rows: LaborReportDayRow[], incidentCount: number): LaborReportSummary {
   const nonVoided = rows.filter((r) => r.statusCode !== "voided");
   const totalHours = nonVoided.reduce((sum, r) => sum + (r.totalHours ?? 0), 0);
+  const totalGrossHours = nonVoided.reduce((sum, r) => sum + (r.grossHours ?? 0), 0);
+  const totalBreakMinutes = nonVoided.reduce((sum, r) => sum + r.breakMinutes, 0);
   const datesWithClock = new Set(nonVoided.filter((r) => r.clockIn).map((r) => r.date));
   return {
     totalHours: Math.round(totalHours * 100) / 100,
+    totalGrossHours: Math.round(totalGrossHours * 100) / 100,
+    totalBreakMinutes,
     daysWithClock: datesWithClock.size,
     incompleteDays: rows.filter((r) => r.statusCode === "incomplete").length,
     correctedCount: rows.filter((r) => r.statusCode === "corrected").length,
     voidedCount: rows.filter((r) => r.statusCode === "voided").length,
     incidentCount,
+    openBreakCount: rows.filter((r) => r.hasOpenBreak).length,
   };
 }
 
@@ -218,8 +247,12 @@ export function laborReportRowsToCsv(rows: LaborReportDayRow[], company: LaborRe
         r.date,
         r.clockIn ?? "",
         r.clockOut ?? "",
-        "",
-        "",
+        r.breakLabel,
+        r.breakStart ?? "",
+        r.breakEnd ?? "",
+        r.breakMinutes,
+        r.grossMinutes ?? "",
+        r.grossHours ?? "",
         r.totalMinutes ?? "",
         r.totalHours ?? "",
         r.status,
@@ -227,6 +260,8 @@ export function laborReportRowsToCsv(rows: LaborReportDayRow[], company: LaborRe
         r.modified ? "true" : "false",
         r.modifiedBy ?? "",
         r.modificationReason ?? "",
+        r.correctedAt ?? "",
+        r.hasOpenBreak ? "true" : "false",
         r.notes ?? "",
       ]
         .map(csvEscape)

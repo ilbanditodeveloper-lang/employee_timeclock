@@ -36,6 +36,7 @@ import {
   getDemoLatestOpenTimeclock,
   getDemoTodayTimeclocks,
   getDemoOpenBreak,
+  getDemoBreaksForTimeclocks,
   closeDemoOpenBreak,
   demoHasPrivacyAcceptance,
 } from "./demo/store";
@@ -921,6 +922,22 @@ export async function getOpenBreakForTimeclock(timeclockId: number, companyId: n
     .orderBy(desc(timeclockBreaks.startedAt))
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function listBreaksForTimeclocks(timeclockIds: number[], companyId: number) {
+  if (timeclockIds.length === 0) return [];
+  if (isDemoRequestActive()) {
+    return getDemoBreaksForTimeclocks(timeclockIds);
+  }
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(timeclockBreaks)
+    .where(
+      and(eq(timeclockBreaks.companyId, companyId), inArray(timeclockBreaks.timeclockId, timeclockIds))
+    )
+    .orderBy(timeclockBreaks.startedAt);
 }
 
 export async function closeOpenBreakForTimeclock(timeclockId: number, companyId: number, endedAt = new Date()) {

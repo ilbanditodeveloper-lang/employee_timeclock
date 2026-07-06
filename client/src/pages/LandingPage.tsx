@@ -164,7 +164,7 @@ function PhoneMockup() {
                 key={item.label}
                 className={cn(
                   "flex flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-[7px] font-medium",
-                  item.active
+                  "active" in item && item.active
                     ? "bg-blue-600 text-white"
                     : "text-slate-600"
                 )}

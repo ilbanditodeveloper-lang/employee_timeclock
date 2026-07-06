@@ -43,7 +43,10 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const code = (error as TRPCClientError<unknown> & { data?: { code?: string } }).data?.code;
+  const code =
+    error.data && typeof error.data === "object" && "code" in error.data
+      ? String((error.data as { code: unknown }).code)
+      : undefined;
   const isUnauthorized =
     code === "UNAUTHORIZED" || isSessionAuthErrorMessage(error.message);
 

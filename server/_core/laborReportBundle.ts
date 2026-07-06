@@ -15,19 +15,29 @@ import {
   getDemoEmployees,
   getDemoRestaurant,
   getDemoTimeclocks,
+  getDemoBreaksForTimeclocks,
   getDemoIncidents,
   getDemoAuditLogs,
 } from "../demo/store";
 import type { LaborReportAuditEntry, LaborReportBundle, LaborReportDayRow, TimeclockStatus } from "@shared/laborReport";
 import {
   buildLaborReportSummary,
-  computeHoursFromMinutes,
-  computeMinutes,
   formatIsoInTimezone,
   rowStatusLabel,
   summarizeAuditChange,
   toYmdFromDate,
 } from "@shared/laborReport";
+import {
+  computeBreakSegments,
+  computeGrossAndNetMinutes,
+  formatBreakLabel,
+  formatBreakTime,
+  hasOpenOrInvalidBreaks,
+  OPEN_BREAK_INCIDENT,
+  roundHours,
+  sumBreakMinutes,
+} from "@shared/laborBreaks";
+import { listBreaksForTimeclocks } from "../db";
 
 export type LaborReportInput = {
   companyId: number;
@@ -74,6 +84,92 @@ function parseDayBounds(dateFrom: string, dateTo: string) {
 function modifierName(userMap: Map<number, string>, userId: number | null | undefined): string | null {
   if (!userId) return null;
   return userMap.get(userId) ?? `Admin #${userId}`;
+}
+
+type TimeclockRow = {
+  id: number;
+  employeeId: number;
+  entryTime: Date | null;
+  exitTime: Date | null;
+  createdAt: Date;
+  status: string;
+  isLate: boolean;
+  correctionReason: string | null;
+  voidReason: string | null;
+  correctedByUserId: number | null;
+  voidedByUserId: number | null;
+  correctedAt: Date | null;
+};
+
+type BreakRow = {
+  id: number;
+  timeclockId: number;
+  startedAt: Date;
+  endedAt: Date | null;
+};
+
+function buildDayRowFromTimeclock(
+  tc: TimeclockRow,
+  emp: { id: number; name: string; username: string },
+  workplaceName: string,
+  tz: string,
+  breaks: BreakRow[],
+  userMap: Map<number, string>
+): LaborReportDayRow {
+  const entryDate = tc.entryTime ? new Date(tc.entryTime) : new Date(tc.createdAt);
+  const hasExit = Boolean(tc.exitTime);
+  const st = rowStatusLabel(tc.status as TimeclockStatus, hasExit);
+  const segments = computeBreakSegments(
+    breaks.map((b) => ({ id: b.id, startedAt: b.startedAt, endedAt: b.endedAt })),
+    tc.exitTime ? new Date(tc.exitTime) : new Date()
+  );
+  const breakMinutes = tc.status === "voided" ? 0 : sumBreakMinutes(segments);
+  const { grossMinutes, netMinutes } =
+    tc.status === "voided"
+      ? { grossMinutes: null, netMinutes: null }
+      : computeGrossAndNetMinutes(tc.entryTime, tc.exitTime, breakMinutes);
+  const hasOpenBreak = hasOpenOrInvalidBreaks(segments);
+  const modifiedById = tc.correctedByUserId ?? tc.voidedByUserId;
+  const firstBreak = segments[0];
+  const lastBreak = segments[segments.length - 1];
+  const incidentNotes: string[] = [];
+  if (hasOpenBreak) incidentNotes.push(OPEN_BREAK_INCIDENT);
+
+  return {
+    timeclockId: tc.id,
+    employeeId: emp.id,
+    employeeName: emp.name,
+    employeeUsername: emp.username,
+    workplaceName,
+    date: toYmdFromDate(entryDate, tz),
+    clockIn: tc.entryTime ? formatIsoInTimezone(tc.entryTime, tz) : null,
+    clockOut: tc.exitTime ? formatIsoInTimezone(tc.exitTime, tz) : null,
+    breaks: segments.map((s) => ({
+      id: s.id,
+      startLabel: formatBreakTime(s.start, tz),
+      endLabel: s.end ? formatBreakTime(s.end, tz) : null,
+      durationMinutes: s.durationMinutes,
+      isOpen: s.isOpen,
+    })),
+    breakStart: firstBreak ? formatBreakTime(firstBreak.start, tz) : null,
+    breakEnd: lastBreak?.end ? formatBreakTime(lastBreak.end, tz) : null,
+    breakLabel: formatBreakLabel(segments, tz),
+    grossMinutes,
+    grossHours: roundHours(grossMinutes),
+    breakMinutes,
+    breakHours: roundHours(breakMinutes) ?? 0,
+    totalMinutes: netMinutes,
+    totalHours: roundHours(netMinutes),
+    status: st.label,
+    statusCode: st.code,
+    isLate: tc.isLate,
+    modified: tc.status === "corrected" || tc.status === "voided",
+    modifiedBy: modifierName(userMap, modifiedById),
+    modificationReason: tc.correctionReason ?? tc.voidReason ?? null,
+    correctedAt: tc.correctedAt ? new Date(tc.correctedAt).toISOString() : null,
+    hasOpenBreak,
+    notes: incidentNotes.length ? incidentNotes.join(" · ") : tc.voidReason ?? tc.correctionReason ?? null,
+  };
 }
 
 export async function buildLaborReportBundle(input: LaborReportInput): Promise<LaborReportBundle> {
@@ -124,37 +220,29 @@ export async function buildLaborReportBundle(input: LaborReportInput): Promise<L
   const empMap = new Map(targetEmployees.map((e) => [e.id, e]));
   const workplaceName = restaurant.name;
 
+  const timeclockIds = tcRows.map((tc) => tc.id);
+  const allBreaks = await listBreaksForTimeclocks(timeclockIds, input.companyId);
+  const breaksByTimeclock = new Map<number, BreakRow[]>();
+  for (const b of allBreaks) {
+    const list = breaksByTimeclock.get(b.timeclockId) ?? [];
+    list.push(b);
+    breaksByTimeclock.set(b.timeclockId, list);
+  }
+
   const rows: LaborReportDayRow[] = [];
   for (const tc of tcRows) {
     const emp = empMap.get(tc.employeeId);
     if (!emp) continue;
-    const entryDate = tc.entryTime ? new Date(tc.entryTime) : new Date(tc.createdAt);
-    const hasExit = Boolean(tc.exitTime);
-    const st = rowStatusLabel(tc.status as TimeclockStatus, hasExit);
-    const minutes = tc.status === "voided" ? null : computeMinutes(tc.entryTime, tc.exitTime);
-    const modifiedById = tc.correctedByUserId ?? tc.voidedByUserId;
-    rows.push({
-      timeclockId: tc.id,
-      employeeId: emp.id,
-      employeeName: emp.name,
-      employeeUsername: emp.username,
-      workplaceName,
-      date: toYmdFromDate(entryDate, tz),
-      clockIn: tc.entryTime ? formatIsoInTimezone(tc.entryTime, tz) : null,
-      clockOut: tc.exitTime ? formatIsoInTimezone(tc.exitTime, tz) : null,
-      breakStart: null,
-      breakEnd: null,
-      breakLabel: "No registradas",
-      totalMinutes: minutes,
-      totalHours: computeHoursFromMinutes(minutes),
-      status: st.label,
-      statusCode: st.code,
-      isLate: tc.isLate,
-      modified: tc.status === "corrected" || tc.status === "voided",
-      modifiedBy: modifierName(userMap, modifiedById),
-      modificationReason: tc.correctionReason ?? tc.voidReason ?? null,
-      notes: tc.voidReason ?? tc.correctionReason ?? null,
-    });
+    rows.push(
+      buildDayRowFromTimeclock(
+        tc,
+        emp,
+        workplaceName,
+        tz,
+        breaksByTimeclock.get(tc.id) ?? [],
+        userMap
+      )
+    );
   }
 
   const incidentRows = await listIncidentsForEmployeeIds(employeeIds, input.companyId);
@@ -219,33 +307,23 @@ async function buildDemoLaborReportBundle(input: LaborReportInput): Promise<Labo
   const employeeIds = targetEmployees.map((e) => e.id);
   const tz = company.timezone || "Europe/Madrid";
   const tcRows = getDemoTimeclocks(employeeIds);
+  const demoBreaks = getDemoBreaksForTimeclocks(tcRows.map((t) => t.id));
+  const breaksByTimeclock = new Map<number, BreakRow[]>();
+  for (const b of demoBreaks) {
+    const list = breaksByTimeclock.get(b.timeclockId) ?? [];
+    list.push(b);
+    breaksByTimeclock.set(b.timeclockId, list);
+  }
   const rows: LaborReportDayRow[] = tcRows.map((tc) => {
     const emp = targetEmployees.find((e) => e.id === tc.employeeId)!;
-    const hasExit = Boolean(tc.exitTime);
-    const st = rowStatusLabel((tc.status as TimeclockStatus) ?? "valid", hasExit);
-    const minutes = tc.status === "voided" ? null : computeMinutes(tc.entryTime, tc.exitTime);
-    return {
-      timeclockId: tc.id,
-      employeeId: emp.id,
-      employeeName: emp.name,
-      employeeUsername: emp.username,
-      workplaceName: restaurant.name,
-      date: tc.entryTime ? toYmdFromDate(new Date(tc.entryTime), tz) : "",
-      clockIn: tc.entryTime ? formatIsoInTimezone(tc.entryTime, tz) : null,
-      clockOut: tc.exitTime ? formatIsoInTimezone(tc.exitTime, tz) : null,
-      breakStart: null,
-      breakEnd: null,
-      breakLabel: "No registradas",
-      totalMinutes: minutes,
-      totalHours: computeHoursFromMinutes(minutes),
-      status: st.label,
-      statusCode: st.code,
-      isLate: tc.isLate,
-      modified: tc.status === "corrected" || tc.status === "voided",
-      modifiedBy: null,
-      modificationReason: null,
-      notes: null,
-    };
+    return buildDayRowFromTimeclock(
+      tc,
+      emp,
+      restaurant.name,
+      tz,
+      breaksByTimeclock.get(tc.id) ?? [],
+      new Map()
+    );
   });
   return {
     company: {

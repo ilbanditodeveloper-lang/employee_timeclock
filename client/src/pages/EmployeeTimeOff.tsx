@@ -143,7 +143,7 @@ export default function EmployeeTimeOff() {
     }
   };
 
-  if (isAuthLoading || !isAdminAuthenticated) {
+  if (isAuthLoading || !isEmployeeAuthenticated) {
     return null;
   }
 

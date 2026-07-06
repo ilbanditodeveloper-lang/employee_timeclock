@@ -103,6 +103,26 @@ import {
   listAuditLogsFiltered,
 } from "./_core/laborReportBundle";
 import {
+  buildEmployeeSelfLaborReport,
+  buildInspectionPackage,
+  buildMonthlyEmployeeReport,
+  countPendingGdprRequests,
+  createGdprRequest,
+  getEmployeeLegalPortalData,
+  getMissingCompanyLegalAcceptances,
+  hashDocumentContent,
+  listCompanyLegalAcceptances,
+  listGdprRequestsForCompany,
+  recordCompanyLegalAcceptances,
+  recordMonthlyReportDelivery,
+} from "./_core/complianceApi";
+import { validateCompanyLegalForOfficialExport } from "@shared/legalCompliance";
+import {
+  isWithinMinimumRetention,
+  normalizeRetentionPolicy,
+  RETENTION_BLOCK_DELETE_MSG,
+} from "@shared/retentionPolicy";
+import {
   restaurants,
   employees,
   schedules,
@@ -115,6 +135,7 @@ import {
   notificationLogs,
   timeOffRequests,
   legalAcceptances,
+  companyLegalAcceptances,
   auditLogs,
 } from "../drizzle/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
@@ -808,6 +829,9 @@ export const appRouter = router({
         employeePassword: z.string().min(6),
         employeePhone: z.string().optional(),
         lateGraceMinutes: z.number().min(0).max(120).default(5),
+        contractType: z.enum(["full_time", "part_time", "temporary", "other"]).optional(),
+        weeklyContractedHours: z.number().min(0).max(80).optional(),
+        nationalId: z.string().max(32).optional(),
         schedule: z.record(
           z.string(),
           z.union([
@@ -845,6 +869,10 @@ export const appRouter = router({
           password: hashPassword(input.employeePassword),
           phone: input.employeePhone,
           lateGraceMinutes: input.lateGraceMinutes,
+          contractType: input.contractType ?? "full_time",
+          weeklyContractedHours:
+            input.weeklyContractedHours != null ? String(input.weeklyContractedHours) : null,
+          nationalId: input.nationalId?.trim() || null,
           isActive: true,
         });
       } catch (error) {
@@ -877,6 +905,9 @@ export const appRouter = router({
         employeePassword: z.string().optional(),
         employeePhone: z.string().optional(),
         lateGraceMinutes: z.number().min(0).max(120).default(5),
+        contractType: z.enum(["full_time", "part_time", "temporary", "other"]).optional(),
+        weeklyContractedHours: z.number().min(0).max(80).optional(),
+        nationalId: z.string().max(32).optional(),
         schedule: z.record(
           z.string(),
           z.union([
@@ -910,6 +941,12 @@ export const appRouter = router({
         phone: input.employeePhone ?? null,
         lateGraceMinutes: input.lateGraceMinutes,
       };
+      if (input.contractType !== undefined) updateData.contractType = input.contractType;
+      if (input.weeklyContractedHours !== undefined) {
+        updateData.weeklyContractedHours =
+          input.weeklyContractedHours != null ? String(input.weeklyContractedHours) : null;
+      }
+      if (input.nationalId !== undefined) updateData.nationalId = input.nationalId.trim() || null;
       const existingEmail = await getEmployeeByEmail(
         normalizeEmployeeEmail(input.employeeEmail),
         company.id
@@ -1323,6 +1360,12 @@ export const appRouter = router({
       const timeclock = await getTimeclockById(input.timeclockId, company.id);
       if (!timeclock || !employeeIds.has(timeclock.employeeId) || timeclock.status === "voided") {
         throw new Error("Fichaje no encontrado");
+      }
+
+      const recordDate = timeclock.entryTime ? new Date(timeclock.entryTime) : new Date(timeclock.createdAt);
+      const retention = normalizeRetentionPolicy(company);
+      if (isWithinMinimumRetention(recordDate, retention)) {
+        throwBusinessError(RETENTION_BLOCK_DELETE_MSG);
       }
 
       const db = await getDb();
@@ -2072,17 +2115,18 @@ export const appRouter = router({
           (input as { restaurantId?: number }).restaurantId
         );
         if (!restaurant) {
-          return { totalCount: 0, timeOff: [], incidents: [] };
+          return { totalCount: 0, gdprPending: 0, timeOff: [], incidents: [] };
         }
         const restaurantEmployees = await getEmployeesByRestaurant(restaurant.id, company.id);
         const employeeIds = restaurantEmployees.map((e) => e.id);
         const nameById = new Map(restaurantEmployees.map((e) => [e.id, e.name]));
         if (employeeIds.length === 0) {
-          return { totalCount: 0, timeOff: [], incidents: [] };
+          const gdprPending = await countPendingGdprRequests(company.id);
+          return { totalCount: gdprPending, gdprPending, timeOff: [], incidents: [] };
         }
 
         const db = await getDb();
-        if (!db) return { totalCount: 0, timeOff: [], incidents: [] };
+        if (!db) return { totalCount: 0, gdprPending: 0, timeOff: [], incidents: [] };
 
         const timeOffRows = await db
           .select()
@@ -2120,8 +2164,11 @@ export const appRouter = router({
           createdAt: row.createdAt,
         }));
 
+        const gdprPending = await countPendingGdprRequests(company.id);
+
         return {
-          totalCount: timeOff.length + incidents.length,
+          totalCount: timeOff.length + incidents.length + gdprPending,
+          gdprPending,
           timeOff,
           incidents,
         };
@@ -2325,6 +2372,12 @@ export const appRouter = router({
           locationEnabled: z.boolean().optional(),
           dataRetentionYears: z.number().min(4).max(10).optional(),
           legalOnboardingAcknowledged: z.boolean().optional(),
+          province: z.string().optional(),
+          legalContactName: z.string().optional(),
+          gpsJustification: z.string().optional(),
+          gpsJustificationCategory: z
+            .enum(["itinerant_workers", "multiple_sites", "off_site_work", "other"])
+            .optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -2361,7 +2414,30 @@ export const appRouter = router({
         }
         if (input.country !== undefined) update.country = input.country;
         if (input.timezone !== undefined) update.timezone = input.timezone;
-        if (input.locationEnabled !== undefined) update.locationEnabled = input.locationEnabled;
+        if (input.province !== undefined) update.province = input.province.trim() || null;
+        if (input.legalContactName !== undefined) {
+          update.legalContactName = input.legalContactName.trim() || null;
+        }
+        if (input.locationEnabled === true && !company.locationEnabled) {
+          const justification = input.gpsJustification?.trim();
+          if (!justification || justification.length < 10) {
+            throwBusinessError(
+              "Para activar GPS debe indicar una justificación de al menos 10 caracteres."
+            );
+          }
+          if (!input.gpsJustificationCategory) {
+            throwBusinessError("Seleccione el motivo de activación de geolocalización.");
+          }
+          update.locationEnabled = true;
+          update.gpsJustification = justification;
+          update.gpsJustificationCategory = input.gpsJustificationCategory;
+          update.gpsActivatedBy = admin.id;
+          update.gpsActivatedAt = new Date();
+        } else if (input.locationEnabled === false && company.locationEnabled) {
+          update.locationEnabled = false;
+        } else if (input.locationEnabled !== undefined) {
+          update.locationEnabled = input.locationEnabled;
+        }
         if (input.dataRetentionYears !== undefined) {
           update.dataRetentionYears = input.dataRetentionYears;
         }
@@ -2369,6 +2445,29 @@ export const appRouter = router({
           update.onboardingLegalAcknowledgedAt = new Date();
         }
         await db.update(companies).set(update).where(eq(companies.id, company.id));
+        if (input.locationEnabled === true && !company.locationEnabled) {
+          await writeAuditLog({
+            companyId: company.id,
+            entityType: "company",
+            entityId: company.id,
+            action: "GPS_ENABLED",
+            newValue: {
+              category: input.gpsJustificationCategory,
+              justification: input.gpsJustification?.trim(),
+            },
+            performedByType: "admin",
+            performedById: admin.id,
+          });
+        } else if (input.locationEnabled === false && company.locationEnabled) {
+          await writeAuditLog({
+            companyId: company.id,
+            entityType: "company",
+            entityId: company.id,
+            action: "GPS_DISABLED",
+            performedByType: "admin",
+            performedById: admin.id,
+          });
+        }
         await writeAuditLog({
           companyId: company.id,
           entityType: "company",
@@ -2458,6 +2557,17 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const now = new Date();
+        const ip =
+          (ctx.req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
+          ctx.req.socket.remoteAddress ??
+          null;
+        const userAgent = (ctx.req.headers["user-agent"] as string | undefined) ?? null;
+        await recordCompanyLegalAcceptances({
+          companyId: company.id,
+          acceptedByUserId: admin.id,
+          ipAddress: ip,
+          userAgent,
+        });
         await db
           .update(companies)
           .set({
@@ -2473,7 +2583,7 @@ export const appRouter = router({
           entityType: "company",
           entityId: company.id,
           action: "complete_onboarding",
-          newValue: { onboardingCompleted: true },
+          newValue: { onboardingCompleted: true, legalDocumentsAccepted: true },
           performedByType: "admin",
           performedById: admin.id,
         });
@@ -2573,11 +2683,20 @@ export const appRouter = router({
           dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           includeAuditHistory: z.boolean().optional(),
+          officialExport: z.boolean().optional(),
         })
       )
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        return buildLaborReportBundle({
+        if (input.officialExport) {
+          const legal = validateCompanyLegalForOfficialExport(company);
+          if (!legal.valid) {
+            throwBusinessError(
+              `Faltan datos legales de empresa (${legal.missing.join(", ")}). Complete el panel Legal/RGPD.`
+            );
+          }
+        }
+        const bundle = await buildLaborReportBundle({
           companyId: company.id,
           adminId: admin.id,
           employeeId: input.employeeId,
@@ -2585,6 +2704,23 @@ export const appRouter = router({
           dateTo: input.dateTo,
           includeAuditHistory: input.includeAuditHistory ?? false,
         });
+        if (input.officialExport) {
+          await writeAuditLog({
+            companyId: company.id,
+            entityType: "company",
+            entityId: company.id,
+            action: "EXPORT_GENERATED",
+            newValue: {
+              type: "labor_report",
+              dateFrom: input.dateFrom,
+              dateTo: input.dateTo,
+              checksum: hashDocumentContent(JSON.stringify(bundle)),
+            },
+            performedByType: "admin",
+            performedById: admin.id,
+          });
+        }
+        return bundle;
       }),
 
     exportEmployeeData: publicProcedure
@@ -2596,6 +2732,150 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
         return buildEmployeeExportBundle(company.id, admin.id, input.employeeId);
+      }),
+
+    getMonthlyEmployeeReport: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number(),
+          year: z.number().int().min(2000).max(2100),
+          month: z.number().int().min(1).max(12),
+          recordDelivery: z.boolean().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        const report = await buildMonthlyEmployeeReport({
+          companyId: company.id,
+          adminId: admin.id,
+          employeeId: input.employeeId,
+          year: input.year,
+          month: input.month,
+        });
+        if (input.recordDelivery) {
+          await recordMonthlyReportDelivery({
+            companyId: company.id,
+            employeeId: input.employeeId,
+            year: input.year,
+            month: input.month,
+            deliveryType: "admin_generated",
+            documentHash: hashDocumentContent(JSON.stringify(report)),
+            ipAddress: getClientIp(ctx.req),
+            userAgent: ctx.req.headers["user-agent"]?.toString() ?? null,
+          });
+        }
+        return report;
+      }),
+
+    buildInspectionPackage: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number().optional(),
+          dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { admin, company } = await resolveAdminAuth(ctx, input);
+        return buildInspectionPackage({
+          companyId: company.id,
+          adminId: admin.id,
+          employeeId: input.employeeId,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+        });
+      }),
+
+    getEmployeeLegalPortal: publicProcedure
+      .input(optionalCreds.extend({ employeeId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const employee = await resolveEmployeeAuth(ctx, input);
+        if (employee.id !== input.employeeId) throwBusinessError("No autorizado");
+        return getEmployeeLegalPortalData(employee.id, employee.companyId);
+      }),
+
+    getMyLaborReportBundle: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number(),
+          dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const employee = await resolveEmployeeAuth(ctx, input);
+        if (employee.id !== input.employeeId) throwBusinessError("No autorizado");
+        const bundle = await buildEmployeeSelfLaborReport(
+          employee.id,
+          employee.companyId,
+          input.dateFrom,
+          input.dateTo
+        );
+        await writeAuditLog({
+          companyId: employee.companyId,
+          entityType: "employee",
+          entityId: employee.id,
+          action: "EXPORT_GENERATED",
+          newValue: { type: "employee_self_export", dateFrom: input.dateFrom, dateTo: input.dateTo },
+          performedByType: "employee",
+          performedById: employee.id,
+        });
+        return bundle;
+      }),
+
+    submitGdprRequest: publicProcedure
+      .input(
+        optionalCreds.extend({
+          employeeId: z.number(),
+          requestType: z.enum([
+            "access",
+            "rectification",
+            "erasure",
+            "restriction",
+            "objection",
+            "portability",
+            "other",
+          ]),
+          message: z.string().min(10).max(4000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const employee = await resolveEmployeeAuth(ctx, input);
+        if (employee.id !== input.employeeId) throwBusinessError("No autorizado");
+        return createGdprRequest({
+          companyId: employee.companyId,
+          employeeId: employee.id,
+          requestType: input.requestType,
+          message: input.message.trim(),
+        });
+      }),
+
+    listGdprRequests: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        return listGdprRequestsForCompany(company.id);
+      }),
+
+    getGdprPendingCount: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        return { count: await countPendingGdprRequests(company.id) };
+      }),
+
+    listCompanyLegalAcceptances: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        return listCompanyLegalAcceptances(company.id);
+      }),
+
+    getMissingCompanyLegalAcceptances: publicProcedure
+      .input(optionalCreds)
+      .query(async ({ ctx, input }) => {
+        const { company } = await resolveAdminAuth(ctx, input);
+        return getMissingCompanyLegalAcceptances(company.id);
       }),
 
     deactivateEmployee: publicProcedure

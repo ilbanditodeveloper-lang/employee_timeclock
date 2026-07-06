@@ -100,6 +100,11 @@ export default function AdminDashboard() {
   const [employeeUsername, setEmployeeUsername] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
+  const [employeeContractType, setEmployeeContractType] = useState<
+    'full_time' | 'part_time' | 'temporary' | 'other'
+  >('full_time');
+  const [employeeWeeklyHours, setEmployeeWeeklyHours] = useState('');
+  const [employeeNationalId, setEmployeeNationalId] = useState('');
   const [lateGraceMinutes, setLateGraceMinutes] = useState('5');
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
@@ -422,7 +427,7 @@ export default function AdminDashboard() {
     return { from, to };
   };
 
-  const fetchReportBundle = async (withAudit?: boolean) => {
+  const fetchReportBundle = async (withAudit?: boolean, official?: boolean) => {
     const { from, to } = getReportDateRange();
     return trpcUtils.publicApi.getLaborReportBundle.fetch({
       ...adminApiInput(),
@@ -430,6 +435,7 @@ export default function AdminDashboard() {
       dateFrom: from,
       dateTo: to,
       includeAuditHistory: withAudit ?? includeAuditHistory,
+      officialExport: official ?? false,
     });
   };
 
@@ -489,7 +495,7 @@ export default function AdminDashboard() {
     }
     setExportBusy(true);
     try {
-      const bundle = await fetchReportBundle(true);
+      const bundle = await fetchReportBundle(true, kind === 'official-pdf');
       if (bundle.rows.length === 0 && !filteredTimeOffForReport.length && !filteredIncidentsForReport.length) {
         toast.error('No hay fichajes en el periodo seleccionado');
         return;
@@ -915,6 +921,9 @@ export default function AdminDashboard() {
           employeePassword: employeePassword || undefined,
           employeePhone,
           lateGraceMinutes: graceMinutesValue,
+          contractType: employeeContractType,
+          weeklyContractedHours: employeeWeeklyHours ? Number(employeeWeeklyHours) : undefined,
+          nationalId: employeeNationalId || undefined,
           schedule: employeeSchedule,
         })
       : createEmployee.mutateAsync({
@@ -925,6 +934,9 @@ export default function AdminDashboard() {
           employeePassword,
           employeePhone,
           lateGraceMinutes: graceMinutesValue,
+          contractType: employeeContractType,
+          weeklyContractedHours: employeeWeeklyHours ? Number(employeeWeeklyHours) : undefined,
+          nationalId: employeeNationalId || undefined,
           schedule: employeeSchedule,
         });
 
@@ -946,6 +958,9 @@ export default function AdminDashboard() {
         setEmployeeUsername('');
         setEmployeePassword('');
         setEmployeePhone('');
+        setEmployeeContractType('full_time');
+        setEmployeeWeeklyHours('');
+        setEmployeeNationalId('');
         setLateGraceMinutes('5');
         setEditingEmployeeId(null);
         setEmployeeSchedule(nextSchedule);
@@ -995,6 +1010,13 @@ export default function AdminDashboard() {
     setEmployeeUsername(employee.username);
     setEmployeePassword('');
     setEmployeePhone(employee.phone || '');
+    setEmployeeContractType(
+      (employee as { contractType?: typeof employeeContractType }).contractType ?? 'full_time'
+    );
+    setEmployeeWeeklyHours(
+      (employee as { weeklyContractedHours?: string | null }).weeklyContractedHours ?? ''
+    );
+    setEmployeeNationalId((employee as { nationalId?: string | null }).nationalId ?? '');
     setLateGraceMinutes(String(employee.lateGraceMinutes ?? 5));
     setScheduleSectionOpen(true);
     setShowEmployeeForm(true);
@@ -1477,6 +1499,56 @@ export default function AdminDashboard() {
                     placeholder="+34 600 123 456"
                     value={employeePhone}
                     onChange={(e) => setEmployeePhone(e.target.value)}
+                    className="input-elegant"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Tipo de contrato
+                    </label>
+                    <select
+                      value={employeeContractType}
+                      onChange={(e) =>
+                        setEmployeeContractType(
+                          e.target.value as 'full_time' | 'part_time' | 'temporary' | 'other'
+                        )
+                      }
+                      className="input-elegant w-full"
+                    >
+                      <option value="full_time">Tiempo completo</option>
+                      <option value="part_time">Tiempo parcial</option>
+                      <option value="temporary">Temporal</option>
+                      <option value="other">Otro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Horas semanales contratadas
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="80"
+                      step="0.5"
+                      placeholder="20"
+                      value={employeeWeeklyHours}
+                      onChange={(e) => setEmployeeWeeklyHours(e.target.value)}
+                      className="input-elegant"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    DNI/NIE (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="12345678A"
+                    value={employeeNationalId}
+                    onChange={(e) => setEmployeeNationalId(e.target.value)}
                     className="input-elegant"
                   />
                 </div>

@@ -106,6 +106,12 @@
       "when": 1782090000000,
       "tag": "0014_company_crm",
       "breakpoints": true
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1782091000000,
+      "tag": "0015_saas_legal_compliance",
+      "breakpoints": true
     }
   ]
 }
