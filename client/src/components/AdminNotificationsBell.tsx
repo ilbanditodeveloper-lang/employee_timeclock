@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { trpc } from "@/lib/trpc";
 import { adminApiInput } from "@/lib/adminContext";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type AdminNotificationsBellProps = {
   onOpenTimeOff?: () => void;
@@ -34,10 +35,28 @@ export default function AdminNotificationsBell({
   onOpenTimeOff,
   onOpenIncidents,
 }: AdminNotificationsBellProps) {
+  const trpcUtils = trpc.useUtils();
   const query = trpc.publicApi.getAdminNotificationCenter.useQuery(adminApiInput(), {
     refetchInterval: 60_000,
   });
+  const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.decision === "approved"
+          ? "Solicitud aprobada"
+          : "Solicitud denegada"
+      );
+      void query.refetch();
+      void trpcUtils.publicApi.listTimeOffRequests.invalidate();
+      void trpcUtils.publicApi.getTimeOffCalendarMonth.invalidate();
+      void trpcUtils.publicApi.getTodayWorkforceStatus.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message || "No se pudo actualizar la solicitud");
+    },
+  });
   const total = query.data?.totalCount ?? 0;
+  const decidingId = decideTimeOff.isPending ? decideTimeOff.variables?.requestId : null;
 
   return (
     <Popover>
@@ -62,14 +81,14 @@ export default function AdminNotificationsBell({
           ) : null}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align="end" className="w-96 p-0">
         <div className="border-b px-4 py-3">
           <p className="text-sm font-semibold text-foreground">Notificaciones</p>
           <p className="text-xs text-muted-foreground">
             Vacaciones e incidencias pendientes de revisar
           </p>
         </div>
-        <div className="max-h-80 overflow-y-auto p-2">
+        <div className="max-h-96 overflow-y-auto p-2">
           {query.isLoading ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">Cargando…</p>
           ) : total === 0 ? (
@@ -78,29 +97,70 @@ export default function AdminNotificationsBell({
             <div className="space-y-3">
               {(query.data?.timeOff ?? []).length > 0 ? (
                 <section>
-                  <div className="mb-1 flex items-center gap-2 px-2">
-                    <Palmtree className="size-3.5 text-teal-600" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Vacaciones / ausencias
-                    </p>
+                  <div className="mb-1 flex items-center justify-between gap-2 px-2">
+                    <div className="flex items-center gap-2">
+                      <Palmtree className="size-3.5 text-teal-600" />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Vacaciones / ausencias
+                      </p>
+                    </div>
+                    {onOpenTimeOff ? (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-blue-700 hover:underline"
+                        onClick={onOpenTimeOff}
+                      >
+                        Ver todas
+                      </button>
+                    ) : null}
                   </div>
-                  <ul className="space-y-1">
+                  <ul className="space-y-2">
                     {(query.data?.timeOff ?? []).map((item) => (
-                      <li key={`to-${item.id}`}>
-                        <button
-                          type="button"
-                          className="w-full rounded-lg px-2 py-2 text-left hover:bg-muted/70"
-                          onClick={onOpenTimeOff}
-                        >
-                          <p className="text-sm font-medium text-foreground">{item.employeeName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {TIME_OFF_KIND_LABELS[item.kind] ?? item.kind} ·{" "}
-                            {formatShortDate(item.startDate)}
-                            {item.endDate !== item.startDate
-                              ? ` – ${formatShortDate(item.endDate)}`
-                              : ""}
-                          </p>
-                        </button>
+                      <li
+                        key={`to-${item.id}`}
+                        className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2"
+                      >
+                        <p className="text-sm font-medium text-foreground">{item.employeeName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {TIME_OFF_KIND_LABELS[item.kind] ?? item.kind} ·{" "}
+                          {formatShortDate(item.startDate)}
+                          {item.endDate !== item.startDate
+                            ? ` – ${formatShortDate(item.endDate)}`
+                            : ""}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 bg-emerald-600 px-2 text-xs text-white hover:bg-emerald-700"
+                            disabled={decidingId === item.id}
+                            onClick={() =>
+                              decideTimeOff.mutate({
+                                ...adminApiInput(),
+                                requestId: item.id,
+                                decision: "approved",
+                              })
+                            }
+                          >
+                            Aprobar
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 px-2 text-xs"
+                            disabled={decidingId === item.id}
+                            onClick={() =>
+                              decideTimeOff.mutate({
+                                ...adminApiInput(),
+                                requestId: item.id,
+                                decision: "rejected",
+                              })
+                            }
+                          >
+                            Denegar
+                          </Button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -109,11 +169,22 @@ export default function AdminNotificationsBell({
 
               {(query.data?.incidents ?? []).length > 0 ? (
                 <section>
-                  <div className="mb-1 flex items-center gap-2 px-2">
-                    <AlertCircle className="size-3.5 text-amber-600" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Incidencias
-                    </p>
+                  <div className="mb-1 flex items-center justify-between gap-2 px-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-3.5 text-amber-600" />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Incidencias
+                      </p>
+                    </div>
+                    {onOpenIncidents ? (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-blue-700 hover:underline"
+                        onClick={onOpenIncidents}
+                      >
+                        Ver todas
+                      </button>
+                    ) : null}
                   </div>
                   <ul className="space-y-1">
                     {(query.data?.incidents ?? []).map((item) => (
