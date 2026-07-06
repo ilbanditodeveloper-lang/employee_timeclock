@@ -33,6 +33,7 @@ import {
   type CrmActivityType,
 } from "@shared/crmStages";
 import { buildWhatsAppHref } from "@shared/landingConfig";
+import SuperAdminCompanyLocationsPanel from "@/components/SuperAdminCompanyLocationsPanel";
 
 type CompanyRow = {
   id: number;
@@ -744,6 +745,11 @@ export default function SuperAdminCompaniesPanel({
                             Actualizar admin
                           </Button>
                         </div>
+                        <SuperAdminCompanyLocationsPanel
+                          companyId={company.id}
+                          companyName={company.name}
+                          locationCount={company.locationCount}
+                        />
                         <Button type="button" size="sm" variant="ghost" onClick={() => setEditingCompanyId(null)}>
                           Cerrar ficha
                         </Button>

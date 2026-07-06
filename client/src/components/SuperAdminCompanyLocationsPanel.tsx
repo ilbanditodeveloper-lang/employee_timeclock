@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import RestaurantMap from "@/components/RestaurantMap";
 import { trpc } from "@/lib/trpc";
-import { adminApiInput, getStoredActiveLocationId, setStoredActiveLocationId } from "@/lib/adminContext";
+import { emptyCreds } from "@/lib/authApi";
 
 type LocationRow = {
   id: number;
@@ -20,22 +19,25 @@ type LocationRow = {
 };
 
 type Props = {
-  locationLimit: number | null;
+  companyId: number;
+  companyName: string;
   locationCount: number;
-  canAddLocation: boolean;
 };
 
-export default function AdminLocationsPanel({
-  locationLimit,
+export default function SuperAdminCompanyLocationsPanel({
+  companyId,
+  companyName,
   locationCount,
-  canAddLocation,
 }: Props) {
-  const locationsQuery = trpc.publicApi.listCompanyLocations.useQuery(adminApiInput());
-  const createLocation = trpc.publicApi.createCompanyLocation.useMutation();
-  const updateLocation = trpc.publicApi.updateCompanyLocation.useMutation();
-  const deleteLocation = trpc.publicApi.deleteCompanyLocation.useMutation();
+  const locationsQuery = trpc.publicApi.superAdminListCompanyLocations.useQuery({
+    ...emptyCreds,
+    companyId,
+  });
+  const createLocation = trpc.publicApi.superAdminCreateCompanyLocation.useMutation();
+  const updateLocation = trpc.publicApi.superAdminUpdateCompanyLocation.useMutation();
+  const deleteLocation = trpc.publicApi.superAdminDeleteCompanyLocation.useMutation();
 
-  const [activeId, setActiveId] = useState<number | undefined>(getStoredActiveLocationId());
+  const [activeId, setActiveId] = useState<number | undefined>();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -49,7 +51,6 @@ export default function AdminLocationsPanel({
   useEffect(() => {
     if (!activeId && locations[0]) {
       setActiveId(locations[0].id);
-      setStoredActiveLocationId(locations[0].id);
     }
   }, [locations, activeId]);
 
@@ -66,17 +67,12 @@ export default function AdminLocationsPanel({
     await locationsQuery.refetch();
   };
 
-  const selectLocation = (id: number) => {
-    setActiveId(id);
-    setStoredActiveLocationId(id);
-    window.location.reload();
-  };
-
   const saveActive = async () => {
     if (!activeLocation) return;
     try {
       await updateLocation.mutateAsync({
-        ...adminApiInput(activeLocation.id),
+        ...emptyCreds,
+        companyId,
         locationId: activeLocation.id,
         name,
         address,
@@ -92,9 +88,14 @@ export default function AdminLocationsPanel({
   };
 
   const addLocation = async () => {
+    if (!name.trim()) {
+      toast.error("Indica un nombre para la sede");
+      return;
+    }
     try {
       await createLocation.mutateAsync({
-        ...adminApiInput(),
+        ...emptyCreds,
+        companyId,
         name,
         address,
         latitude,
@@ -113,14 +114,12 @@ export default function AdminLocationsPanel({
     if (!window.confirm("¿Eliminar esta sede?")) return;
     try {
       await deleteLocation.mutateAsync({
-        ...adminApiInput(),
+        ...emptyCreds,
+        companyId,
         locationId,
       });
       toast.success("Sede eliminada");
-      if (activeId === locationId) {
-        setStoredActiveLocationId(null);
-        setActiveId(undefined);
-      }
+      if (activeId === locationId) setActiveId(undefined);
       await refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo eliminar");
@@ -128,24 +127,22 @@ export default function AdminLocationsPanel({
   };
 
   return (
-    <Card className="p-6 space-y-6">
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <h4 className="font-semibold text-sm flex items-center gap-2">
             <MapPin className="size-4" />
-            Sedes / locales
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            {locationCount} sede{locationCount === 1 ? "" : "s"}
-            {locationLimit != null ? ` · Límite plan: ${locationLimit}` : " · Multi-sede ilimitada (Enterprise)"}
+            Sedes / locales — {companyName}
+          </h4>
+          <p className="text-xs text-muted-foreground mt-1">
+            {locationCount} sede{locationCount === 1 ? "" : "s"} registrada(s). Gestión multi-sede solo
+            desde superadmin.
           </p>
         </div>
-        {canAddLocation ? (
-          <Button type="button" size="sm" onClick={() => setShowForm((v) => !v)}>
-            <Plus className="size-4 mr-1" />
-            Nueva sede
-          </Button>
-        ) : null}
+        <Button type="button" size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+          <Plus className="size-4 mr-1" />
+          Nueva sede
+        </Button>
       </div>
 
       {locations.length > 1 ? (
@@ -156,7 +153,7 @@ export default function AdminLocationsPanel({
               type="button"
               size="sm"
               variant={loc.id === activeLocation?.id ? "default" : "outline"}
-              onClick={() => selectLocation(loc.id)}
+              onClick={() => setActiveId(loc.id)}
             >
               {loc.name}
               {loc.isPrimary ? " (principal)" : ""}
@@ -166,13 +163,13 @@ export default function AdminLocationsPanel({
       ) : null}
 
       {showForm ? (
-        <div className="rounded-lg border border-dashed p-4 space-y-3">
+        <div className="rounded-lg border border-dashed p-3 space-y-3">
           <p className="text-sm font-medium">Nueva sede</p>
           <div>
             <Label>Nombre</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
-          <Button type="button" onClick={() => void addLocation()} disabled={createLocation.isPending}>
+          <Button type="button" size="sm" onClick={() => void addLocation()} disabled={createLocation.isPending}>
             Crear sede
           </Button>
         </div>
@@ -193,32 +190,37 @@ export default function AdminLocationsPanel({
               <Label>Radio GPS (m)</Label>
               <Input
                 type="number"
-                min={50}
+                min={0}
                 value={radiusMeters}
                 onChange={(e) => setRadiusMeters(Number(e.target.value))}
                 className="mt-1"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                0 = sin validación GPS. Recomendado 50–150 m si hay geovalla.
+              </p>
             </div>
           </div>
 
           <RestaurantMap
             latitude={latitude}
             longitude={longitude}
-            onLocationSelect={(lat: number, lng: number) => {
+            initialAddress={address}
+            onLocationSelect={(lat, lng) => {
               setLatitude(lat);
               setLongitude(lng);
             }}
+            onAddressChange={(next) => setAddress(next)}
           />
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void saveActive()} disabled={updateLocation.isPending}>
+            <Button type="button" size="sm" onClick={() => void saveActive()} disabled={updateLocation.isPending}>
               Guardar sede
             </Button>
             {locations.length > 1 && !activeLocation.isPrimary ? (
               <Button
                 type="button"
-                variant="destructive"
                 size="sm"
+                variant="destructive"
                 onClick={() => void removeLocation(activeLocation.id)}
                 disabled={deleteLocation.isPending}
               >
@@ -229,8 +231,10 @@ export default function AdminLocationsPanel({
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">Configura tu primer local en los ajustes del negocio.</p>
+        <p className="text-sm text-muted-foreground">
+          Esta empresa aún no tiene sede. El admin la configurará en Ajustes o créala aquí.
+        </p>
       )}
-    </Card>
+    </div>
   );
 }

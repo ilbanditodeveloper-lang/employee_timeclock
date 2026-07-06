@@ -680,6 +680,80 @@ export const appRouter = router({
         return createStripeBillingPortalSession(company.id);
       }),
 
+    superAdminListCompanyLocations: publicProcedure
+      .input(optionalCreds.extend({ companyId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        if (isDemoModeEnabled() && input.companyId === 1) {
+          return [getDemoRestaurant()];
+        }
+        return getRestaurantsByCompany(input.companyId);
+      }),
+
+    superAdminCreateCompanyLocation: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+          name: z.string().min(1),
+          address: z.string().optional(),
+          latitude: z.number(),
+          longitude: z.number(),
+          radiusMeters: z.number().default(100),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        const admin = await getLocalAdminByCompany(input.companyId);
+        if (!admin) throw new Error("No hay admin local para esta empresa");
+        const created = await createCompanyLocation({
+          companyId: input.companyId,
+          adminId: admin.id,
+          name: input.name,
+          address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          radiusMeters: input.radiusMeters,
+        });
+        return { success: true as const, locationId: created?.id };
+      }),
+
+    superAdminUpdateCompanyLocation: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+          locationId: z.number().int().positive(),
+          name: z.string().min(1).optional(),
+          address: z.string().optional(),
+          latitude: z.number().optional(),
+          longitude: z.number().optional(),
+          radiusMeters: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        await updateCompanyLocation(input.locationId, input.companyId, {
+          name: input.name,
+          address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          radiusMeters: input.radiusMeters,
+        });
+        return { success: true as const };
+      }),
+
+    superAdminDeleteCompanyLocation: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+          locationId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        await deleteCompanyLocation(input.locationId, input.companyId);
+        return { success: true as const };
+      }),
+
     listCompanyLocations: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
       if (ctx.session?.isDemo && ctx.session.type === "admin") {
         return [getDemoRestaurant()];
@@ -699,25 +773,10 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { admin, company } = await resolveAdminAuth(ctx, input);
-        const plan = (company.subscriptionPlan ?? "trial") as SubscriptionPlan;
-        const limit = getPlanLocationLimit(plan);
-        const count = await countRestaurantsByCompany(company.id);
-        if (limit != null && count >= limit) {
-          throw new Error(
-            `Tu plan ${plan} permite ${limit} sede. Actualiza a Enterprise para multi-sede.`
-          );
-        }
-        const created = await createCompanyLocation({
-          companyId: company.id,
-          adminId: admin.id,
-          name: input.name,
-          address: input.address,
-          latitude: input.latitude,
-          longitude: input.longitude,
-          radiusMeters: input.radiusMeters,
-        });
-        return { success: true as const, locationId: created?.id };
+        await resolveAdminAuth(ctx, input);
+        throw new Error(
+          "La gestión multi-sede está disponible solo en el panel de superadmin. Configure su local en Ajustes."
+        );
       }),
 
     updateCompanyLocation: publicProcedure
@@ -732,15 +791,10 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { company } = await resolveAdminAuth(ctx, input);
-        await updateCompanyLocation(input.locationId, company.id, {
-          name: input.name,
-          address: input.address,
-          latitude: input.latitude,
-          longitude: input.longitude,
-          radiusMeters: input.radiusMeters,
-        });
-        return { success: true as const };
+        await resolveAdminAuth(ctx, input);
+        throw new Error(
+          "La gestión multi-sede está disponible solo en el panel de superadmin."
+        );
       }),
 
     deleteCompanyLocation: publicProcedure
@@ -750,9 +804,10 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { company } = await resolveAdminAuth(ctx, input);
-        await deleteCompanyLocation(input.locationId, company.id);
-        return { success: true as const };
+        await resolveAdminAuth(ctx, input);
+        throw new Error(
+          "La gestión multi-sede está disponible solo en el panel de superadmin."
+        );
       }),
 
     adminLogin: publicProcedure.input(

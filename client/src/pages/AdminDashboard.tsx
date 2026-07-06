@@ -18,7 +18,6 @@ import AdminAuditLogPanel from '@/components/AdminAuditLogPanel';
 import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
 import AdminBillingPanel from '@/components/AdminBillingPanel';
-import AdminLocationsPanel from '@/components/AdminLocationsPanel';
 import AdminSupportPanel from '@/components/AdminSupportPanel';
 import AdminNotificationsBell from '@/components/AdminNotificationsBell';
 import AdminTodayActivityPanel from '@/components/AdminTodayActivityPanel';
@@ -1086,10 +1085,6 @@ export default function AdminDashboard() {
   const showLimitBanner = Boolean(subscription?.showLimitBanner && subscription.bannerMessage);
   const showBillingBanner = Boolean(subscription?.showBillingBanner && subscription.bannerMessage);
   const atEmployeeLimit = Boolean(subscription?.atEmployeeLimit);
-  const locationCount = onboardingQuery.data?.locationCount ?? 1;
-  const locationLimit = subscription?.locationLimit ?? 1;
-  const canAddLocation = locationLimit == null || locationCount < locationLimit;
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('billing') === 'success') {
@@ -2500,27 +2495,21 @@ export default function AdminDashboard() {
               />
             ) : null}
 
-            <AdminLocationsPanel
-              locationLimit={locationLimit}
-              locationCount={locationCount}
-              canAddLocation={canAddLocation}
-            />
-
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-2">Ajustes</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">Ajustes del negocio</h2>
               <p className="text-sm text-muted-foreground mb-6">
-                Configuración del negocio, ubicación y validación GPS al fichar.
+                Configuración de tu centro de trabajo y validación GPS al fichar (si está activa).
               </p>
 
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                 <MapPin className="w-4 h-4" />
-                Restaurante / ubicación
+                Ubicación del negocio
               </h3>
 
               <div className="space-y-4 mb-8">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Nombre del Restaurante
+                    Nombre del negocio
                   </label>
                   <input
                     type="text"
@@ -2579,7 +2568,7 @@ export default function AdminDashboard() {
               </div>
 
               <Button onClick={handleSaveRestaurant} className="w-full btn-primary">
-                Guardar Restaurante
+                Guardar ubicación
               </Button>
             </Card>
           </TabsContent>
