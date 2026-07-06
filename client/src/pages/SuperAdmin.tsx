@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ function textToFeatures(text: string) {
 
 export default function SuperAdmin() {
   const [, setLocation] = useLocation();
+  const { isAuthLoading, isSuperAdminAuthenticated } = useAuthContext();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthed, setIsAuthed] = useState(false);
@@ -69,7 +71,7 @@ export default function SuperAdmin() {
   const [landingDraft, setLandingDraft] = useState<LandingPageConfig>(DEFAULT_LANDING_PAGE_CONFIG);
 
   const loginMutation = trpc.publicApi.superAdminLogin.useMutation();
-  const sessionQuery = trpc.publicApi.getSession.useQuery();
+  const trpcUtils = trpc.useUtils();
   const listCompanies = trpc.publicApi.superAdminListCompanies.useQuery(emptyCreds, {
     enabled: isAuthed,
   });
@@ -97,10 +99,9 @@ export default function SuperAdmin() {
   );
 
   useEffect(() => {
-    if (sessionQuery.data?.session?.type === "superadmin") {
-      setIsAuthed(true);
-    }
-  }, [sessionQuery.data?.session?.type]);
+    if (isAuthLoading) return;
+    setIsAuthed(isSuperAdminAuthenticated);
+  }, [isAuthLoading, isSuperAdminAuthenticated]);
 
   useEffect(() => {
     if (landingQuery.data) {
@@ -112,6 +113,11 @@ export default function SuperAdmin() {
     event.preventDefault();
     try {
       await loginMutation.mutateAsync({ username, password });
+      await trpcUtils.publicApi.getSession.invalidate();
+      const sessionResult = await trpcUtils.publicApi.getSession.fetch();
+      if (sessionResult.session?.type !== "superadmin") {
+        throw new Error("No se pudo establecer la sesión");
+      }
       setIsAuthed(true);
       toast.success("Acceso superadmin correcto");
       void listCompanies.refetch();
@@ -225,6 +231,14 @@ export default function SuperAdmin() {
   };
 
   const pageMeta = SUPERADMIN_PAGE_TITLES[activeTab];
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f4f7f6]">
+        <p className="text-muted-foreground">Cargando…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f4f7f6]">

@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import RestaurantMap from "@/components/RestaurantMap";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthContext, useRequireAdminAuth } from "@/contexts/AuthContext";
 import { createDefaultEmployeeSchedule } from "@shared/scheduleDefaults";
 
 const COUNTRY_OPTIONS = [{ code: "ES", label: "España" }];
@@ -34,6 +34,7 @@ const MADRID_LNG = -3.7038;
 export default function AdminOnboarding() {
   const [, setLocation] = useLocation();
   const { adminSession } = useAuthContext();
+  const { isAuthLoading, isAdminAuthenticated } = useRequireAdminAuth();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
 
@@ -68,12 +69,7 @@ export default function AdminOnboarding() {
   const [employeePassword, setEmployeePassword] = useState("");
 
   useEffect(() => {
-    if (!adminSession) {
-      setLocation("/admin-login");
-    }
-  }, [adminSession, setLocation]);
-
-  useEffect(() => {
+    if (isAuthLoading || !isAdminAuthenticated) return;
     const data = statusQuery.data;
     if (!data) return;
     if (data.onboardingCompleted) {
@@ -224,6 +220,10 @@ export default function AdminOnboarding() {
       setSaving(false);
     }
   };
+
+  if (isAuthLoading || !isAdminAuthenticated) {
+    return null;
+  }
 
   if (statusQuery.isLoading || !statusQuery.data) {
     return (

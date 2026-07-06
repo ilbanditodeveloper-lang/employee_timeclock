@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { resolveScheduleExitTime } from "@shared/scheduleExit";
@@ -55,6 +55,7 @@ function getShiftSummary(daySchedule?: DaySchedule): string {
 
 export default function EmployeeSchedule() {
   const { employeeSession } = useAuthContext();
+  const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
 
   const employeeScheduleQuery = trpc.publicApi.getEmployeeSchedule.useQuery(
     employeeQueryInput(employeeSession?.employeeId ?? 0),
@@ -77,6 +78,10 @@ export default function EmployeeSchedule() {
       };
     });
   }, [employeeScheduleQuery.data]);
+
+  if (isAuthLoading || !isEmployeeAuthenticated) {
+    return null;
+  }
 
   return (
     <EmployeeShellLayout

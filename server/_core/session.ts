@@ -145,13 +145,8 @@ export async function setSessionCookie(res: Response, req: Parameters<typeof get
   const options = getSessionCookieOptions(req);
 
   res.cookie(COOKIE_NAME, token, {
-
     ...options,
-
     maxAge: SESSION_MAX_AGE_MS,
-
-    sameSite: options.secure ? "none" : "lax",
-
   });
 
 }

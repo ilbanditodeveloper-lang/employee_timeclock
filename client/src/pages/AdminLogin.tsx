@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { useLocation } from 'wouter';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Lock } from 'lucide-react';
-import { toast } from 'sonner';
-import { trpc } from '@/lib/trpc';
-import { useAuthContext } from '@/contexts/AuthContext';
-import AccessPageShell from '@/components/AccessPageShell';
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Lock } from "lucide-react";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
+import { useAuthContext } from "@/contexts/AuthContext";
+import AccessPageShell from "@/components/AccessPageShell";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
@@ -15,7 +15,14 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const adminLogin = trpc.publicApi.adminLogin.useMutation();
   const trpcUtils = trpc.useUtils();
-  const { setAdminSession, setEmployeeSession } = useAuthContext();
+  const { setAdminSession, setEmployeeSession, isAuthLoading, isAdminAuthenticated } = useAuthContext();
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (isAdminAuthenticated) {
+      setLocation('/admin');
+    }
+  }, [isAuthLoading, isAdminAuthenticated, setLocation]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +52,10 @@ export default function AdminLogin() {
       setLoading(false);
     }
   };
+
+  if (isAuthLoading || isAdminAuthenticated) {
+    return null;
+  }
 
   return (
     <AccessPageShell

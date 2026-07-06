@@ -17,6 +17,28 @@ function getAuthRedirectPath(): string {
   return "/acceso";
 }
 
+function shouldRedirectOnAuthError(): boolean {
+  const path = window.location.pathname;
+  if (
+    path === "/admin-login" ||
+    path === "/employee-login" ||
+    path === "/acceso" ||
+    path === "/" ||
+    path === "/superadmin"
+  ) {
+    return false;
+  }
+
+  const sessionQuery = queryClient.getQueryCache().findAll({
+    predicate: (query) => JSON.stringify(query.queryKey).includes("getSession"),
+  })[0];
+
+  if (!sessionQuery?.state.dataUpdatedAt) return false;
+
+  const session = (sessionQuery.state.data as { session?: unknown } | undefined)?.session;
+  return !session;
+}
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
@@ -26,6 +48,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
     code === "UNAUTHORIZED" || isSessionAuthErrorMessage(error.message);
 
   if (!isUnauthorized) return;
+  if (!shouldRedirectOnAuthError()) return;
 
   window.location.href = getAuthRedirectPath();
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Palmtree, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
 import { employeeQueryInput, emptyCreds } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { resolveAppTimeZone, todayYmdInTimeZone, APP_TIMEZONE } from "@shared/timezone";
@@ -39,6 +39,7 @@ function ymdRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: st
 export default function EmployeeTimeOff() {
   const [, setLocation] = useLocation();
   const { employeeSession } = useAuthContext();
+  const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
   const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const todayYmd = () => todayYmdInTimeZone(appTimeZone);
   const [kind, setKind] = useState<"vacation" | "day_off">("vacation");
@@ -56,12 +57,6 @@ export default function EmployeeTimeOff() {
 
   const createMutation = trpc.publicApi.createTimeOffRequest.useMutation();
   const deleteMutation = trpc.publicApi.deleteMyTimeOffRequest.useMutation();
-
-  useEffect(() => {
-    if (!employeeSession) {
-      setLocation("/employee-login");
-    }
-  }, [employeeSession, setLocation]);
 
   const blockedRanges = useMemo(() => {
     return (listQuery.data || [])
@@ -147,6 +142,10 @@ export default function EmployeeTimeOff() {
       toast.error(getErrorMessage(err, "No se pudo borrar la solicitud"));
     }
   };
+
+  if (isAuthLoading || !isAdminAuthenticated) {
+    return null;
+  }
 
   return (
     <EmployeeShellLayout

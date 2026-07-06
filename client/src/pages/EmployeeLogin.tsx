@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,15 @@ export default function EmployeeLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const employeeLogin = trpc.publicApi.employeeLogin.useMutation();
-  const { setEmployeeSession, setAdminSession } = useAuthContext();
+  const trpcUtils = trpc.useUtils();
+  const { setEmployeeSession, setAdminSession, isAuthLoading, isEmployeeAuthenticated } = useAuthContext();
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (isEmployeeAuthenticated) {
+      setLocation('/employee');
+    }
+  }, [isAuthLoading, isEmployeeAuthenticated, setLocation]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +32,11 @@ export default function EmployeeLogin() {
       const trimmed = loginId.trim();
       const username = trimmed.includes('@') ? trimmed.toLowerCase() : trimmed;
       const result = await employeeLogin.mutateAsync({ username, password });
+      await trpcUtils.publicApi.getSession.invalidate();
+      const sessionResult = await trpcUtils.publicApi.getSession.fetch();
+      if (sessionResult.session?.type !== "employee") {
+        throw new Error("No se pudo establecer la sesión. Prueba de nuevo.");
+      }
       setEmployeeSession({
         username,
         employeeId: result.employeeId,
@@ -45,6 +58,10 @@ export default function EmployeeLogin() {
       setLoading(false);
     }
   };
+
+  if (isAuthLoading || isEmployeeAuthenticated) {
+    return null;
+  }
 
   return (
     <AccessPageShell

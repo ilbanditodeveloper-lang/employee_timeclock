@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Clock, Calendar, AlertCircle, CalendarDays, Palmtree, Pause, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
-import { useAuthContext } from '@/contexts/AuthContext';
+import { useAuthContext, useRequireEmployeeAuth } from '@/contexts/AuthContext';
 import { employeeQueryInput } from '@/lib/authApi';
 import EmployeePrivacyNotice from '@/pages/EmployeePrivacyNotice';
 import {
@@ -119,6 +119,7 @@ export default function EmployeeDashboard() {
   const vapidKeyQuery = trpc.publicApi.pushNotifications.getVapidPublicKey.useQuery();
   const [, setLocation] = useLocation();
   const { employeeSession, setEmployeeSession } = useAuthContext();
+  const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
   const locationEnabled = employeeSession?.locationEnabled ?? false;
   const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const [isAtRestaurant, setIsAtRestaurant] = useState(() => !locationEnabled);
@@ -152,13 +153,6 @@ export default function EmployeeDashboard() {
     { enabled: Boolean(employeeSession?.employeeId) }
   );
 
-  useEffect(() => {
-    if (!employeeSession) {
-      setLocation('/employee-login');
-    }
-  }, [employeeSession, setLocation]);
-
-  // Request push notification permission and subscribe — solo una vez por sesión y con retraso para no saturar el servidor (p. ej. Render al despertar).
   useEffect(() => {
     if (!employeeSession || !vapidKeyQuery.data?.publicKey || pushSubscriptionAttempted.current) return;
     pushSubscriptionAttempted.current = true;
@@ -473,6 +467,10 @@ export default function EmployeeDashboard() {
   const handleIncident = () => {
     setLocation('/employee/incident');
   };
+
+  if (isAuthLoading || !isEmployeeAuthenticated) {
+    return null;
+  }
 
   if (employeeSession?.needsPrivacyNotice) {
     return (

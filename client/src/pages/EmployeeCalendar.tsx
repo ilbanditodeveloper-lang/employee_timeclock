@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { trpc } from "@/lib/trpc";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { formatTimeInTimeZone, resolveAppTimeZone, todayYmdInTimeZone } from "@shared/timezone";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 export default function EmployeeCalendar() {
   const [, setLocation] = useLocation();
   const { employeeSession } = useAuthContext();
+  const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
   const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const [selectionMode, setSelectionMode] = useState<"single" | "range">("single");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
@@ -109,6 +110,10 @@ export default function EmployeeCalendar() {
     if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return total;
     return total + (end - start) / (1000 * 60 * 60);
   }, 0);
+
+  if (isAuthLoading || !isEmployeeAuthenticated) {
+    return null;
+  }
 
   return (
     <EmployeeShellLayout

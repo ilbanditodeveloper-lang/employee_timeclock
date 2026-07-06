@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 export type EmployeeScheduleDay = {
@@ -31,6 +32,7 @@ type AuthContextValue = {
   employeeSession: EmployeeSession | null;
   isAdminAuthenticated: boolean;
   isEmployeeAuthenticated: boolean;
+  isSuperAdminAuthenticated: boolean;
   setAdminSession: (session: AdminSession | null) => void;
   setEmployeeSession: (session: EmployeeSession | null) => void;
   clearAllSessions: () => void;
@@ -42,7 +44,6 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [employeeSession, setEmployeeSession] = useState<EmployeeSession | null>(null);
-  const [hydrated, setHydrated] = useState(false);
 
   const sessionQuery = trpc.publicApi.getSession.useQuery(undefined, {
     retry: false,
@@ -52,41 +53,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const serverSession = sessionQuery.data?.session ?? null;
   const isAdminAuthenticated = serverSession?.type === "admin";
   const isEmployeeAuthenticated = serverSession?.type === "employee";
+  const isSuperAdminAuthenticated = serverSession?.type === "superadmin";
+  const isAuthLoading = !sessionQuery.isFetched;
 
   useEffect(() => {
     if (!sessionQuery.isFetched) return;
-    const session = sessionQuery.data?.session;
-    if (!session) {
-      setAdminSession(null);
-      setEmployeeSession(null);
-      setHydrated(true);
-      return;
-    }
-    if (session.type === "admin" && session.companySlug) {
-      setAdminSession({
-        companySlug: session.companySlug,
-        displayName: session.displayName,
-      });
-      setEmployeeSession(null);
-    } else if (session.type === "employee" && session.employeeId && session.companySlug) {
-      setEmployeeSession((prev) => ({
-        username: prev?.username ?? session.displayName ?? "",
-        employeeId: session.employeeId!,
-        companySlug: session.companySlug!,
-        displayName: session.displayName,
-        schedule: prev?.schedule,
-        lateGraceMinutes: prev?.lateGraceMinutes,
-        locationEnabled: prev?.locationEnabled,
-        needsPrivacyNotice: prev?.needsPrivacyNotice,
-        timezone: prev?.timezone,
-      }));
-      setAdminSession(null);
-    } else {
+    if (!serverSession) {
       setAdminSession(null);
       setEmployeeSession(null);
     }
-    setHydrated(true);
-  }, [sessionQuery.isFetched, sessionQuery.data, sessionQuery.isError]);
+  }, [sessionQuery.isFetched, serverSession]);
+
+  const activeAdminSession = useMemo((): AdminSession | null => {
+    if (serverSession?.type === "admin" && serverSession.companySlug) {
+      return {
+        companySlug: serverSession.companySlug,
+        displayName: serverSession.displayName ?? adminSession?.displayName,
+      };
+    }
+    return adminSession;
+  }, [serverSession, adminSession]);
+
+  const activeEmployeeSession = useMemo((): EmployeeSession | null => {
+    if (
+      serverSession?.type === "employee" &&
+      serverSession.employeeId &&
+      serverSession.companySlug
+    ) {
+      const sameEmployee = employeeSession?.employeeId === serverSession.employeeId;
+      return {
+        username: sameEmployee
+          ? (employeeSession?.username ?? serverSession.displayName ?? "")
+          : (serverSession.displayName ?? ""),
+        employeeId: serverSession.employeeId,
+        companySlug: serverSession.companySlug,
+        displayName: serverSession.displayName ?? employeeSession?.displayName,
+        schedule: sameEmployee ? employeeSession?.schedule : undefined,
+        lateGraceMinutes: sameEmployee ? employeeSession?.lateGraceMinutes : undefined,
+        locationEnabled: sameEmployee ? employeeSession?.locationEnabled : undefined,
+        needsPrivacyNotice: sameEmployee ? employeeSession?.needsPrivacyNotice : undefined,
+        timezone: sameEmployee ? employeeSession?.timezone : undefined,
+      };
+    }
+    return employeeSession;
+  }, [serverSession, employeeSession]);
 
   const clearAllSessions = () => {
     setAdminSession(null);
@@ -95,23 +105,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      adminSession,
-      employeeSession,
+      adminSession: activeAdminSession,
+      employeeSession: activeEmployeeSession,
       isAdminAuthenticated,
       isEmployeeAuthenticated,
+      isSuperAdminAuthenticated,
       setAdminSession,
       setEmployeeSession,
       clearAllSessions,
-      isAuthLoading: !hydrated && (sessionQuery.isLoading || sessionQuery.isFetching),
+      isAuthLoading,
     }),
     [
-      adminSession,
-      employeeSession,
+      activeAdminSession,
+      activeEmployeeSession,
       isAdminAuthenticated,
       isEmployeeAuthenticated,
-      hydrated,
-      sessionQuery.isLoading,
-      sessionQuery.isFetching,
+      isSuperAdminAuthenticated,
+      isAuthLoading,
     ]
   );
 
@@ -124,4 +134,32 @@ export function useAuthContext() {
     throw new Error("useAuthContext must be used within AuthProvider");
   }
   return ctx;
+}
+
+export function useRequireEmployeeAuth() {
+  const [, setLocation] = useLocation();
+  const { isAuthLoading, isEmployeeAuthenticated } = useAuthContext();
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (!isEmployeeAuthenticated) {
+      setLocation("/employee-login");
+    }
+  }, [isAuthLoading, isEmployeeAuthenticated, setLocation]);
+
+  return { isAuthLoading, isEmployeeAuthenticated };
+}
+
+export function useRequireAdminAuth() {
+  const [, setLocation] = useLocation();
+  const { isAuthLoading, isAdminAuthenticated } = useAuthContext();
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (!isAdminAuthenticated) {
+      setLocation("/admin-login");
+    }
+  }, [isAuthLoading, isAdminAuthenticated, setLocation]);
+
+  return { isAuthLoading, isAdminAuthenticated };
 }

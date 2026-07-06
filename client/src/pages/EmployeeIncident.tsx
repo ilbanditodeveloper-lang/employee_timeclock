@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 
@@ -19,6 +19,7 @@ export default function EmployeeIncident() {
   const createIncident = trpc.publicApi.createIncident.useMutation();
   const clockIn = trpc.publicApi.clockIn.useMutation();
   const { employeeSession } = useAuthContext();
+  const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
 
   useEffect(() => {
     const now = new Date();
@@ -83,6 +84,10 @@ export default function EmployeeIncident() {
       setSubmitting(false);
     }
   };
+
+  if (isAuthLoading || !isEmployeeAuthenticated) {
+    return null;
+  }
 
   return (
     <EmployeeShellLayout
