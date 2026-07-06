@@ -227,7 +227,7 @@ export async function validateEmployeeCredentials(params: {
       }
       const check = verifyPassword(params.password, employee.password);
       if (!check.isValid) {
-        throw new Error("Credenciales inválidas");
+        throwBusinessError(GENERIC_AUTH_FAILURE_MSG);
       }
       if (check.needsUpgrade) {
         const db = await getDb();
