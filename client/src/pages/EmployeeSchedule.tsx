@@ -92,7 +92,7 @@ export default function EmployeeSchedule() {
       <Card className="app-shell-card border-0 p-6 shadow-sm">
         <h2 className="text-2xl font-bold text-foreground mb-2">Calendario semanal de turnos</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Recibirás avisos 5 minutos antes y a la hora de entrada y salida según este horario.
+          Recibirás avisos 1 minuto antes y a la hora de entrada y salida según este horario.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

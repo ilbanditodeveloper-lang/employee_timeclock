@@ -248,12 +248,6 @@ export default function AdminDashboard() {
     { ...adminApiInput() },
     { enabled: isAdminAuthenticated }
   );
-  const notificationLogsQuery = trpc.publicApi.listNotificationLogs.useQuery(
-    {
-      employeeId: selectedEmployeeId ? Number(selectedEmployeeId) : undefined,
-    },
-    { enabled: isAdminAuthenticated }
-  );
   const updateTimeclock = trpc.publicApi.updateTimeclock.useMutation();
   const adminForceClockOut = trpc.publicApi.adminForceClockOut.useMutation();
   const deactivateEmployee = trpc.publicApi.deactivateEmployee.useMutation();
@@ -842,7 +836,9 @@ export default function AdminDashboard() {
     }
     clearAllSessions();
     setAdminSession(null);
-    setLocation('/acceso');
+    trpcUtils.publicApi.getSession.setData(undefined, { session: null });
+    await trpcUtils.publicApi.getSession.invalidate();
+    window.location.href = '/admin-login';
   };
 
   const handleSaveRestaurant = async () => {
@@ -1725,7 +1721,7 @@ export default function AdminDashboard() {
             <Card className="p-6">
               <h2 className="text-2xl font-bold text-foreground mb-2">Configuración de Turnos</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Los empleados reciben notificaciones push 5 min antes y a la hora de entrada y salida según el turno guardado.
+                Los empleados reciben notificaciones push 1 minuto antes y a la hora de entrada y salida según el turno guardado.
               </p>
               <div className="space-y-4 mb-6">
                 <div>
@@ -2065,59 +2061,6 @@ export default function AdminDashboard() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-              <div className="mt-6 border border-border rounded-lg p-4">
-                <Accordion type="single" collapsible defaultValue="notifications-history">
-                  <AccordionItem value="notifications-history">
-                    <AccordionTrigger className="text-sm font-semibold text-foreground">
-                      Historial de notificaciones
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-2">
-                      {notificationLogsQuery.data?.length ? (
-                        <div className="space-y-2">
-                          {notificationLogsQuery.data.map((log) => {
-                            const label =
-                              log.entrySlot === 0
-                                ? "Recordatorio salida"
-                                : log.entrySlot === 2
-                                ? "Entrada programada (2)"
-                                : "Entrada programada (1)";
-                            return (
-                              <div
-                                key={`${log.employeeId}-${log.notifiedAt}`}
-                                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted px-3 py-2"
-                              >
-                                <div>
-                                  <p className="text-sm text-foreground">
-                                    {employeeNameById.get(log.employeeId) || `Empleado #${log.employeeId}`}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {label} · {log.entryTime} ·{" "}
-                                    {log.scheduleDate
-                                      ? formatClockDateShort(log.scheduleDate)
-                                      : ""}
-                                  </p>
-                                </div>
-                                <span className="text-xs text-muted-foreground">
-                                  {log.notifiedAt
-                                    ? new Date(log.notifiedAt).toLocaleString("es-ES", {
-                                        dateStyle: "short",
-                                        timeStyle: "short",
-                                      })
-                                    : ""}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          No hay notificaciones registradas.
-                        </p>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
               <div className="mt-6 border border-border rounded-lg p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-foreground">
                   Calculadora de sueldo

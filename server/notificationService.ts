@@ -37,7 +37,7 @@ type NotificationOptions = {
 };
 
 const DEFAULT_TIME_ZONE = "Europe/Madrid";
-const DEFAULT_LEAD_MINUTES = 5;
+const DEFAULT_LEAD_MINUTES = 1;
 const DEFAULT_LOOKBACK_MINUTES = 65;
 
 /** Distingue logs de salida de los de entrada en notification_logs.entrySlot */
@@ -237,7 +237,7 @@ function isReminderDue(
 }
 
 /**
- * Recordatorios push de fichaje: entrada y salida, 5 min antes y a la hora.
+ * Recordatorios push de fichaje: entrada y salida, 1 min antes y a la hora.
  * Ejecutar cada minuto vía cron (GET /api/cron/notifications).
  */
 export async function checkAndSendNotifications(
@@ -250,6 +250,8 @@ export async function checkAndSendNotifications(
   const timeZone = options.timeZone || DEFAULT_TIME_ZONE;
   const leadMinutes = Math.max(0, options.leadMinutes ?? DEFAULT_LEAD_MINUTES);
   const lookbackMinutes = Math.max(1, options.lookbackMinutes ?? DEFAULT_LOOKBACK_MINUTES);
+  const leadTimeLabel =
+    leadMinutes === 1 ? "1 minuto" : leadMinutes > 1 ? `${leadMinutes} minutos` : "";
   const { hour, minute } = getTimePartsInTimeZone(now, timeZone);
   const currentDay = getDayOfWeekInTimeZone(now, timeZone);
   const currentMinutes = hour * 60 + minute;
@@ -309,7 +311,7 @@ export async function checkAndSendNotifications(
             employeeId: schedule.employeeId,
             title: "⏰ Hora de entrada",
             body: isLeadReminder
-              ? `En 5 minutos toca fichar entrada (${schedule.entryTime})`
+              ? `En ${leadTimeLabel} toca fichar entrada (${schedule.entryTime})`
               : `Es hora de registrar tu entrada (${schedule.entryTime})`,
             reminderTime,
             scheduleDate: todayDate,
@@ -317,7 +319,7 @@ export async function checkAndSendNotifications(
             data: {
               entryTime: schedule.entryTime,
               entrySlot: schedule.entrySlot,
-              reminderType: isLeadReminder ? "entry_lead_5m" : "entry_on_time",
+              reminderType: isLeadReminder ? `entry_lead_${leadMinutes}m` : "entry_on_time",
             },
           });
         }
@@ -341,7 +343,7 @@ export async function checkAndSendNotifications(
         employeeId: schedule.employeeId,
         title: "⏰ Hora de salida",
         body: isLeadReminder
-          ? `En 5 minutos toca fichar salida (${exitTime})`
+          ? `En ${leadTimeLabel} toca fichar salida (${exitTime})`
           : `Es hora de registrar tu salida (${exitTime})`,
         reminderTime,
         scheduleDate: todayDate,
@@ -349,7 +351,7 @@ export async function checkAndSendNotifications(
         data: {
           exitTime,
           entrySlot: schedule.entrySlot,
-          reminderType: isLeadReminder ? "exit_lead_5m" : "exit_on_time",
+          reminderType: isLeadReminder ? `exit_lead_${leadMinutes}m` : "exit_on_time",
         },
       });
     }

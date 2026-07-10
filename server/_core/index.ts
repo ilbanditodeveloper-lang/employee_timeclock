@@ -193,7 +193,7 @@ async function startServer() {
   app.get("/api/cron/notifications", async (req, res) => {
     if (!isCronAuthorized(req, res)) return;
     try {
-      await checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 5 });
+      await checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 1 });
       res.json({ ok: true });
     } catch (error) {
       console.error("Cron notifications error:", error);
@@ -225,12 +225,12 @@ async function startServer() {
 
   if (isInternalCronEnabled()) {
     setInterval(() => {
-      checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 5 }).catch((error) => {
+      checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 1 }).catch((error) => {
         console.error("Error in notification scheduler:", error);
       });
     }, 60000);
 
-    checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 5 }).catch((error) => {
+    checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 1 }).catch((error) => {
       console.error("Error in initial notification check:", error);
     });
   }

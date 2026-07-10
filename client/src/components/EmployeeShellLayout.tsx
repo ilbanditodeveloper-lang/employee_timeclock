@@ -4,7 +4,6 @@ import { Clock, LogOut } from "lucide-react";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
 
 type EmployeeShellLayoutProps = {
   pageTitle: string;
@@ -21,8 +20,8 @@ export default function EmployeeShellLayout({
   contentClassName = "container mx-auto max-w-4xl px-4 py-8 pb-28 md:pb-8",
   showBottomMenu = true,
 }: EmployeeShellLayoutProps) {
-  const [, setLocation] = useLocation();
   const { clearAllSessions, setEmployeeSession } = useAuthContext();
+  const trpcUtils = trpc.useUtils();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
 
   const handleLogout = async () => {
@@ -33,7 +32,9 @@ export default function EmployeeShellLayout({
     }
     clearAllSessions();
     setEmployeeSession(null);
-    setLocation("/acceso");
+    trpcUtils.publicApi.getSession.setData(undefined, { session: null });
+    await trpcUtils.publicApi.getSession.invalidate();
+    window.location.href = "/employee-login";
   };
 
   return (

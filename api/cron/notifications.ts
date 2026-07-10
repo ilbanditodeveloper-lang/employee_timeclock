@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    await checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 5 });
+    await checkAndSendNotifications({ timeZone: "Europe/Madrid", leadMinutes: 1 });
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("Cron notifications error:", error);
