@@ -2772,7 +2772,7 @@ export const appRouter = router({
           const legal = validateCompanyLegalForOfficialExport(company);
           if (!legal.valid) {
             throwBusinessError(
-              `Faltan datos legales de empresa (${legal.missing.join(", ")}). Complete el panel Legal/RGPD.`
+              `Faltan datos legales de empresa (${legal.missing.join(", ")}). Complete el panel Legal/RGPD arriba (razón social, CIF y email de privacidad).`
             );
           }
         }
@@ -2857,13 +2857,26 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         const { admin, company } = await resolveAdminAuth(ctx, input);
-        return buildInspectionPackage({
-          companyId: company.id,
-          adminId: admin.id,
-          employeeId: input.employeeId,
-          dateFrom: input.dateFrom,
-          dateTo: input.dateTo,
-        });
+        const legal = validateCompanyLegalForOfficialExport(company);
+        if (!legal.valid) {
+          throwBusinessError(
+            `Faltan datos legales de empresa (${legal.missing.join(", ")}). Complete el panel Legal/RGPD arriba (razón social, CIF y email de privacidad).`
+          );
+        }
+        try {
+          return await buildInspectionPackage({
+            companyId: company.id,
+            adminId: admin.id,
+            employeeId: input.employeeId,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("Faltan datos legales")) {
+            throwBusinessError(error.message);
+          }
+          throw error;
+        }
       }),
 
     getEmployeeLegalPortal: publicProcedure

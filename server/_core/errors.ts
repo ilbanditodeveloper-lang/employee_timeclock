@@ -33,6 +33,13 @@ const BUSINESS_MESSAGE_PATTERNS = [
   /^Ya estás en pausa/,
   /^No estás en pausa/,
   /^Cuenta de empleado desactivada/,
+  /^Faltan datos legales/,
+  /^Datos legales incompletos/,
+  /^Complete el panel Legal/,
+  /^Indique periodo/,
+  /^Empresa no encontrada/,
+  /^Empleado no encontrado/,
+  /^Database not available/,
 ];
 
 /** Errores de negocio visibles al usuario (400, no 500 genérico). */

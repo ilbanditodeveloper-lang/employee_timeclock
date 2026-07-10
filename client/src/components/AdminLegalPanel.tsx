@@ -95,6 +95,18 @@ export default function AdminLegalPanel() {
   const companyTermsDoc = useMemo(() => buildCompanyTerms(companyInfo), [companyInfo]);
   const dpaDoc = useMemo(() => buildDpaTemplate(companyInfo), [companyInfo]);
 
+  const legalExportReady = useMemo(
+    () => validateCompanyLegalForOfficialExport(companyInfo),
+    [companyInfo]
+  );
+
+  useEffect(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    setInspectionFrom(format(monthStart, "yyyy-MM-dd"));
+    setInspectionTo(format(now, "yyyy-MM-dd"));
+  }, []);
+
   const selectedEmployee = acceptancesQuery.data?.find(
     (e) => String(e.employeeId) === pdfEmployeeId
   );
@@ -475,39 +487,53 @@ export default function AdminLegalPanel() {
       <Card className="p-6">
         <h3 className="mb-2 text-lg font-semibold text-foreground">Resumen mensual (tiempo parcial)</h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Exportación mensual con horas netas, pausas y diferencia frente a horas contratadas.
+          Genera un CSV con las horas netas del mes elegido (descontando pausas), incidencias y diferencia
+          frente a las horas contratadas del empleado.
         </p>
-        <div className="flex flex-wrap gap-3">
-          <select
-            value={monthlyEmployeeId}
-            onChange={(e) => setMonthlyEmployeeId(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="">Empleado…</option>
-            {(employeesQuery.data ?? []).map((emp) => (
-              <option key={emp.id} value={String(emp.id)}>
-                {emp.name}
-              </option>
-            ))}
-          </select>
-          <Input
-            type="number"
-            min={2000}
-            max={2100}
-            value={monthlyYear}
-            onChange={(e) => setMonthlyYear(e.target.value)}
-            className="w-24"
-            placeholder="Año"
-          />
-          <Input
-            type="number"
-            min={1}
-            max={12}
-            value={monthlyMonth}
-            onChange={(e) => setMonthlyMonth(e.target.value)}
-            className="w-20"
-            placeholder="Mes"
-          />
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-1 min-w-[180px]">
+            <Label htmlFor="monthly-employee">Empleado</Label>
+            <select
+              id="monthly-employee"
+              value={monthlyEmployeeId}
+              onChange={(e) => setMonthlyEmployeeId(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Seleccione empleado…</option>
+              {(employeesQuery.data ?? []).map((emp) => (
+                <option key={emp.id} value={String(emp.id)}>
+                  {emp.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">Trabajador del que se exportan las horas.</p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="monthly-year">Año</Label>
+            <Input
+              id="monthly-year"
+              type="number"
+              min={2000}
+              max={2100}
+              value={monthlyYear}
+              onChange={(e) => setMonthlyYear(e.target.value)}
+              className="w-28"
+            />
+            <p className="text-xs text-muted-foreground">Año natural (ej. 2026).</p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="monthly-month">Mes</Label>
+            <Input
+              id="monthly-month"
+              type="number"
+              min={1}
+              max={12}
+              value={monthlyMonth}
+              onChange={(e) => setMonthlyMonth(e.target.value)}
+              className="w-20"
+            />
+            <p className="text-xs text-muted-foreground">1 = enero, 7 = julio, 12 = diciembre.</p>
+          </div>
           <Button onClick={() => void handleMonthlyExport()} disabled={complianceBusy}>
             Exportar CSV mensual
           </Button>
@@ -517,12 +543,40 @@ export default function AdminLegalPanel() {
       <Card className="p-6">
         <h3 className="mb-2 text-lg font-semibold text-foreground">Paquete Inspección de Trabajo</h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Genera manifest JSON + CSV con checksum. Requiere datos legales completos.
+          Descarga manifest JSON + CSV con checksum para un periodo concreto. Requiere razón social, CIF y email
+          de privacidad guardados arriba.
         </p>
-        <div className="flex flex-wrap gap-3">
-          <Input type="date" value={inspectionFrom} onChange={(e) => setInspectionFrom(e.target.value)} />
-          <Input type="date" value={inspectionTo} onChange={(e) => setInspectionTo(e.target.value)} />
-          <Button onClick={() => void handleInspectionExport()} disabled={complianceBusy}>
+        {!legalExportReady.valid ? (
+          <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Faltan datos legales: {legalExportReady.missing.join(", ")}. Complételos en «Datos legales de la
+            empresa» y pulse Guardar antes de descargar.
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="inspection-from">Desde</Label>
+            <Input
+              id="inspection-from"
+              type="date"
+              value={inspectionFrom}
+              onChange={(e) => setInspectionFrom(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Primer día del periodo a incluir.</p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="inspection-to">Hasta</Label>
+            <Input
+              id="inspection-to"
+              type="date"
+              value={inspectionTo}
+              onChange={(e) => setInspectionTo(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Último día del periodo (inclusive).</p>
+          </div>
+          <Button
+            onClick={() => void handleInspectionExport()}
+            disabled={complianceBusy || !legalExportReady.valid}
+          >
             Descargar paquete
           </Button>
         </div>
