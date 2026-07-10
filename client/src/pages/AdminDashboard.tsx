@@ -59,6 +59,7 @@ import {
   saveDefaultSchedule,
   type WeekSchedule,
 } from '@shared/scheduleDefaults';
+import { validateEmployeeEmailOrPhone } from '@shared/employeeContact';
 
 const scheduleDays = [
   { key: 'monday', label: 'Lunes' },
@@ -891,12 +892,16 @@ export default function AdminDashboard() {
   };
 
   const handleCreateEmployee = () => {
-    if (!employeeName || !employeeEmail || !employeeUsername || (!editingEmployeeId && !employeePassword)) {
-      toast.error('Por favor completa nombre, email, usuario y contraseña');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail.trim())) {
-      toast.error('Introduce un email válido para el empleado');
+    const contact = validateEmployeeEmailOrPhone(employeeEmail, employeePhone);
+    if (
+      !employeeName ||
+      !contact.valid ||
+      !employeeUsername ||
+      (!editingEmployeeId && !employeePassword)
+    ) {
+      toast.error(
+        contact.message ?? 'Completa nombre, usuario, contraseña y al menos email o teléfono de contacto'
+      );
       return;
     }
     if (employeePassword && employeePassword.length < 6) {
@@ -912,10 +917,10 @@ export default function AdminDashboard() {
           ...adminApiInput(),
           employeeId: editingEmployeeId,
           employeeName,
-          employeeEmail: employeeEmail.trim().toLowerCase(),
+          employeeEmail: contact.normalizedEmail ?? '',
           employeeUsername,
           employeePassword: employeePassword || undefined,
-          employeePhone,
+          employeePhone: contact.normalizedPhone ?? '',
           lateGraceMinutes: graceMinutesValue,
           contractType: employeeContractType,
           weeklyContractedHours: employeeWeeklyHours ? Number(employeeWeeklyHours) : undefined,
@@ -1442,24 +1447,36 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Email de acceso
+                    Email de contacto
                   </label>
                   <input
                     type="email"
-                    placeholder="empleado@empresa.com"
+                    placeholder="empleado@empresa.com (opcional si hay teléfono)"
                     value={employeeEmail}
                     onChange={(e) => setEmployeeEmail(e.target.value)}
                     className="input-elegant"
-                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Teléfono de contacto
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+34 600 123 456 (opcional si hay email)"
+                    value={employeePhone}
+                    onChange={(e) => setEmployeePhone(e.target.value)}
+                    className="input-elegant"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    El empleado usará este email para fichar (junto con su contraseña).
+                    Al menos uno: email o teléfono. Para fichar el empleado usa su usuario y contraseña.
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Usuario (interno)
+                    Usuario para fichar
                   </label>
                   <input
                     type="text"

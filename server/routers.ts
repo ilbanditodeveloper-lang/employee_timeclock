@@ -118,6 +118,7 @@ import {
   recordMonthlyReportDelivery,
 } from "./_core/complianceApi";
 import { validateCompanyLegalForOfficialExport } from "@shared/legalCompliance";
+import { validateEmployeeEmailOrPhone } from "@shared/employeeContact";
 import {
   isWithinMinimumRetention,
   normalizeRetentionPolicy,
@@ -904,10 +905,10 @@ export const appRouter = router({
         username: z.string().min(1).optional(),
         password: z.string().min(1).optional(),
         employeeName: z.string().min(1),
-        employeeEmail: z.string().email(),
+        employeeEmail: z.string().trim().optional().or(z.literal("")),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().min(6),
-        employeePhone: z.string().optional(),
+        employeePhone: z.string().trim().optional().or(z.literal("")),
         lateGraceMinutes: z.number().min(0).max(120).default(5),
         contractType: z.enum(["full_time", "part_time", "temporary", "other"]).optional(),
         weeklyContractedHours: z.number().min(0).max(80).optional(),
@@ -934,10 +935,15 @@ export const appRouter = router({
       if (!restaurant) throw new Error("Restaurant not found");
       const employeeCounts = await countEmployeesByCompany([company.id]);
       assertCanAddEmployee(company, employeeCounts.get(company.id) ?? 0);
-      const normalizedEmail = normalizeEmployeeEmail(input.employeeEmail);
-      const existingEmail = await getEmployeeByEmail(normalizedEmail, restaurant.companyId);
-      if (existingEmail) {
-        throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+      const contact = validateEmployeeEmailOrPhone(input.employeeEmail, input.employeePhone);
+      if (!contact.valid) {
+        throwBusinessError(contact.message ?? "Indique email o teléfono de contacto del empleado");
+      }
+      if (contact.normalizedEmail) {
+        const existingEmail = await getEmployeeByEmail(contact.normalizedEmail, restaurant.companyId);
+        if (existingEmail) {
+          throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+        }
       }
       try {
         await db.insert(employees).values({
@@ -945,9 +951,9 @@ export const appRouter = router({
           restaurantId: restaurant.id,
           name: input.employeeName,
           username: input.employeeUsername,
-          email: normalizedEmail,
+          email: contact.normalizedEmail,
           password: hashPassword(input.employeePassword),
-          phone: input.employeePhone,
+          phone: contact.normalizedPhone,
           lateGraceMinutes: input.lateGraceMinutes,
           contractType: input.contractType ?? "full_time",
           weeklyContractedHours:
@@ -980,10 +986,10 @@ export const appRouter = router({
         password: z.string().min(1).optional(),
         employeeId: z.number(),
         employeeName: z.string().min(1),
-        employeeEmail: z.string().email(),
+        employeeEmail: z.string().trim().optional().or(z.literal("")),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().optional(),
-        employeePhone: z.string().optional(),
+        employeePhone: z.string().trim().optional().or(z.literal("")),
         lateGraceMinutes: z.number().min(0).max(120).default(5),
         contractType: z.enum(["full_time", "part_time", "temporary", "other"]).optional(),
         weeklyContractedHours: z.number().min(0).max(80).optional(),
@@ -1014,11 +1020,16 @@ export const appRouter = router({
         restaurant.id
       );
 
+      const contact = validateEmployeeEmailOrPhone(input.employeeEmail, input.employeePhone);
+      if (!contact.valid) {
+        throwBusinessError(contact.message ?? "Indique email o teléfono de contacto del empleado");
+      }
+
       const updateData: Record<string, unknown> = {
         name: input.employeeName,
         username: input.employeeUsername,
-        email: normalizeEmployeeEmail(input.employeeEmail),
-        phone: input.employeePhone ?? null,
+        email: contact.normalizedEmail,
+        phone: contact.normalizedPhone,
         lateGraceMinutes: input.lateGraceMinutes,
       };
       if (input.contractType !== undefined) updateData.contractType = input.contractType;
@@ -1027,12 +1038,11 @@ export const appRouter = router({
           input.weeklyContractedHours != null ? String(input.weeklyContractedHours) : null;
       }
       if (input.nationalId !== undefined) updateData.nationalId = input.nationalId.trim() || null;
-      const existingEmail = await getEmployeeByEmail(
-        normalizeEmployeeEmail(input.employeeEmail),
-        company.id
-      );
-      if (existingEmail && existingEmail.id !== input.employeeId) {
-        throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+      if (contact.normalizedEmail) {
+        const existingEmail = await getEmployeeByEmail(contact.normalizedEmail, company.id);
+        if (existingEmail && existingEmail.id !== input.employeeId) {
+          throw new Error(DUPLICATE_EMPLOYEE_EMAIL_MSG);
+        }
       }
       if (input.employeePassword) {
         updateData.password = hashPassword(input.employeePassword);

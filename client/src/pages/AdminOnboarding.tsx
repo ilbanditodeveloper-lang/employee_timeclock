@@ -18,6 +18,7 @@ import {
   GPS_JUSTIFICATION_CATEGORIES,
   type GpsJustificationCategory,
 } from "@shared/gpsJustification";
+import { validateEmployeeEmailOrPhone } from "@shared/employeeContact";
 
 const COUNTRY_OPTIONS = [{ code: "ES", label: "España" }];
 const TIMEZONE_OPTIONS = [
@@ -73,6 +74,7 @@ export default function AdminOnboarding() {
 
   const [employeeName, setEmployeeName] = useState("");
   const [employeeEmail, setEmployeeEmail] = useState("");
+  const [employeePhone, setEmployeePhone] = useState("");
   const [employeeUsername, setEmployeeUsername] = useState("");
   const [employeePassword, setEmployeePassword] = useState("");
 
@@ -187,23 +189,32 @@ export default function AdminOnboarding() {
   };
 
   const saveStep4 = async () => {
-    if (!employeeName.trim() && !employeeUsername.trim() && !employeeEmail.trim()) {
+    if (
+      !employeeName.trim() &&
+      !employeeUsername.trim() &&
+      !employeeEmail.trim() &&
+      !employeePhone.trim()
+    ) {
       return true;
     }
+    const contact = validateEmployeeEmailOrPhone(employeeEmail, employeePhone);
     if (
       !employeeName.trim() ||
-      !employeeEmail.trim() ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employeeEmail.trim()) ||
+      !contact.valid ||
       employeeUsername.trim().length < 3 ||
       employeePassword.length < 6
     ) {
-      toast.error("Completa nombre, email, usuario (mín. 3) y contraseña (mín. 6) o usa «Crear después»");
+      toast.error(
+        contact.message ??
+          "Completa nombre, usuario (mín. 3), contraseña (mín. 6) y email o teléfono, o usa «Crear después»"
+      );
       return false;
     }
     await createEmployee.mutateAsync({
       ...emptyCreds,
       employeeName: employeeName.trim(),
-      employeeEmail: employeeEmail.trim().toLowerCase(),
+      employeeEmail: contact.normalizedEmail ?? "",
+      employeePhone: contact.normalizedPhone ?? "",
       employeeUsername: employeeUsername.trim(),
       employeePassword,
       lateGraceMinutes: 5,
@@ -533,17 +544,30 @@ export default function AdminOnboarding() {
                   <Input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} className="mt-1" />
                 </div>
                 <div>
-                  <Label>Email de acceso</Label>
+                  <Label>Email de contacto</Label>
                   <Input
                     type="email"
                     value={employeeEmail}
                     onChange={(e) => setEmployeeEmail(e.target.value)}
                     className="mt-1"
-                    placeholder="empleado@empresa.com"
+                    placeholder="empleado@empresa.com (opcional si hay teléfono)"
                   />
                 </div>
                 <div>
-                  <Label>Usuario (interno)</Label>
+                  <Label>Teléfono de contacto</Label>
+                  <Input
+                    type="tel"
+                    value={employeePhone}
+                    onChange={(e) => setEmployeePhone(e.target.value)}
+                    className="mt-1"
+                    placeholder="+34 600 000 000 (opcional si hay email)"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Indica al menos uno: email o teléfono. Para fichar usará el usuario y la contraseña de abajo.
+                  </p>
+                </div>
+                <div>
+                  <Label>Usuario para fichar</Label>
                   <Input value={employeeUsername} onChange={(e) => setEmployeeUsername(e.target.value)} className="mt-1" />
                 </div>
                 <div>

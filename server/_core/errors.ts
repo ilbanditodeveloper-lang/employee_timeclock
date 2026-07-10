@@ -42,6 +42,9 @@ const BUSINESS_MESSAGE_PATTERNS = [
   /^Database not available/,
   /^Para activar GPS/,
   /^Seleccione el motivo de activación/,
+  /^Indique email o teléfono/,
+  /^Introduce un email válido o deja el campo vacío/,
+  /^Introduce un teléfono válido/,
 ];
 
 /** Errores de negocio visibles al usuario (400, no 500 genérico). */
