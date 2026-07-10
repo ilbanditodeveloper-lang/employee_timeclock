@@ -2422,9 +2422,45 @@ export const appRouter = router({
       return { success: true, sent: successCount, failed: failCount };
     }),
 
-    getSession: publicProcedure.query(async ({ ctx }) => ({
-      session: ctx.session,
-    })),
+    getSession: publicProcedure.query(async ({ ctx }) => {
+      const session = ctx.session;
+      if (!session) return { session: null };
+
+      if (session.type === "employee" && session.employeeId) {
+        if (session.isDemo || isDemoRequestActive()) {
+          const demoCompany = getDemoCompany();
+          return {
+            session: {
+              ...session,
+              locationEnabled: demoCompany.locationEnabled ?? false,
+              timezone: "Europe/Madrid",
+              lateGraceMinutes: 5,
+              needsPrivacyNotice: !demoHasPrivacyAcceptance(session.employeeId),
+            },
+          };
+        }
+        if (session.companyId) {
+          const company = await getCompanyById(session.companyId);
+          const employee = await getEmployeeById(session.employeeId, session.companyId);
+          const acceptance = await getLegalAcceptance(
+            session.employeeId,
+            "employee_privacy_notice",
+            EMPLOYEE_PRIVACY_NOTICE_VERSION
+          );
+          return {
+            session: {
+              ...session,
+              locationEnabled: company?.locationEnabled ?? false,
+              timezone: company?.timezone ?? "Europe/Madrid",
+              lateGraceMinutes: employee?.lateGraceMinutes ?? 5,
+              needsPrivacyNotice: !acceptance,
+            },
+          };
+        }
+      }
+
+      return { session };
+    }),
 
     logoutSession: publicProcedure.mutation(async ({ ctx }) => {
       clearSessionCookie(ctx.res, ctx.req);

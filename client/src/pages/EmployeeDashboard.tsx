@@ -99,6 +99,22 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function getGeolocationErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = Number((error as { code?: number }).code);
+    if (code === 1) {
+      return "Permite el acceso a ubicación en el navegador para fichar (Ajustes → Permisos).";
+    }
+    if (code === 2) {
+      return "No se pudo obtener tu ubicación. Comprueba que el GPS está activo.";
+    }
+    if (code === 3) {
+      return "La ubicación tardó demasiado. Inténtalo de nuevo al aire libre o cerca de una ventana.";
+    }
+  }
+  return getErrorMessage(error, "No se pudo obtener tu ubicación");
+}
+
 function isNetworkFetchError(error: unknown): boolean {
   const message = getErrorMessage(error, "").toLowerCase();
   if (message.includes("failed to fetch") || message.includes("networkerror")) return true;
@@ -119,8 +135,14 @@ export default function EmployeeDashboard() {
   const vapidKeyQuery = trpc.publicApi.pushNotifications.getVapidPublicKey.useQuery();
   const [, setLocation] = useLocation();
   const { employeeSession, setEmployeeSession } = useAuthContext();
+  const trpcUtils = trpc.useUtils();
   const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
   const locationEnabled = employeeSession?.locationEnabled ?? false;
+
+  useEffect(() => {
+    if (!isEmployeeAuthenticated) return;
+    void trpcUtils.publicApi.getSession.invalidate();
+  }, [isEmployeeAuthenticated, trpcUtils]);
   const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
   const [isAtRestaurant, setIsAtRestaurant] = useState(() => !locationEnabled);
   const [isClockedIn, setIsClockedIn] = useState(false);
@@ -330,8 +352,12 @@ export default function EmployeeDashboard() {
     if (!employeeSession?.employeeId) throw new Error("Sesión no válida");
     const base = employeeQueryInput(employeeSession.employeeId);
     if (!locationEnabled) return base;
-    const coords = await getCurrentLocationOnce();
-    return { ...base, latitude: coords.lat, longitude: coords.lng };
+    try {
+      const coords = await getCurrentLocationOnce();
+      return { ...base, latitude: coords.lat, longitude: coords.lng };
+    } catch (error) {
+      throw new Error(getGeolocationErrorMessage(error));
+    }
   };
 
   const handleClockIn = async () => {
@@ -350,8 +376,16 @@ export default function EmployeeDashboard() {
       employeeTimeclocks.refetch().catch(() => {});
       toast.success('¡Entrada registrada!');
     } catch (error) {
+      const message = getErrorMessage(error, 'Error al registrar entrada');
+      if (message.includes('Se requiere ubicación')) {
+        await trpcUtils.publicApi.getSession.invalidate();
+        toast.error(
+          'Tu empresa requiere ubicación para fichar. Permite el GPS en el navegador y vuelve a pulsar Entrada.'
+        );
+        return;
+      }
       if (!isNetworkFetchError(error)) {
-        toast.error(getErrorMessage(error, 'Error al registrar entrada'));
+        toast.error(message);
       } else {
         let done = false;
         for (const delayMs of [500, 1500]) {

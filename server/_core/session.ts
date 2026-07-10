@@ -32,6 +32,16 @@ export type AppSession = {
 
   isDemo?: boolean;
 
+  /** Campos enriquecidos en getSession (no se guardan en el JWT). */
+
+  locationEnabled?: boolean;
+
+  timezone?: string;
+
+  lateGraceMinutes?: number;
+
+  needsPrivacyNotice?: boolean;
+
 };
 
 

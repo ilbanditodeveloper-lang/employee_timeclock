@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sessionQuery = trpc.publicApi.getSession.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   });
 
   const serverSession = sessionQuery.data?.session ?? null;
@@ -81,6 +82,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       serverSession.companySlug
     ) {
       const sameEmployee = employeeSession?.employeeId === serverSession.employeeId;
+      const serverLocation =
+        typeof serverSession.locationEnabled === "boolean"
+          ? serverSession.locationEnabled
+          : undefined;
+      const serverTimezone =
+        typeof serverSession.timezone === "string" ? serverSession.timezone : undefined;
+      const serverGrace =
+        typeof serverSession.lateGraceMinutes === "number"
+          ? serverSession.lateGraceMinutes
+          : undefined;
+      const serverPrivacy =
+        typeof serverSession.needsPrivacyNotice === "boolean"
+          ? serverSession.needsPrivacyNotice
+          : undefined;
       return {
         username: sameEmployee
           ? (employeeSession?.username ?? serverSession.displayName ?? "")
@@ -89,10 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         companySlug: serverSession.companySlug,
         displayName: serverSession.displayName ?? employeeSession?.displayName,
         schedule: sameEmployee ? employeeSession?.schedule : undefined,
-        lateGraceMinutes: sameEmployee ? employeeSession?.lateGraceMinutes : undefined,
-        locationEnabled: sameEmployee ? employeeSession?.locationEnabled : undefined,
-        needsPrivacyNotice: sameEmployee ? employeeSession?.needsPrivacyNotice : undefined,
-        timezone: sameEmployee ? employeeSession?.timezone : undefined,
+        lateGraceMinutes: serverGrace ?? (sameEmployee ? employeeSession?.lateGraceMinutes : undefined),
+        locationEnabled: serverLocation ?? (sameEmployee ? employeeSession?.locationEnabled : undefined) ?? false,
+        needsPrivacyNotice:
+          serverPrivacy ?? (sameEmployee ? employeeSession?.needsPrivacyNotice : undefined),
+        timezone: serverTimezone ?? (sameEmployee ? employeeSession?.timezone : undefined),
       };
     }
     return employeeSession;
