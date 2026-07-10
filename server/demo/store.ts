@@ -535,6 +535,14 @@ export function demoSetCompanyStatus(companyId: number, isActive: boolean) {
   return { success: true };
 }
 
+export function demoDeleteSuperCompany(companyId: number) {
+  const idx = superCompanies.findIndex((c) => c.id === companyId);
+  if (idx < 0) throw new Error("Empresa no encontrada");
+  if (companyId === 1) throw new Error("No se puede borrar la empresa demo principal");
+  superCompanies.splice(idx, 1);
+  return { success: true };
+}
+
 export function demoSetCompanySubscription(
   companyId: number,
   subscriptionPlan: SubscriptionPlan,

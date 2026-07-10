@@ -1259,3 +1259,44 @@ export async function addCompanyCrmActivity(params: {
     .returning();
   return row;
 }
+
+/**
+ * Elimina una empresa y todos sus datos (solo superadmin).
+ * Omite triggers de conservación con session_replication_role en la transacción.
+ */
+export async function deleteCompanyCompletely(companyId: number): Promise<{ slug: string; name: string }> {
+  const db = await getDb();
+  if (!db || !_client) throw new Error("Database not available");
+
+  const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+  if (!company) throw new Error("Empresa no encontrada");
+  if (company.legalHoldEnabled) {
+    throw new Error(
+      "No se puede borrar: esta empresa tiene retención legal activa (legal hold). Desactívala antes en su ficha legal."
+    );
+  }
+
+  await _client.begin(async (tx) => {
+    await tx`SET LOCAL session_replication_role = replica`;
+    await tx`DELETE FROM notification_logs WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM timeclock_breaks WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM gdpr_requests WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM monthly_report_deliveries WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM company_legal_acceptances WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM company_crm_activities WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM audit_logs WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM legal_acceptances WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM push_subscriptions WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM time_off_requests WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM incidents WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM timeclocks WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM schedules WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM employees WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM restaurants WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM users WHERE "companyId" = ${companyId}`;
+    await tx`DELETE FROM companies WHERE id = ${companyId}`;
+    await tx`SET LOCAL session_replication_role = DEFAULT`;
+  });
+
+  return { slug: company.slug, name: company.name };
+}

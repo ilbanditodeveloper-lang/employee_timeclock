@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus,
   Pencil,
+  Trash2,
   Mail,
   MessageCircle,
   Phone,
@@ -97,6 +98,7 @@ export default function SuperAdminCompaniesPanel({
   const planLabels = planLabelsProp ?? SUBSCRIPTION_PLAN_LABELS;
   const listCompanies = trpc.publicApi.superAdminListCompanies.useQuery(emptyCreds);
   const setStatus = trpc.publicApi.superAdminSetCompanyStatus.useMutation();
+  const deleteCompany = trpc.publicApi.superAdminDeleteCompany.useMutation();
   const createCompany = trpc.publicApi.superAdminCreateCompany.useMutation();
   const setSubscription = trpc.publicApi.superAdminSetCompanySubscription.useMutation();
   const setCompanyAdmin = trpc.publicApi.superAdminSetCompanyAdmin.useMutation();
@@ -317,6 +319,32 @@ export default function SuperAdminCompaniesPanel({
       refetch();
     } catch {
       toast.error("No se pudo cambiar el estado");
+    }
+  };
+
+  const handleDeleteCompany = async (company: CompanyRow) => {
+    const warning =
+      `BORRADO PERMANENTE de "${company.name}" (${company.slug}).\n\n` +
+      `Se eliminarán empleados, fichajes, incidencias, CRM y datos de la empresa. ` +
+      `Esta acción no se puede deshacer.\n\n` +
+      `Escribe el slug exacto para confirmar: ${company.slug}`;
+    const typed = window.prompt(warning);
+    if (typed == null) return;
+    if (typed.trim() !== company.slug) {
+      toast.error("Slug incorrecto — no se borró nada");
+      return;
+    }
+    try {
+      await deleteCompany.mutateAsync({
+        ...emptyCreds,
+        companyId: company.id,
+        confirmSlug: typed.trim(),
+      });
+      toast.success(`Empresa "${company.name}" eliminada`);
+      if (editingCompanyId === company.id) setEditingCompanyId(null);
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo borrar la empresa");
     }
   };
 
@@ -541,6 +569,17 @@ export default function SuperAdminCompaniesPanel({
                       onClick={() => void toggleStatus(company)}
                     >
                       {company.isActive ? "Baja" : "Alta"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-red-700 border-red-200 hover:bg-red-50"
+                      disabled={deleteCompany.isPending}
+                      onClick={() => void handleDeleteCompany(company)}
+                    >
+                      <Trash2 className="size-3.5 mr-1" />
+                      Borrar
                     </Button>
                   </div>
                 </div>

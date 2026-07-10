@@ -57,6 +57,7 @@ import {
   deleteCompanyLocation,
   listCompanyCrmActivities,
   addCompanyCrmActivity,
+  deleteCompanyCompletely,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
 import { hashPassword } from "./_core/password";
@@ -151,6 +152,7 @@ import {
   demoCreateSuperCompany,
   demoMutationSuccess,
   demoSetCompanyStatus,
+  demoDeleteSuperCompany,
   demoSetCompanySubscription,
   demoUpdateCompanyLegal,
   demoUpsertRestaurant,
@@ -475,6 +477,29 @@ export const appRouter = router({
           .set({ isActive: input.isActive, updatedAt: new Date() })
           .where(eq(companies.id, input.companyId));
         return { success: true };
+      }),
+
+    superAdminDeleteCompany: publicProcedure
+      .input(
+        optionalCreds.extend({
+          companyId: z.number().int().positive(),
+          confirmSlug: z.string().min(1),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        if (isDemoModeEnabled()) {
+          return demoDeleteSuperCompany(input.companyId);
+        }
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const company = await getCompanyById(input.companyId);
+        if (!company) throw new Error("Empresa no encontrada");
+        if (company.slug !== input.confirmSlug.trim()) {
+          throw new Error("El slug de confirmación no coincide");
+        }
+        const result = await deleteCompanyCompletely(input.companyId);
+        return { success: true as const, slug: result.slug, name: result.name };
       }),
 
     superAdminGetLandingSettings: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
