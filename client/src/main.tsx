@@ -109,12 +109,7 @@ const trpcClient = trpc.createClient({
       false: httpBatchLink({
         url: trpcUrl,
         transformer: superjson,
-        fetch(input, init) {
-          return globalThis.fetch(input, {
-            ...(init ?? {}),
-            credentials: "include",
-          });
-        },
+        fetch: fetchWithTimeout,
       }),
     }),
   ],

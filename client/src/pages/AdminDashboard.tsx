@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { adminApiInput } from '@/lib/adminContext';
+import { adminApiInput, getStoredActiveLocationId, syncStoredActiveLocationId } from '@/lib/adminContext';
 import { Calendar as UiCalendar, CalendarDayButton } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, subMonths } from 'date-fns';
@@ -282,9 +282,11 @@ export default function AdminDashboard() {
     },
     { enabled: isAdminAuthenticated }
   );
-  const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(adminApiInput(), {
+  const workforceTodayQuery = trpc.publicApi.getTodayWorkforceStatus.useQuery(adminInput, {
     enabled: isAdminAuthenticated,
-    refetchInterval: activeTab === 'dashboard' ? 30_000 : false,
+    refetchInterval: activeTab === 'dashboard' ? 15_000 : false,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
     onSuccess: () => {
@@ -1043,6 +1045,33 @@ export default function AdminDashboard() {
       setRadiusMeters(getRestaurant.data.radiusMeters);
     }
   }, [getRestaurant.data]);
+
+  useEffect(() => {
+    if (!isAdminAuthenticated || getRestaurant.isLoading || !getRestaurant.isFetched) return;
+    const stored = getStoredActiveLocationId();
+    const resolvedId = getRestaurant.data?.id;
+    if (resolvedId) {
+      if (stored !== resolvedId) {
+        syncStoredActiveLocationId(resolvedId);
+        void workforceTodayQuery.refetch();
+      }
+      return;
+    }
+    if (stored) {
+      syncStoredActiveLocationId(null);
+      void workforceTodayQuery.refetch();
+    }
+  }, [
+    getRestaurant.data?.id,
+    getRestaurant.isLoading,
+    getRestaurant.isFetched,
+    isAdminAuthenticated,
+  ]);
+
+  useEffect(() => {
+    if (activeTab !== 'dashboard' || !isAdminAuthenticated) return;
+    void workforceTodayQuery.refetch();
+  }, [activeTab, isAdminAuthenticated]);
 
   useEffect(() => {
     if (isAuthLoading) return;

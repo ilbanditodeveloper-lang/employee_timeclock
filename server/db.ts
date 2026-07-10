@@ -724,7 +724,9 @@ export async function resolveAdminRestaurantForCompany(
   restaurantId?: number
 ) {
   if (restaurantId) {
-    return getRestaurantById(restaurantId, companyId);
+    const resolved = await getRestaurantById(restaurantId, companyId);
+    if (resolved) return resolved;
+    // Client sent a stale/invalid location id — fall back to company default.
   }
   const list = await getRestaurantsByCompany(companyId);
   if (list.length > 0) {

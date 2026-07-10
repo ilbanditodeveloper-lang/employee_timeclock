@@ -10,13 +10,27 @@ export function getStoredActiveLocationId(): number | undefined {
   return Number.isFinite(id) && id > 0 ? id : undefined;
 }
 
+export function clearStoredActiveLocationId() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ACTIVE_LOCATION_KEY);
+}
+
 export function setStoredActiveLocationId(locationId: number | null) {
   if (typeof window === "undefined") return;
   if (locationId == null) {
-    localStorage.removeItem(ACTIVE_LOCATION_KEY);
+    clearStoredActiveLocationId();
     return;
   }
   localStorage.setItem(ACTIVE_LOCATION_KEY, String(locationId));
+}
+
+export function syncStoredActiveLocationId(validLocationId: number | null | undefined) {
+  if (typeof window === "undefined") return;
+  if (!validLocationId) {
+    clearStoredActiveLocationId();
+    return;
+  }
+  setStoredActiveLocationId(validLocationId);
 }
 
 export function adminApiInput(restaurantId?: number) {
