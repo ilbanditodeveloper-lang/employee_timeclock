@@ -109,6 +109,7 @@ export default function AdminDashboard() {
   const [lateGraceMinutes, setLateGraceMinutes] = useState('5');
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [employeeFormKey, setEmployeeFormKey] = useState(0);
   const [workedHours, setWorkedHours] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -930,10 +931,10 @@ export default function AdminDashboard() {
       : createEmployee.mutateAsync({
           ...adminApiInput(),
           employeeName,
-          employeeEmail: employeeEmail.trim().toLowerCase(),
+          employeeEmail: contact.normalizedEmail ?? '',
           employeeUsername,
           employeePassword,
-          employeePhone,
+          employeePhone: contact.normalizedPhone ?? '',
           lateGraceMinutes: graceMinutesValue,
           contractType: employeeContractType,
           weeklyContractedHours: employeeWeeklyHours ? Number(employeeWeeklyHours) : undefined,
@@ -951,21 +952,7 @@ export default function AdminDashboard() {
         if (adminSession?.companySlug) {
           saveDefaultSchedule(adminSession.companySlug, employeeSchedule);
         }
-        const nextSchedule = adminSession?.companySlug
-          ? loadDefaultSchedule(adminSession.companySlug)
-          : createDefaultEmployeeSchedule();
-        setEmployeeName('');
-        setEmployeeEmail('');
-        setEmployeeUsername('');
-        setEmployeePassword('');
-        setEmployeePhone('');
-        setEmployeeContractType('full_time');
-        setEmployeeWeeklyHours('');
-        setEmployeeNationalId('');
-        setLateGraceMinutes('5');
-        setEditingEmployeeId(null);
-        setEmployeeSchedule(nextSchedule);
-        setScheduleSectionOpen(false);
+        resetEmployeeFormFields();
         setShowEmployeeForm(false);
         listEmployees.refetch();
       })
@@ -986,10 +973,14 @@ export default function AdminDashboard() {
     setEmployeeUsername('');
     setEmployeePassword('');
     setEmployeePhone('');
+    setEmployeeContractType('full_time');
+    setEmployeeWeeklyHours('');
+    setEmployeeNationalId('');
     setLateGraceMinutes('5');
     setEditingEmployeeId(null);
     setEmployeeSchedule(nextSchedule);
     setScheduleSectionOpen(false);
+    setEmployeeFormKey((key) => key + 1);
   };
 
   const handleStartCreateEmployee = () => {
@@ -1431,7 +1422,7 @@ export default function AdminDashboard() {
                     </h2>
                   </div>
 
-              <div className="space-y-4">
+              <div key={employeeFormKey} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Nombre del Empleado
@@ -1442,6 +1433,7 @@ export default function AdminDashboard() {
                     value={employeeName}
                     onChange={(e) => setEmployeeName(e.target.value)}
                     className="input-elegant"
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1484,6 +1476,8 @@ export default function AdminDashboard() {
                     value={employeeUsername}
                     onChange={(e) => setEmployeeUsername(e.target.value)}
                     className="input-elegant"
+                    autoComplete="off"
+                    name="timeclock-new-employee-username"
                   />
                 </div>
 
@@ -1496,19 +1490,6 @@ export default function AdminDashboard() {
                     placeholder="••••••••"
                     value={employeePassword}
                     onChange={(e) => setEmployeePassword(e.target.value)}
-                    className="input-elegant"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Teléfono (Opcional)
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="+34 600 123 456"
-                    value={employeePhone}
-                    onChange={(e) => setEmployeePhone(e.target.value)}
                     className="input-elegant"
                   />
                 </div>
