@@ -13,6 +13,11 @@ import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
 import { useAuthContext, useRequireAdminAuth } from "@/contexts/AuthContext";
 import { createDefaultEmployeeSchedule } from "@shared/scheduleDefaults";
+import {
+  DEFAULT_WORKPLACE_GPS_JUSTIFICATION,
+  GPS_JUSTIFICATION_CATEGORIES,
+  type GpsJustificationCategory,
+} from "@shared/gpsJustification";
 
 const COUNTRY_OPTIONS = [{ code: "ES", label: "España" }];
 const TIMEZONE_OPTIONS = [
@@ -59,10 +64,9 @@ export default function AdminOnboarding() {
   const [longitude, setLongitude] = useState(MADRID_LNG);
   const [radiusMeters, setRadiusMeters] = useState(150);
   const [locationEnabled, setLocationEnabled] = useState(false);
-  const [gpsJustificationCategory, setGpsJustificationCategory] = useState("");
-  const [gpsJustification, setGpsJustification] = useState(
-    "Geolocalización activada al configurar el local de trabajo durante el alta del negocio."
-  );
+  const [gpsJustificationCategory, setGpsJustificationCategory] =
+    useState<GpsJustificationCategory>("workplace_geofence");
+  const [gpsJustification, setGpsJustification] = useState(DEFAULT_WORKPLACE_GPS_JUSTIFICATION);
 
   const [dataRetentionYears, setDataRetentionYears] = useState("4");
   const [legalAcknowledged, setLegalAcknowledged] = useState(false);
@@ -129,13 +133,14 @@ export default function AdminOnboarding() {
 
   const saveStep2 = async () => {
     const address = restaurantAddress.trim() || "Pendiente de configurar";
+    const effectiveRadius = locationEnabled ? Math.max(50, radiusMeters) : 150;
     await upsertRestaurant.mutateAsync({
       ...emptyCreds,
       name: businessName.trim() || "Mi negocio",
       address,
       latitude,
       longitude,
-      radiusMeters: locationEnabled ? radiusMeters : 150,
+      radiusMeters: effectiveRadius,
     });
     if (locationEnabled) {
       const justification = gpsJustification.trim();
@@ -150,11 +155,7 @@ export default function AdminOnboarding() {
       await updateLegal.mutateAsync({
         ...emptyCreds,
         locationEnabled: true,
-        gpsJustificationCategory: gpsJustificationCategory as
-          | "itinerant_workers"
-          | "multiple_sites"
-          | "off_site_work"
-          | "other",
+        gpsJustificationCategory,
         gpsJustification: justification,
       });
     } else {
@@ -381,7 +382,7 @@ export default function AdminOnboarding() {
                   <div>
                     <p className="font-medium text-sm">Validación por GPS</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Puedes dejarlo desactivado y activarlo más adelante desde el panel legal.
+                      Activa el GPS para que los empleados solo puedan fichar cerca del local (no desde casa).
                     </p>
                   </div>
                   <Switch
@@ -389,7 +390,10 @@ export default function AdminOnboarding() {
                     onCheckedChange={(checked) => {
                       setLocationEnabled(checked);
                       if (checked && !gpsJustificationCategory) {
-                        setGpsJustificationCategory("multiple_sites");
+                        setGpsJustificationCategory("workplace_geofence");
+                      }
+                      if (checked && !gpsJustification.trim()) {
+                        setGpsJustification(DEFAULT_WORKPLACE_GPS_JUSTIFICATION);
                       }
                     }}
                   />
@@ -412,15 +416,23 @@ export default function AdminOnboarding() {
                       <select
                         id="onboarding-gps-category"
                         value={gpsJustificationCategory}
-                        onChange={(e) => setGpsJustificationCategory(e.target.value)}
+                        onChange={(e) =>
+                          setGpsJustificationCategory(e.target.value as GpsJustificationCategory)
+                        }
                         className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
-                        <option value="">Seleccione…</option>
-                        <option value="multiple_sites">Varios centros de trabajo</option>
-                        <option value="itinerant_workers">Trabajadores itinerantes</option>
-                        <option value="off_site_work">Trabajo fuera del centro</option>
-                        <option value="other">Otro</option>
+                        {GPS_JUSTIFICATION_CATEGORIES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {
+                          GPS_JUSTIFICATION_CATEGORIES.find((o) => o.value === gpsJustificationCategory)
+                            ?.hint
+                        }
+                      </p>
                     </div>
                     <div>
                       <Label htmlFor="onboarding-gps-justification">Justificación GPS</Label>
@@ -431,9 +443,13 @@ export default function AdminOnboarding() {
                         className="mt-1"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Obligatorio al activar GPS (mínimo 10 caracteres).
+                        Obligatorio al activar GPS (mínimo 10 caracteres). Puedes dejar el texto sugerido.
                       </p>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Radio recomendado: 100–150 m. Con 10 m el GPS del móvil puede fallar aunque el empleado
+                      esté en el local.
+                    </p>
                     <RestaurantMap
                       latitude={latitude}
                       longitude={longitude}

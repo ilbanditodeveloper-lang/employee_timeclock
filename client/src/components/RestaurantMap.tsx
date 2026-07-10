@@ -20,11 +20,15 @@ declare global {
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const GOOGLE_SCRIPT_SELECTOR = 'script[data-timeclock-google-maps="true"]';
 
+function isMapsApiReady(): boolean {
+  return typeof window.google?.maps?.Map === 'function';
+}
+
 function waitForGoogleMaps(timeoutMs = 15000): Promise<boolean> {
   return new Promise((resolve) => {
     const started = Date.now();
     const interval = window.setInterval(() => {
-      if (window.google?.maps) {
+      if (isMapsApiReady()) {
         window.clearInterval(interval);
         resolve(true);
         return;
@@ -37,12 +41,29 @@ function waitForGoogleMaps(timeoutMs = 15000): Promise<boolean> {
   });
 }
 
+async function loadGoogleMapsLibraries(): Promise<boolean> {
+  if (!window.google?.maps) return false;
+
+  if (typeof window.google.maps.importLibrary === 'function') {
+    try {
+      await window.google.maps.importLibrary('maps');
+      await window.google.maps.importLibrary('places');
+      await window.google.maps.importLibrary('geocoding');
+    } catch {
+      return false;
+    }
+  }
+
+  return isMapsApiReady();
+}
+
 async function ensureGoogleMapsLoaded(): Promise<boolean> {
-  if (window.google?.maps) return true;
+  if (isMapsApiReady()) return true;
 
   const existingScript = document.querySelector<HTMLScriptElement>(GOOGLE_SCRIPT_SELECTOR);
   if (existingScript) {
-    return await waitForGoogleMaps();
+    await waitForGoogleMaps();
+    return loadGoogleMapsLibraries();
   }
 
   if (!GOOGLE_MAPS_API_KEY) {
@@ -56,7 +77,8 @@ async function ensureGoogleMapsLoaded(): Promise<boolean> {
   script.setAttribute('data-timeclock-google-maps', 'true');
   document.head.appendChild(script);
 
-  return await waitForGoogleMaps();
+  await waitForGoogleMaps();
+  return loadGoogleMapsLibraries();
 }
 
 /** Geocodifica una dirección escrita a mano (sin pin en el mapa). */

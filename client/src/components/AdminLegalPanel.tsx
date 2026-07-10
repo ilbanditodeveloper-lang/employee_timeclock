@@ -26,6 +26,11 @@ import {
   downloadMonthlyLaborReportCsv,
 } from "@/lib/laborReportExport";
 import { SAAS_PROCESSOR_NOTICE, validateCompanyLegalForOfficialExport } from "@shared/legalCompliance";
+import {
+  DEFAULT_WORKPLACE_GPS_JUSTIFICATION,
+  GPS_JUSTIFICATION_CATEGORIES,
+  type GpsJustificationCategory,
+} from "@shared/gpsJustification";
 import { format } from "date-fns";
 
 export default function AdminLegalPanel() {
@@ -142,11 +147,7 @@ export default function AdminLegalPanel() {
       dataRetentionYears: years,
       gpsJustification: locationEnabled ? gpsJustification.trim() : undefined,
       gpsJustificationCategory: locationEnabled
-        ? (gpsJustificationCategory as
-            | "itinerant_workers"
-            | "multiple_sites"
-            | "off_site_work"
-            | "other")
+        ? (gpsJustificationCategory as GpsJustificationCategory)
         : undefined,
     });
   };
@@ -314,15 +315,26 @@ export default function AdminLegalPanel() {
                 <select
                   id="gpsCategory"
                   value={gpsJustificationCategory}
-                  onChange={(e) => setGpsJustificationCategory(e.target.value)}
+                  onChange={(e) =>
+                    setGpsJustificationCategory(e.target.value as GpsJustificationCategory)
+                  }
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="">Seleccione…</option>
-                  <option value="itinerant_workers">Trabajadores itinerantes</option>
-                  <option value="multiple_sites">Varios centros de trabajo</option>
-                  <option value="off_site_work">Trabajo fuera del centro</option>
-                  <option value="other">Otro</option>
+                  {GPS_JUSTIFICATION_CATEGORIES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
+                {gpsJustificationCategory ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {
+                      GPS_JUSTIFICATION_CATEGORIES.find((o) => o.value === gpsJustificationCategory)
+                        ?.hint
+                    }
+                  </p>
+                ) : null}
               </div>
               <div>
                 <Label htmlFor="gpsJustification">Justificación (obligatoria)</Label>
@@ -330,7 +342,7 @@ export default function AdminLegalPanel() {
                   id="gpsJustification"
                   value={gpsJustification}
                   onChange={(e) => setGpsJustification(e.target.value)}
-                  placeholder="Explique por qué necesita geolocalización puntual al fichar"
+                  placeholder={DEFAULT_WORKPLACE_GPS_JUSTIFICATION}
                   className="mt-1"
                 />
               </div>

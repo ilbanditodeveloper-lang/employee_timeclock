@@ -2456,7 +2456,13 @@ export const appRouter = router({
           legalContactName: z.string().optional(),
           gpsJustification: z.string().optional(),
           gpsJustificationCategory: z
-            .enum(["itinerant_workers", "multiple_sites", "off_site_work", "other"])
+            .enum([
+              "workplace_geofence",
+              "itinerant_workers",
+              "multiple_sites",
+              "off_site_work",
+              "other",
+            ])
             .optional(),
         })
       )
