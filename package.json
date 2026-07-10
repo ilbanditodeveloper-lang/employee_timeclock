@@ -17,6 +17,7 @@
     "check:primer-cliente": "node scripts/primer-cliente-pago-check.mjs --url=https://timeclockapp.es --production --piloto",
     "check:primer-cliente:stripe": "node scripts/primer-cliente-pago-check.mjs --url=https://timeclockapp.es --production",
     "check:primer-cliente:http": "node scripts/primer-cliente-pago-check.mjs --url=https://timeclockapp.es",
+    "deploy:render": "node scripts/trigger-render-deploy.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
     "retention:review": "node scripts/retention-review.mjs",
