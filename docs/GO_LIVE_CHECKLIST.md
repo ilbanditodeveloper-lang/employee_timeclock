@@ -36,11 +36,11 @@ Checklist final antes de abrir producción a clientes reales.
 
 ## Base de datos production
 
-- [x] Migraciones **0000–0011** aplicadas (incl. suscripción y pausas fichaje)
+- [x] Migraciones **0000–0016** aplicadas (legal compliance + fix columnas) (incl. suscripción y pausas fichaje)
 - [ ] `node scripts/verify-production-db.mjs --production` → PASS
 - [x] 0 datos TEST (`test-*`, `@example.com`) — verificado en Supabase
 - [ ] 0 emails admin duplicados
-- [ ] Preflight `--production` → PASS (con `DEMO_MODE=false`)
+- [ ] `node scripts/primer-cliente-pago-check.mjs --url=https://timeclockapp.es --production` → PASS
 
 ## Legal y compliance técnico
 
@@ -67,10 +67,13 @@ Checklist final antes de abrir producción a clientes reales.
 ## Comandos finales
 
 ```bash
+node scripts/primer-cliente-pago-check.mjs --url=https://timeclockapp.es --production
 node scripts/inventory-test-data.mjs
-node scripts/preflight-production-check.mjs --production --url=https://app.tudominio.com
+node scripts/preflight-production-check.mjs --production --url=https://timeclockapp.es
 node scripts/verify-production-db.mjs --production
-node scripts/e2e-phase5-production-readiness.mjs --url=https://app.tudominio.com
+node scripts/e2e-phase5-production-readiness.mjs --url=https://timeclockapp.es
 ```
+
+Ver también: [CHECKLIST_PRIMER_CLIENTE_PAGO_ES.md](./CHECKLIST_PRIMER_CLIENTE_PAGO_ES.md)
 
 **Go / No-go:** todos PASS + QA manual OK → **GO**

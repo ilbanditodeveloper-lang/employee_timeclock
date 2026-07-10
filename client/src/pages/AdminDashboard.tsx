@@ -16,6 +16,7 @@ import { format, subMonths } from 'date-fns';
 import AdminLegalPanel from '@/components/AdminLegalPanel';
 import AdminAuditLogPanel from '@/components/AdminAuditLogPanel';
 import OnboardingReminderBanner from '@/components/OnboardingReminderBanner';
+import LegalReacceptanceBanner from '@/components/LegalReacceptanceBanner';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
 import AdminBillingPanel from '@/components/AdminBillingPanel';
 import AdminSupportPanel from '@/components/AdminSupportPanel';
@@ -1128,6 +1129,7 @@ export default function AdminDashboard() {
         </>
       }
     >
+      <LegalReacceptanceBanner />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="w-full space-y-6">
             {showOnboardingBanner && <OnboardingReminderBanner />}

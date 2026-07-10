@@ -2933,6 +2933,42 @@ export const appRouter = router({
         return getMissingCompanyLegalAcceptances(company.id);
       }),
 
+    acceptCompanyLegalDocuments: publicProcedure
+      .input(
+        optionalCreds.extend({
+          legalAcknowledged: z.boolean().refine((value) => value === true, {
+            message: "Debes confirmar la aceptación de los documentos legales",
+          }),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.session?.isDemo && ctx.session.type === "admin") {
+          return { success: true as const };
+        }
+        const { company, admin } = await resolveAdminAuth(ctx, input);
+        const ip =
+          (ctx.req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
+          ctx.req.socket.remoteAddress ??
+          null;
+        const userAgent = (ctx.req.headers["user-agent"] as string | undefined) ?? null;
+        await recordCompanyLegalAcceptances({
+          companyId: company.id,
+          acceptedByUserId: admin.id,
+          ipAddress: ip,
+          userAgent,
+        });
+        await writeAuditLog({
+          companyId: company.id,
+          entityType: "company",
+          entityId: company.id,
+          action: "accept_legal_documents",
+          newValue: { documents: "current_platform_versions" },
+          performedByType: "admin",
+          performedById: admin.id,
+        });
+        return { success: true as const };
+      }),
+
     deactivateEmployee: publicProcedure
       .input(
         optionalCreds.extend({

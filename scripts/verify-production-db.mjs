@@ -54,10 +54,15 @@ try {
 const requiredColumns = [
   { table: "companies", column: "onboardingCompleted" },
   { table: "companies", column: "legalName" },
+  { table: "companies", column: "subscriptionPlan" },
   { table: "timeclocks", column: "status" },
   { table: "audit_logs", column: "companyId" },
   { table: "legal_acceptances", column: "documentVersion" },
+  { table: "employees", column: "contractType" },
+  { table: "users", column: "adminRole" },
 ];
+
+const requiredTables = ["company_legal_acceptances", "timeclock_breaks", "gdpr_requests"];
 
 for (const { table, column } of requiredColumns) {
   const rows = await sql`
@@ -66,6 +71,15 @@ for (const { table, column } of requiredColumns) {
     LIMIT 1`;
   if (rows.length) pass(`schema-${table}-${column}`);
   else fail(`schema-${table}-${column}`, "columna no encontrada — ejecuta pnpm db:migrate");
+}
+
+for (const table of requiredTables) {
+  const rows = await sql`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = ${table}
+    LIMIT 1`;
+  if (rows.length) pass(`schema-table-${table}`);
+  else fail(`schema-table-${table}`, "tabla no encontrada — ejecuta npm run db:migrate");
 }
 
 const indexRows = await sql`
