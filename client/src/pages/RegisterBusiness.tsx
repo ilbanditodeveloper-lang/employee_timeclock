@@ -33,6 +33,7 @@ export default function RegisterBusiness() {
   const landingQuery = trpc.publicApi.getLandingPageConfig.useQuery();
   const registerBusiness = trpc.publicApi.registerBusiness.useMutation();
   const checkout = trpc.publicApi.createCheckoutSession.useMutation();
+  const trpcUtils = trpc.useUtils();
   const planFromUrl = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const plan = params.get("plan");
@@ -120,9 +121,16 @@ export default function RegisterBusiness() {
         acceptedTerms: true,
       });
 
+      await trpcUtils.publicApi.getSession.invalidate();
+      const sessionResult = await trpcUtils.publicApi.getSession.fetch();
+      if (sessionResult.session?.type !== "admin") {
+        throw new Error(
+          "Cuenta creada, pero no se pudo iniciar sesión automáticamente. Entra con tu email y contraseña."
+        );
+      }
       setAdminSession({
         companySlug: result.companySlug,
-        displayName: result.adminUsername,
+        displayName: sessionResult.session.displayName ?? result.adminUsername,
       });
       setEmployeeSession(null);
 
@@ -211,11 +219,34 @@ export default function RegisterBusiness() {
           <Button
             type="button"
             className="w-full bg-blue-700 hover:bg-blue-800"
-            onClick={() => setLocation("/admin/onboarding")}
+            onClick={async () => {
+              await trpcUtils.publicApi.getSession.invalidate();
+              const sessionResult = await trpcUtils.publicApi.getSession.fetch();
+              if (sessionResult.session?.type !== "admin") {
+                toast.error("Inicia sesión con tu email y contraseña para continuar.");
+                setLocation("/admin-login");
+                return;
+              }
+              setLocation("/admin/onboarding");
+            }}
           >
             Configurar mi negocio
           </Button>
-          <Button type="button" variant="outline" className="w-full border-blue-300 text-blue-900 hover:bg-blue-50" onClick={() => setLocation("/admin")}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-blue-300 text-blue-900 hover:bg-blue-50"
+            onClick={async () => {
+              await trpcUtils.publicApi.getSession.invalidate();
+              const sessionResult = await trpcUtils.publicApi.getSession.fetch();
+              if (sessionResult.session?.type !== "admin") {
+                toast.error("Inicia sesión con tu email y contraseña para continuar.");
+                setLocation("/admin-login");
+                return;
+              }
+              setLocation("/admin");
+            }}
+          >
             Ir al panel
           </Button>
         </div>

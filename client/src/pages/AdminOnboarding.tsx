@@ -59,6 +59,10 @@ export default function AdminOnboarding() {
   const [longitude, setLongitude] = useState(MADRID_LNG);
   const [radiusMeters, setRadiusMeters] = useState(150);
   const [locationEnabled, setLocationEnabled] = useState(false);
+  const [gpsJustificationCategory, setGpsJustificationCategory] = useState("");
+  const [gpsJustification, setGpsJustification] = useState(
+    "Geolocalización activada al configurar el local de trabajo durante el alta del negocio."
+  );
 
   const [dataRetentionYears, setDataRetentionYears] = useState("4");
   const [legalAcknowledged, setLegalAcknowledged] = useState(false);
@@ -133,10 +137,32 @@ export default function AdminOnboarding() {
       longitude,
       radiusMeters: locationEnabled ? radiusMeters : 150,
     });
-    await updateLegal.mutateAsync({
-      ...emptyCreds,
-      locationEnabled,
-    });
+    if (locationEnabled) {
+      const justification = gpsJustification.trim();
+      if (!gpsJustificationCategory) {
+        toast.error("Seleccione el motivo de activación de geolocalización");
+        return false;
+      }
+      if (justification.length < 10) {
+        toast.error("Indique una justificación de GPS de al menos 10 caracteres");
+        return false;
+      }
+      await updateLegal.mutateAsync({
+        ...emptyCreds,
+        locationEnabled: true,
+        gpsJustificationCategory: gpsJustificationCategory as
+          | "itinerant_workers"
+          | "multiple_sites"
+          | "off_site_work"
+          | "other",
+        gpsJustification: justification,
+      });
+    } else {
+      await updateLegal.mutateAsync({
+        ...emptyCreds,
+        locationEnabled: false,
+      });
+    }
     return true;
   };
 
@@ -358,7 +384,15 @@ export default function AdminOnboarding() {
                       Puedes dejarlo desactivado y activarlo más adelante desde el panel legal.
                     </p>
                   </div>
-                  <Switch checked={locationEnabled} onCheckedChange={setLocationEnabled} />
+                  <Switch
+                    checked={locationEnabled}
+                    onCheckedChange={(checked) => {
+                      setLocationEnabled(checked);
+                      if (checked && !gpsJustificationCategory) {
+                        setGpsJustificationCategory("multiple_sites");
+                      }
+                    }}
+                  />
                 </div>
                 {locationEnabled && (
                   <>
@@ -372,6 +406,33 @@ export default function AdminOnboarding() {
                         onChange={(e) => setRadiusMeters(Number(e.target.value) || 150)}
                         className="mt-1"
                       />
+                    </div>
+                    <div>
+                      <Label htmlFor="onboarding-gps-category">Motivo de activación GPS</Label>
+                      <select
+                        id="onboarding-gps-category"
+                        value={gpsJustificationCategory}
+                        onChange={(e) => setGpsJustificationCategory(e.target.value)}
+                        className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Seleccione…</option>
+                        <option value="multiple_sites">Varios centros de trabajo</option>
+                        <option value="itinerant_workers">Trabajadores itinerantes</option>
+                        <option value="off_site_work">Trabajo fuera del centro</option>
+                        <option value="other">Otro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="onboarding-gps-justification">Justificación GPS</Label>
+                      <Input
+                        id="onboarding-gps-justification"
+                        value={gpsJustification}
+                        onChange={(e) => setGpsJustification(e.target.value)}
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Obligatorio al activar GPS (mínimo 10 caracteres).
+                      </p>
                     </div>
                     <RestaurantMap
                       latitude={latitude}

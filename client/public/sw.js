@@ -1,5 +1,20 @@
-const CACHE_NAME = "timeclock-v4";
+const CACHE_NAME = "timeclock-v5";
 const PRECACHE_URLS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
+
+function offlineResponse() {
+  return new Response("Sin conexión", {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
+async function cachedNavigationFallback(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const fallback = await caches.match("/index.html");
+  return fallback ?? offlineResponse();
+}
 
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -53,9 +68,7 @@ self.addEventListener("fetch", event => {
           }
           return response;
         })
-        .catch(() =>
-          caches.match(event.request).then(cached => cached || caches.match("/index.html"))
-        )
+        .catch(() => cachedNavigationFallback(event.request))
     );
     return;
   }
@@ -72,7 +85,7 @@ self.addEventListener("fetch", event => {
             }
             return response;
           })
-          .catch(() => cachedResponse);
+          .catch(() => cachedResponse ?? offlineResponse());
 
         return cachedResponse || fetchPromise;
       })

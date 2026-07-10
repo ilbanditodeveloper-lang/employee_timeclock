@@ -40,6 +40,8 @@ const BUSINESS_MESSAGE_PATTERNS = [
   /^Empresa no encontrada/,
   /^Empleado no encontrado/,
   /^Database not available/,
+  /^Para activar GPS/,
+  /^Seleccione el motivo de activación/,
 ];
 
 /** Errores de negocio visibles al usuario (400, no 500 genérico). */
