@@ -179,7 +179,10 @@ export default function SuperAdmin() {
       if (prev.faqs.length >= 20) return prev;
       return {
         ...prev,
-        faqs: [...prev.faqs, { q: "Nueva pregunta", a: "Respuesta..." }],
+        faqs: [
+          ...prev.faqs,
+          { q: t("superadmin.landing.faq.defaultQuestion"), a: t("superadmin.landing.faq.defaultAnswer") },
+        ],
       };
     });
   };
@@ -198,19 +201,19 @@ export default function SuperAdmin() {
         features: pack.features.filter(Boolean),
       }));
       if (packs.some((p) => p.features.length === 0)) {
-        toast.error("Cada plan debe tener al menos una característica");
+        toast.error(t("superadmin.landing.toasts.planNeedsFeature"));
         return;
       }
       const trustBadges = landingDraft.hero.trustBadges.map((b) => b.trim()).filter(Boolean);
       if (trustBadges.length === 0) {
-        toast.error("El hero debe tener al menos un distintivo de confianza");
+        toast.error(t("superadmin.landing.toasts.heroNeedsBadge"));
         return;
       }
       const faqs = landingDraft.faqs
         .map((f) => ({ q: f.q.trim(), a: f.a.trim() }))
         .filter((f) => f.q && f.a);
       if (faqs.length === 0) {
-        toast.error("Debe haber al menos una pregunta FAQ con texto");
+        toast.error(t("superadmin.landing.toasts.faqRequired"));
         return;
       }
       await saveLanding.mutateAsync({
@@ -222,10 +225,10 @@ export default function SuperAdmin() {
           pricingPacks: packs as LandingPageConfig["pricingPacks"],
         },
       });
-      toast.success("Ajustes de la web guardados");
+      toast.success(t("superadmin.landing.toasts.saved"));
       void landingQuery.refetch();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudieron guardar los ajustes");
+      toast.error(err instanceof Error ? err.message : t("superadmin.landing.toasts.saveFailed"));
     }
   };
 
@@ -350,17 +353,21 @@ export default function SuperAdmin() {
 
               <div className="grid gap-6 lg:grid-cols-3">
                 <AppShellPanel
-                  title="Estado de clientes"
-                  description="Distribución actual de empresas registradas"
+                  title={t("superadmin.dashboard.clientStatus.title")}
+                  description={t("superadmin.dashboard.clientStatus.description")}
                   className="lg:col-span-1"
                 >
                   <div className="space-y-4">
                     <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
-                      <span className="text-sm font-medium text-emerald-800">Activas</span>
+                      <span className="text-sm font-medium text-emerald-800">
+                        {t("superadmin.dashboard.clientStatus.activeLabel")}
+                      </span>
                       <span className="text-2xl font-bold text-emerald-900">{stats.active}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3">
-                      <span className="text-sm font-medium text-slate-700">Dadas de baja</span>
+                      <span className="text-sm font-medium text-slate-700">
+                        {t("superadmin.dashboard.clientStatus.inactiveLabel")}
+                      </span>
                       <span className="text-2xl font-bold text-slate-900">{stats.inactive}</span>
                     </div>
                     <Button
@@ -369,14 +376,14 @@ export default function SuperAdmin() {
                       className="w-full"
                       onClick={() => setActiveTab("companies")}
                     >
-                      Gestionar empresas
+                      {t("superadmin.dashboard.clientStatus.manageCompanies")}
                     </Button>
                   </div>
                 </AppShellPanel>
 
                 <AppShellPanel
-                  title="Últimas empresas"
-                  description="Acceso rápido a clientes recientes"
+                  title={t("superadmin.dashboard.recentCompanies.title")}
+                  description={t("superadmin.dashboard.recentCompanies.description")}
                   className="lg:col-span-2"
                 >
                   <div className="space-y-2">
@@ -388,7 +395,10 @@ export default function SuperAdmin() {
                         <div>
                           <p className="font-semibold text-slate-900">{company.name}</p>
                           <p className="text-xs text-slate-500">
-                            {company.employeeCount} empleados · {company.planLabel}
+                            {t("superadmin.dashboard.recentCompanies.employees", {
+                              count: company.employeeCount ?? 0,
+                            })}{" "}
+                            · {company.planLabel}
                           </p>
                         </div>
                         <span
@@ -399,33 +409,37 @@ export default function SuperAdmin() {
                               : "bg-slate-200 text-slate-600"
                           )}
                         >
-                          {company.isActive ? "Activa" : "Baja"}
+                          {company.isActive
+                            ? t("superadmin.dashboard.recentCompanies.active")
+                            : t("superadmin.dashboard.recentCompanies.inactive")}
                         </span>
                       </div>
                     ))}
                     {companies.length === 0 ? (
-                      <p className="text-sm text-slate-500">No hay empresas registradas todavía.</p>
+                      <p className="text-sm text-slate-500">
+                        {t("superadmin.dashboard.recentCompanies.empty")}
+                      </p>
                     ) : null}
                   </div>
                 </AppShellPanel>
               </div>
 
               <AppShellPanel
-                title="Accesos rápidos"
-                description="Herramientas habituales del superadmin"
+                title={t("superadmin.dashboard.quickAccess.title")}
+                description={t("superadmin.dashboard.quickAccess.description")}
               >
                 <div className="flex flex-wrap gap-3">
                   <Button type="button" onClick={() => setActiveTab("companies")}>
                     <Building2 className="mr-2 size-4" />
-                    Ver todas las empresas
+                    {t("superadmin.dashboard.quickAccess.viewAll")}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setActiveTab("landing")}>
                     <Globe className="mr-2 size-4" />
-                    Editar landing
+                    {t("superadmin.dashboard.quickAccess.editLanding")}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setLocation("/")}>
                     <ExternalLink className="mr-2 size-4" />
-                    Abrir web pública
+                    {t("superadmin.dashboard.quickAccess.openPublicWeb")}
                   </Button>
                 </div>
               </AppShellPanel>
@@ -438,15 +452,15 @@ export default function SuperAdmin() {
             <div className="w-full">
               <AppShellPanel className="space-y-8">
                 <div>
-                  <h2 className="text-xl font-bold text-foreground mb-1">Ajustes de la landing page</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Los cambios se aplican al instante en la página principal (/). No hace falta redeploy.
-                  </p>
+                  <h2 className="text-xl font-bold text-foreground mb-1">
+                    {t("superadmin.landing.title")}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">{t("superadmin.landing.subtitle")}</p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="wa-number">WhatsApp de soporte (prefijo país + número)</Label>
+                    <Label htmlFor="wa-number">{t("superadmin.landing.whatsapp.label")}</Label>
                     <Input
                       id="wa-number"
                       placeholder="34600111222"
@@ -457,13 +471,11 @@ export default function SuperAdmin() {
                       className="mt-1"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Mismo número para visitantes (dudas en la web) y administradores (soporte en
-                      Ajustes). Ejemplo España: 34 + 9 dígitos. Si está vacío, no se muestran los
-                      botones de WhatsApp.
+                      {t("superadmin.landing.whatsapp.hint")}
                     </p>
                   </div>
                   <div>
-                    <Label htmlFor="trial-days">Días de prueba</Label>
+                    <Label htmlFor="trial-days">{t("superadmin.landing.trialDays")}</Label>
                     <Input
                       id="trial-days"
                       type="number"
@@ -479,7 +491,7 @@ export default function SuperAdmin() {
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label htmlFor="trial-headline">Texto destacado de prueba</Label>
+                    <Label htmlFor="trial-headline">{t("superadmin.landing.trialHeadline")}</Label>
                     <Input
                       id="trial-headline"
                       value={landingDraft.trialHeadline}
@@ -492,10 +504,12 @@ export default function SuperAdmin() {
                 </div>
 
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold text-foreground">Hero (cabecera principal)</h3>
+                  <h3 className="text-lg font-semibold text-foreground">
+                    {t("superadmin.landing.hero.sectionTitle")}
+                  </h3>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">
-                      <Label>Etiqueta superior (badge)</Label>
+                      <Label>{t("superadmin.landing.hero.badge")}</Label>
                       <Input
                         value={landingDraft.hero.badge}
                         onChange={(e) => updateHero({ badge: e.target.value })}
@@ -503,7 +517,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Título — parte principal</Label>
+                      <Label>{t("superadmin.landing.hero.titleMain")}</Label>
                       <Input
                         value={landingDraft.hero.titleMain}
                         onChange={(e) => updateHero({ titleMain: e.target.value })}
@@ -511,7 +525,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Título — parte destacada (color)</Label>
+                      <Label>{t("superadmin.landing.hero.titleHighlight")}</Label>
                       <Input
                         value={landingDraft.hero.titleHighlight}
                         onChange={(e) => updateHero({ titleHighlight: e.target.value })}
@@ -519,7 +533,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label>Subtítulo</Label>
+                      <Label>{t("superadmin.landing.hero.subtitle")}</Label>
                       <Textarea
                         value={landingDraft.hero.subtitle}
                         onChange={(e) => updateHero({ subtitle: e.target.value })}
@@ -527,7 +541,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Texto botón principal (hero / cabecera)</Label>
+                      <Label>{t("superadmin.landing.hero.ctaWhatsapp")}</Label>
                       <Input
                         value={landingDraft.hero.ctaWhatsappLabel}
                         onChange={(e) => updateHero({ ctaWhatsappLabel: e.target.value })}
@@ -535,7 +549,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Botón prueba gratis</Label>
+                      <Label>{t("superadmin.landing.hero.ctaTrial")}</Label>
                       <Input
                         value={landingDraft.hero.ctaTrialLabel}
                         onChange={(e) => updateHero({ ctaTrialLabel: e.target.value })}
@@ -543,7 +557,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Botón secundario</Label>
+                      <Label>{t("superadmin.landing.hero.ctaSecondary")}</Label>
                       <Input
                         value={landingDraft.hero.ctaSecondaryLabel}
                         onChange={(e) => updateHero({ ctaSecondaryLabel: e.target.value })}
@@ -551,7 +565,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label>Distintivos de confianza (uno por línea)</Label>
+                      <Label>{t("superadmin.landing.hero.trustBadges")}</Label>
                       <Textarea
                         value={packFeaturesToText(landingDraft.hero.trustBadges)}
                         onChange={(e) =>
@@ -561,7 +575,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label>Título del bloque final (CTA footer)</Label>
+                      <Label>{t("superadmin.landing.hero.footerTitle")}</Label>
                       <Input
                         value={landingDraft.hero.footerTitle}
                         onChange={(e) => updateHero({ footerTitle: e.target.value })}
@@ -569,7 +583,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label>Subtítulo del bloque final</Label>
+                      <Label>{t("superadmin.landing.hero.footerSubtitle")}</Label>
                       <Textarea
                         value={landingDraft.hero.footerSubtitle}
                         onChange={(e) => updateHero({ footerSubtitle: e.target.value })}
@@ -577,7 +591,7 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div>
-                      <Label>Botón registro en bloque final</Label>
+                      <Label>{t("superadmin.landing.hero.footerCtaRegister")}</Label>
                       <Input
                         value={landingDraft.hero.footerCtaRegisterLabel}
                         onChange={(e) => updateHero({ footerCtaRegisterLabel: e.target.value })}
@@ -588,7 +602,9 @@ export default function SuperAdmin() {
                 </div>
 
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold text-foreground">Planes de precios (3 packs)</h3>
+                  <h3 className="text-lg font-semibold text-foreground">
+                    {t("superadmin.landing.pricing.sectionTitle")}
+                  </h3>
                   <div className="grid gap-6 lg:grid-cols-3">
                     {landingDraft.pricingPacks.map((pack, index) => (
                       <div
@@ -598,9 +614,11 @@ export default function SuperAdmin() {
                           pack.highlighted ? "border-blue-500 bg-blue-50/50" : "border-border"
                         )}
                       >
-                        <p className="text-sm font-semibold text-muted-foreground">Plan {index + 1}</p>
+                        <p className="text-sm font-semibold text-muted-foreground">
+                          {t("superadmin.landing.pricing.planLabel", { index: index + 1 })}
+                        </p>
                         <div>
-                          <Label>Nombre</Label>
+                          <Label>{t("superadmin.landing.pricing.name")}</Label>
                           <Input
                             value={pack.name}
                             onChange={(e) => updatePack(index, { name: e.target.value })}
@@ -609,7 +627,7 @@ export default function SuperAdmin() {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label>Precio</Label>
+                            <Label>{t("superadmin.landing.pricing.price")}</Label>
                             <Input
                               value={pack.price}
                               onChange={(e) => updatePack(index, { price: e.target.value })}
@@ -618,7 +636,7 @@ export default function SuperAdmin() {
                             />
                           </div>
                           <div>
-                            <Label>Sufijo</Label>
+                            <Label>{t("superadmin.landing.pricing.priceSuffix")}</Label>
                             <Input
                               value={pack.priceSuffix}
                               onChange={(e) => updatePack(index, { priceSuffix: e.target.value })}
@@ -628,7 +646,7 @@ export default function SuperAdmin() {
                           </div>
                         </div>
                         <div>
-                          <Label>Descripción corta</Label>
+                          <Label>{t("superadmin.landing.pricing.description")}</Label>
                           <Input
                             value={pack.description}
                             onChange={(e) => updatePack(index, { description: e.target.value })}
@@ -636,7 +654,7 @@ export default function SuperAdmin() {
                           />
                         </div>
                         <div>
-                          <Label>Características (una por línea)</Label>
+                          <Label>{t("superadmin.landing.pricing.features")}</Label>
                           <Textarea
                             value={packFeaturesToText(pack.features)}
                             onChange={(e) =>
@@ -646,7 +664,7 @@ export default function SuperAdmin() {
                           />
                         </div>
                         <div>
-                          <Label>Texto del botón</Label>
+                          <Label>{t("superadmin.landing.pricing.ctaLabel")}</Label>
                           <Input
                             value={pack.ctaLabel}
                             onChange={(e) => updatePack(index, { ctaLabel: e.target.value })}
@@ -668,7 +686,7 @@ export default function SuperAdmin() {
                               }));
                             }}
                           />
-                          Destacar como plan popular
+                          {t("superadmin.landing.pricing.highlightPopular")}
                         </label>
                       </div>
                     ))}
@@ -677,7 +695,7 @@ export default function SuperAdmin() {
 
                 <div className="space-y-6">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Fotos «Para quién es» (6 sectores)
+                    {t("superadmin.landing.audience.sectionTitle")}
                   </h3>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {landingDraft.audienceImages.map((item, index) => (
@@ -687,7 +705,7 @@ export default function SuperAdmin() {
                           style={{ backgroundImage: `url(${item.imageUrl})` }}
                         />
                         <div>
-                          <Label>Etiqueta</Label>
+                          <Label>{t("superadmin.landing.audience.label")}</Label>
                           <Input
                             value={item.label}
                             onChange={(e) => updateAudience(index, { label: e.target.value })}
@@ -695,7 +713,7 @@ export default function SuperAdmin() {
                           />
                         </div>
                         <div>
-                          <Label>URL de la imagen</Label>
+                          <Label>{t("superadmin.landing.audience.imageUrl")}</Label>
                           <Input
                             value={item.imageUrl}
                             onChange={(e) => updateAudience(index, { imageUrl: e.target.value })}
@@ -711,10 +729,11 @@ export default function SuperAdmin() {
                 <div className="space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-semibold text-foreground">Preguntas frecuentes (FAQ)</h3>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {t("superadmin.landing.faq.sectionTitle")}
+                      </h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        En las respuestas puedes usar <code className="text-xs">{"{trialDays}"}</code>{" "}
-                        para insertar los días de prueba configurados arriba.
+                        {t("superadmin.landing.faq.hint")}
                       </p>
                     </div>
                     <Button
@@ -726,7 +745,7 @@ export default function SuperAdmin() {
                       className="gap-1"
                     >
                       <Plus className="size-4" />
-                      Añadir pregunta
+                      {t("superadmin.landing.faq.addQuestion")}
                     </Button>
                   </div>
                   <div className="space-y-4">
@@ -734,7 +753,7 @@ export default function SuperAdmin() {
                       <div key={index} className="rounded-xl border border-border p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-muted-foreground">
-                            Pregunta {index + 1}
+                            {t("superadmin.landing.faq.questionLabel", { index: index + 1 })}
                           </p>
                           <Button
                             type="button"
@@ -745,11 +764,11 @@ export default function SuperAdmin() {
                             className="text-destructive hover:text-destructive gap-1"
                           >
                             <Trash2 className="size-4" />
-                            Eliminar
+                            {t("superadmin.landing.faq.remove")}
                           </Button>
                         </div>
                         <div>
-                          <Label>Pregunta</Label>
+                          <Label>{t("superadmin.landing.faq.question")}</Label>
                           <Input
                             value={faq.q}
                             onChange={(e) => updateFaq(index, { q: e.target.value })}
@@ -757,7 +776,7 @@ export default function SuperAdmin() {
                           />
                         </div>
                         <div>
-                          <Label>Respuesta</Label>
+                          <Label>{t("superadmin.landing.faq.answer")}</Label>
                           <Textarea
                             value={faq.a}
                             onChange={(e) => updateFaq(index, { a: e.target.value })}
@@ -776,17 +795,19 @@ export default function SuperAdmin() {
                     disabled={saveLanding.isPending}
                     className="btn-primary"
                   >
-                    {saveLanding.isPending ? "Guardando..." : "Guardar ajustes web"}
+                    {saveLanding.isPending
+                      ? t("superadmin.landing.actions.saving")
+                      : t("superadmin.landing.actions.save")}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => landingQuery.data && setLandingDraft(landingQuery.data)}
                   >
-                    Descartar cambios
+                    {t("superadmin.landing.actions.discard")}
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => setLocation("/")}>
-                    Ver landing
+                    {t("superadmin.landing.actions.viewLanding")}
                   </Button>
                 </div>
               </AppShellPanel>

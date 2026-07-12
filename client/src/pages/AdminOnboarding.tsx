@@ -16,16 +16,15 @@ import { emptyCreds } from "@/lib/authApi";
 import { useAuthContext, useRequireAdminAuth } from "@/contexts/AuthContext";
 import { createDefaultEmployeeSchedule } from "@shared/scheduleDefaults";
 import {
-  DEFAULT_WORKPLACE_GPS_JUSTIFICATION,
   GPS_JUSTIFICATION_CATEGORIES,
   type GpsJustificationCategory,
 } from "@shared/gpsJustification";
 import { validateEmployeeEmailOrPhone } from "@shared/employeeContact";
 
-const COUNTRY_OPTIONS = [{ code: "ES", label: "España" }];
+const COUNTRY_OPTIONS = [{ code: "ES", labelKey: "admin.onboarding.countries.ES" }];
 const TIMEZONE_OPTIONS = [
-  { value: "Europe/Madrid", label: "Europe/Madrid (España peninsular)" },
-  { value: "Atlantic/Canary", label: "Atlantic/Canary (Canarias)" },
+  { value: "Europe/Madrid", labelKey: "admin.onboarding.timezones.europeMadrid" },
+  { value: "Atlantic/Canary", labelKey: "admin.onboarding.timezones.atlanticCanary" },
 ];
 
 const STEPS_META = [
@@ -70,7 +69,7 @@ export default function AdminOnboarding() {
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [gpsJustificationCategory, setGpsJustificationCategory] =
     useState<GpsJustificationCategory>("workplace_geofence");
-  const [gpsJustification, setGpsJustification] = useState(DEFAULT_WORKPLACE_GPS_JUSTIFICATION);
+  const [gpsJustification, setGpsJustification] = useState("");
 
   const [dataRetentionYears, setDataRetentionYears] = useState("4");
   const [legalAcknowledged, setLegalAcknowledged] = useState(false);
@@ -89,6 +88,24 @@ export default function AdminOnboarding() {
       })),
     [t]
   );
+
+  const gpsCategoryOptions = useMemo(
+    () =>
+      GPS_JUSTIFICATION_CATEGORIES.map((option) => ({
+        value: option.value,
+        label: t(`admin.legal.gps.categories.${option.value}.label`),
+        hint: t(`admin.legal.gps.categories.${option.value}.hint`),
+      })),
+    [t]
+  );
+
+  const defaultGpsJustification = t("admin.legal.gps.defaultJustification");
+
+  useEffect(() => {
+    if (!gpsJustification.trim()) {
+      setGpsJustification(defaultGpsJustification);
+    }
+  }, [defaultGpsJustification, gpsJustification]);
 
   useEffect(() => {
     if (isAuthLoading || !isAdminAuthenticated) return;
@@ -116,21 +133,21 @@ export default function AdminOnboarding() {
     } else {
       setRestaurantAddress(c.address ?? "");
     }
-  }, [statusQuery.data, setLocation]);
+  }, [statusQuery.data, setLocation, isAuthLoading, isAdminAuthenticated]);
 
   const handleSkip = async () => {
     try {
       await skipOnboarding.mutateAsync(emptyCreds);
-      toast.message("Puedes completar la configuración más tarde desde el panel.");
+      toast.message(t("admin.onboarding.skipLater"));
       setLocation("/admin");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+      toast.error(e instanceof Error ? e.message : t("admin.onboarding.toasts.saveFailed"));
     }
   };
 
   const saveStep1 = async () => {
     if (businessName.trim().length < 2) {
-      toast.error("El nombre comercial es obligatorio");
+      toast.error(t("admin.onboarding.validations.businessNameRequired"));
       return false;
     }
     await updateLegal.mutateAsync({
@@ -159,11 +176,11 @@ export default function AdminOnboarding() {
     if (locationEnabled) {
       const justification = gpsJustification.trim();
       if (!gpsJustificationCategory) {
-        toast.error("Seleccione el motivo de activación de geolocalización");
+        toast.error(t("admin.onboarding.validations.gpsCategoryRequired"));
         return false;
       }
       if (justification.length < 10) {
-        toast.error("Indique una justificación de GPS de al menos 10 caracteres");
+        toast.error(t("admin.onboarding.validations.gpsJustificationMin"));
         return false;
       }
       await updateLegal.mutateAsync({
@@ -184,11 +201,11 @@ export default function AdminOnboarding() {
   const saveStep3 = async () => {
     const years = Number(dataRetentionYears);
     if (Number.isNaN(years) || years < 4) {
-      toast.error("La conservación mínima es 4 años");
+      toast.error(t("admin.onboarding.validations.minRetention"));
       return false;
     }
     if (!legalAcknowledged) {
-      toast.error("Debes confirmar la revisión de los textos legales");
+      toast.error(t("admin.onboarding.validations.legalAckRequired"));
       return false;
     }
     await updateLegal.mutateAsync({
@@ -217,8 +234,7 @@ export default function AdminOnboarding() {
       employeePassword.length < 6
     ) {
       toast.error(
-        contact.message ??
-          "Completa nombre, usuario (mín. 3), contraseña (mín. 6) y email o teléfono, o usa «Crear después»"
+        contact.message ?? t("admin.onboarding.validations.employeeIncomplete")
       );
       return false;
     }
@@ -245,7 +261,7 @@ export default function AdminOnboarding() {
       await statusQuery.refetch();
       setStep((s) => Math.min(5, s + 1));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error al guardar");
+      toast.error(e instanceof Error ? e.message : t("admin.onboarding.toasts.saveError"));
     } finally {
       setSaving(false);
     }
@@ -253,7 +269,7 @@ export default function AdminOnboarding() {
 
   const handleFinish = async () => {
     if (!legalAcknowledged) {
-      toast.error("Debes confirmar la revisión de los textos legales");
+      toast.error(t("admin.onboarding.validations.legalAckRequired"));
       return;
     }
     setSaving(true);
@@ -262,10 +278,10 @@ export default function AdminOnboarding() {
         ...emptyCreds,
         legalAcknowledged: true,
       });
-      toast.success("Configuración inicial completada");
+      toast.success(t("admin.onboarding.toasts.completed"));
       setLocation("/admin");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo finalizar");
+      toast.error(e instanceof Error ? e.message : t("admin.onboarding.toasts.finishFailed"));
     } finally {
       setSaving(false);
     }
@@ -278,7 +294,7 @@ export default function AdminOnboarding() {
   if (statusQuery.isLoading || !statusQuery.data) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando configuración…</p>
+        <p className="text-muted-foreground">{t("admin.onboarding.loading")}</p>
       </div>
     );
   }
@@ -298,7 +314,7 @@ export default function AdminOnboarding() {
           <div className="flex items-center gap-2">
             <LanguageSwitcher compact />
             <Button type="button" variant="ghost" size="sm" onClick={handleSkip} disabled={skipOnboarding.isPending}>
-              Saltar por ahora
+              {t("admin.onboarding.skipNow")}
             </Button>
           </div>
         </div>
@@ -306,7 +322,7 @@ export default function AdminOnboarding() {
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-foreground">{t("admin.onboarding.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Paso {step} de 5 — configura lo mínimo para empezar
+            {t("admin.onboarding.stepProgress", { step })}
           </p>
         </div>
 
@@ -337,20 +353,20 @@ export default function AdminOnboarding() {
               <h2 className="text-lg font-semibold">{t("admin.onboarding.steps.business")}</h2>
               <div className="space-y-4">
                 <div>
-                  <Label>Nombre comercial *</Label>
+                  <Label>{t("admin.onboarding.fields.businessName")}</Label>
                   <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="mt-1" />
                 </div>
                 <div>
-                  <Label>Razón social / responsable</Label>
+                  <Label>{t("admin.onboarding.fields.legalName")}</Label>
                   <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} className="mt-1" />
                 </div>
                 <div>
-                  <Label>Dirección</Label>
+                  <Label>{t("admin.onboarding.fields.address")}</Label>
                   <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} className="mt-1" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>País</Label>
+                    <Label>{t("admin.onboarding.fields.country")}</Label>
                     <select
                       value={country}
                       onChange={(e) => setCountry(e.target.value)}
@@ -358,13 +374,13 @@ export default function AdminOnboarding() {
                     >
                       {COUNTRY_OPTIONS.map((o) => (
                         <option key={o.code} value={o.code}>
-                          {o.label}
+                          {t(o.labelKey)}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <Label>Zona horaria</Label>
+                    <Label>{t("admin.onboarding.fields.timezone")}</Label>
                     <select
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
@@ -372,14 +388,14 @@ export default function AdminOnboarding() {
                     >
                       {TIMEZONE_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>
-                          {o.label}
+                          {t(o.labelKey)}
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
                 <div>
-                  <Label>Email de contacto / privacidad</Label>
+                  <Label>{t("admin.onboarding.fields.privacyEmail")}</Label>
                   <Input
                     type="email"
                     value={privacyEmail}
@@ -393,22 +409,22 @@ export default function AdminOnboarding() {
 
           {step === 2 && (
             <>
-              <h2 className="text-lg font-semibold">Local y fichaje</h2>
+              <h2 className="text-lg font-semibold">{t("admin.onboarding.steps.location")}</h2>
               <div className="space-y-4">
                 <div>
-                  <Label>Dirección del local</Label>
+                  <Label>{t("admin.onboarding.fields.restaurantAddress")}</Label>
                   <Input
                     value={restaurantAddress}
                     onChange={(e) => setRestaurantAddress(e.target.value)}
-                    placeholder="Calle, número, ciudad"
+                    placeholder={t("admin.onboarding.placeholders.restaurantAddress")}
                     className="mt-1"
                   />
                 </div>
                 <div className="flex items-center justify-between rounded-lg border p-4">
                   <div>
-                    <p className="font-medium text-sm">Validación por GPS</p>
+                    <p className="font-medium text-sm">{t("admin.onboarding.location.gpsTitle")}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Activa el GPS para que los empleados solo puedan fichar cerca del local (no desde casa).
+                      {t("admin.onboarding.location.gpsDescription")}
                     </p>
                   </div>
                   <Switch
@@ -419,7 +435,7 @@ export default function AdminOnboarding() {
                         setGpsJustificationCategory("workplace_geofence");
                       }
                       if (checked && !gpsJustification.trim()) {
-                        setGpsJustification(DEFAULT_WORKPLACE_GPS_JUSTIFICATION);
+                        setGpsJustification(defaultGpsJustification);
                       }
                     }}
                   />
@@ -427,7 +443,7 @@ export default function AdminOnboarding() {
                 {locationEnabled && (
                   <>
                     <div>
-                      <Label>Radio de validación (metros)</Label>
+                      <Label>{t("admin.onboarding.fields.validationRadius")}</Label>
                       <Input
                         type="number"
                         min={50}
@@ -438,7 +454,9 @@ export default function AdminOnboarding() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="onboarding-gps-category">Motivo de activación GPS</Label>
+                      <Label htmlFor="onboarding-gps-category">
+                        {t("admin.onboarding.fields.gpsCategory")}
+                      </Label>
                       <select
                         id="onboarding-gps-category"
                         value={gpsJustificationCategory}
@@ -447,7 +465,7 @@ export default function AdminOnboarding() {
                         }
                         className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
-                        {GPS_JUSTIFICATION_CATEGORIES.map((option) => (
+                        {gpsCategoryOptions.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -455,13 +473,15 @@ export default function AdminOnboarding() {
                       </select>
                       <p className="text-xs text-muted-foreground mt-1">
                         {
-                          GPS_JUSTIFICATION_CATEGORIES.find((o) => o.value === gpsJustificationCategory)
+                          gpsCategoryOptions.find((o) => o.value === gpsJustificationCategory)
                             ?.hint
                         }
                       </p>
                     </div>
                     <div>
-                      <Label htmlFor="onboarding-gps-justification">Justificación GPS</Label>
+                      <Label htmlFor="onboarding-gps-justification">
+                        {t("admin.onboarding.fields.gpsJustification")}
+                      </Label>
                       <Input
                         id="onboarding-gps-justification"
                         value={gpsJustification}
@@ -469,12 +489,11 @@ export default function AdminOnboarding() {
                         className="mt-1"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Obligatorio al activar GPS (mínimo 10 caracteres). Puedes dejar el texto sugerido.
+                        {t("admin.onboarding.location.gpsJustificationHint")}
                       </p>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Radio recomendado: 100–150 m. Con 10 m el GPS del móvil puede fallar aunque el empleado
-                      esté en el local.
+                      {t("admin.onboarding.location.radiusHint")}
                     </p>
                     <RestaurantMap
                       latitude={latitude}
@@ -493,15 +512,13 @@ export default function AdminOnboarding() {
 
           {step === 3 && (
             <>
-              <h2 className="text-lg font-semibold">Legal básico</h2>
+              <h2 className="text-lg font-semibold">{t("admin.onboarding.steps.legal")}</h2>
               <p className="text-sm text-muted-foreground">
-                Esta app gestiona registros horarios de empleados. Tu empresa debe informar a sus trabajadores y
-                revisar los textos legales antes de usarla oficialmente. Esto es una ayuda técnica, no asesoramiento
-                legal.
+                {t("admin.onboarding.legal.description")}
               </p>
               <div className="space-y-4">
                 <div>
-                  <Label>Email de privacidad</Label>
+                  <Label>{t("admin.onboarding.fields.privacyEmailLegal")}</Label>
                   <Input
                     type="email"
                     value={privacyEmail}
@@ -510,7 +527,7 @@ export default function AdminOnboarding() {
                   />
                 </div>
                 <div>
-                  <Label>Años de conservación de fichajes</Label>
+                  <Label>{t("admin.onboarding.fields.retentionYears")}</Label>
                   <Input
                     type="number"
                     min={4}
@@ -519,17 +536,19 @@ export default function AdminOnboarding() {
                     onChange={(e) => setDataRetentionYears(e.target.value)}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Mínimo legal recomendado: 4 años</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("admin.onboarding.legal.retentionHint")}
+                  </p>
                 </div>
                 <p className="text-sm flex flex-wrap gap-3">
                   <Link href="/legal/privacy" className="underline">
-                    Política de privacidad
+                    {t("admin.onboarding.legal.links.privacy")}
                   </Link>
                   <Link href="/legal/employee-notice" className="underline">
-                    Aviso para empleados
+                    {t("admin.onboarding.legal.links.employeeNotice")}
                   </Link>
                   <Link href="/legal/terms" className="underline">
-                    Términos de uso
+                    {t("admin.onboarding.legal.links.terms")}
                   </Link>
                 </p>
                 <div className="flex items-start gap-3">
@@ -539,8 +558,7 @@ export default function AdminOnboarding() {
                     onCheckedChange={(v) => setLegalAcknowledged(v === true)}
                   />
                   <label htmlFor="legal-ack" className="text-sm text-muted-foreground leading-relaxed">
-                    Entiendo que debo revisar los textos legales con un asesor antes de usar la app oficialmente en mi
-                    negocio.
+                    {t("admin.onboarding.legal.acknowledge")}
                   </label>
                 </div>
               </div>
@@ -549,44 +567,44 @@ export default function AdminOnboarding() {
 
           {step === 4 && (
             <>
-              <h2 className="text-lg font-semibold">Primer empleado (opcional)</h2>
+              <h2 className="text-lg font-semibold">{t("admin.onboarding.steps.firstEmployee")}</h2>
               <p className="text-sm text-muted-foreground">
-                Puedes crear tu primer empleado ahora o hacerlo más tarde desde el panel.
+                {t("admin.onboarding.firstEmployee.description")}
               </p>
               <div className="space-y-4">
                 <div>
-                  <Label>Nombre</Label>
+                  <Label>{t("admin.onboarding.fields.employeeName")}</Label>
                   <Input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} className="mt-1" />
                 </div>
                 <div>
-                  <Label>Email de contacto</Label>
+                  <Label>{t("admin.onboarding.fields.employeeEmail")}</Label>
                   <Input
                     type="email"
                     value={employeeEmail}
                     onChange={(e) => setEmployeeEmail(e.target.value)}
                     className="mt-1"
-                    placeholder="empleado@empresa.com (opcional si hay teléfono)"
+                    placeholder={t("admin.onboarding.placeholders.employeeEmail")}
                   />
                 </div>
                 <div>
-                  <Label>Teléfono de contacto</Label>
+                  <Label>{t("admin.onboarding.fields.employeePhone")}</Label>
                   <Input
                     type="tel"
                     value={employeePhone}
                     onChange={(e) => setEmployeePhone(e.target.value)}
                     className="mt-1"
-                    placeholder="+34 600 000 000 (opcional si hay email)"
+                    placeholder={t("admin.onboarding.placeholders.employeePhone")}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Indica al menos uno: email o teléfono. Para fichar usará el usuario y la contraseña de abajo.
+                    {t("admin.onboarding.firstEmployee.contactHint")}
                   </p>
                 </div>
                 <div>
-                  <Label>Usuario para fichar</Label>
+                  <Label>{t("admin.onboarding.fields.employeeUsername")}</Label>
                   <Input value={employeeUsername} onChange={(e) => setEmployeeUsername(e.target.value)} className="mt-1" />
                 </div>
                 <div>
-                  <Label>Contraseña</Label>
+                  <Label>{t("admin.onboarding.fields.employeePassword")}</Label>
                   <Input
                     type="password"
                     value={employeePassword}
@@ -602,14 +620,13 @@ export default function AdminOnboarding() {
             <>
               <div className="text-center py-4">
                 <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-4" />
-                <h2 className="text-lg font-semibold">Configuración inicial completada</h2>
+                <h2 className="text-lg font-semibold">{t("admin.onboarding.finish.title")}</h2>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ya puedes usar el panel de administración. Podrás ajustar empleados, horarios y opciones legales en
-                  cualquier momento.
+                  {t("admin.onboarding.finish.description")}
                 </p>
                 {statusQuery.data.employeeCount === 0 && (
                   <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">
-                    Aún no has creado empleados. Recuerda añadirlos antes de que tu equipo fiche.
+                    {t("admin.onboarding.finish.noEmployees")}
                   </p>
                 )}
               </div>
@@ -619,28 +636,28 @@ export default function AdminOnboarding() {
           <div className="flex flex-wrap gap-3 pt-4 border-t">
             {step > 1 && step < 5 && (
               <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)} disabled={saving}>
-                Atrás
+                {t("admin.onboarding.actions.back")}
               </Button>
             )}
             {step < 4 && (
               <Button type="button" className="ml-auto btn-primary" onClick={handleNext} disabled={saving}>
-                {saving ? "Guardando…" : "Siguiente"}
+                {saving ? t("admin.onboarding.actions.saving") : t("admin.onboarding.actions.next")}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             )}
             {step === 4 && (
               <>
                 <Button type="button" variant="secondary" onClick={() => setStep(5)} disabled={saving}>
-                  Crear después
+                  {t("admin.onboarding.actions.createLater")}
                 </Button>
                 <Button type="button" className="ml-auto btn-primary" onClick={handleNext} disabled={saving}>
-                  {saving ? "Guardando…" : "Siguiente"}
+                  {saving ? t("admin.onboarding.actions.saving") : t("admin.onboarding.actions.next")}
                 </Button>
               </>
             )}
             {step === 5 && (
               <Button type="button" className="w-full btn-primary" onClick={handleFinish} disabled={saving}>
-                {saving ? "Finalizando…" : "Ir al panel admin"}
+                {saving ? t("admin.onboarding.actions.finishing") : t("admin.onboarding.actions.goToPanel")}
               </Button>
             )}
           </div>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { LegalTemplateDocument } from "@shared/legalTemplates";
 import { legalTemplateToPlainText } from "@shared/legalTemplates";
 import { downloadLegalTemplatePdf } from "@/lib/laborReportExport";
+import { useLocale } from "@/contexts/LocaleContext";
 
 import type { ReactNode } from "react";
 
@@ -14,20 +15,21 @@ type Props = {
 };
 
 export default function LegalDocumentSection({ document: doc, children }: Props) {
+  const { t } = useLocale();
   const plain = legalTemplateToPlainText(doc);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(plain);
-      toast.success("Texto copiado al portapapeles");
+      toast.success(t("legal.common.copySuccess"));
     } catch {
-      toast.error("No se pudo copiar");
+      toast.error(t("legal.common.copyFailed"));
     }
   };
 
   const handlePdf = () => {
     downloadLegalTemplatePdf(doc.title, plain, `${doc.id}_${doc.version}.pdf`);
-    toast.success("PDF descargado");
+    toast.success(t("legal.common.pdfDownloaded"));
   };
 
   return (
@@ -35,16 +37,18 @@ export default function LegalDocumentSection({ document: doc, children }: Props)
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-foreground">{doc.title}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">Versión plantilla: {doc.version}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("legal.common.templateVersion", { version: doc.version })}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={handleCopy} className="gap-2">
             <Copy className="h-4 w-4" />
-            Copiar
+            {t("legal.common.copy")}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={handlePdf} className="gap-2">
             <FileDown className="h-4 w-4" />
-            PDF
+            {t("legal.common.pdf")}
           </Button>
         </div>
       </div>

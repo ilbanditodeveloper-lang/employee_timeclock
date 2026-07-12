@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLocale } from '@/contexts/LocaleContext';
 
 interface RestaurantMapProps {
   latitude: number;
@@ -110,6 +111,7 @@ export default function RestaurantMap({
   onLocationSelect,
   onAddressChange,
 }: RestaurantMapProps) {
+  const { t } = useLocale();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const marker = useRef<google.maps.Marker | null>(null);
@@ -131,9 +133,7 @@ export default function RestaurantMap({
       const loaded = await ensureGoogleMapsLoaded();
       if (cancelled) return;
       if (!loaded || !window.google?.maps) {
-        setMapsLoadError(
-          'No se pudo cargar Google Maps. Revisa la API key y las restricciones del dominio.'
-        );
+        setMapsLoadError(t("common.map.loadError"));
         return;
       }
 
@@ -174,7 +174,7 @@ export default function RestaurantMap({
           const place = autocomplete.current?.getPlace();
           const location = place?.geometry?.location;
           if (!location) {
-            toast.error('No se pudo encontrar la ubicación');
+            toast.error(t("common.map.notFound"));
             return;
           }
           const lat = location.lat();
@@ -196,7 +196,7 @@ export default function RestaurantMap({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [latitude, longitude, onLocationSelect, onAddressChange, t]);
 
   useEffect(() => {
     if (initialAddress) {
@@ -215,7 +215,7 @@ export default function RestaurantMap({
     marker.current = new window.google.maps.Marker({
       position: { lat, lng },
       map: map.current,
-      title: 'Ubicación del Restaurante',
+      title: t("common.map.markerTitle"),
       icon: {
         path: window.google.maps.SymbolPath.CIRCLE,
         scale: 8,
@@ -279,16 +279,16 @@ export default function RestaurantMap({
           updateMarker(lat, lng);
           onLocationSelect(lat, lng);
           setLoading(false);
-          toast.success('Ubicación obtenida correctamente');
+          toast.success(t("common.map.obtainedSuccess"));
         },
         (error) => {
           console.error('Error getting location:', error);
-          toast.error('No se pudo obtener tu ubicación');
+          toast.error(t("common.map.obtainFailed"));
           setLoading(false);
         }
       );
     } else {
-      toast.error('Geolocalización no disponible en tu navegador');
+      toast.error(t("common.map.geoUnavailable"));
       setLoading(false);
     }
   };
@@ -298,14 +298,14 @@ export default function RestaurantMap({
       {/* Map Container */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-foreground">
-          Buscar dirección
+          {t("common.map.searchAddress")}
         </label>
         <input
           ref={searchInputRef}
           type="text"
           value={searchValue}
           onChange={(event) => setSearchValue(event.target.value)}
-          placeholder="Escribe una dirección o selecciona en el mapa"
+          placeholder={t("common.map.addressPlaceholder")}
           className="input-elegant"
           disabled={!mapsReady}
         />
@@ -325,7 +325,7 @@ export default function RestaurantMap({
       {locationName && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <p className="text-sm text-blue-900 dark:text-blue-200">
-            <strong>Ubicación:</strong> {locationName}
+            <strong>{t("common.map.locationLabel")}</strong> {locationName}
           </p>
           <p className="text-xs text-blue-800 dark:text-blue-300 mt-1">
             Lat: {latitude.toFixed(6)}, Lng: {longitude.toFixed(6)}
@@ -343,12 +343,12 @@ export default function RestaurantMap({
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            Obteniendo ubicación...
+            {t("common.map.detecting")}
           </>
         ) : (
           <>
             <MapPin className="w-4 h-4" />
-            Usar Mi Ubicación
+            {t("common.map.useMyLocation")}
           </>
         )}
       </Button>
@@ -356,7 +356,7 @@ export default function RestaurantMap({
       {/* Instructions */}
       <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
         <p className="text-sm text-amber-900 dark:text-amber-200">
-          <strong>Instrucciones:</strong> Haz clic en el mapa para seleccionar la ubicación del restaurante, o usa el botón "Usar Mi Ubicación" para detectar tu posición actual.
+          <strong>{t("common.map.instructionsTitle")}</strong> {t("common.map.instructions")}
         </p>
       </div>
     </div>

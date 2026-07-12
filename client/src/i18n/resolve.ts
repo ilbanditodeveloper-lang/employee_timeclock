@@ -1,6 +1,6 @@
 import type { AppLocale, TranslationTree } from "./types";
-import { es } from "./locales/es";
-import { en } from "./locales/en";
+import { es } from "./locales/es/index";
+import { en } from "./locales/en/index";
 
 const catalogs: Record<AppLocale, TranslationTree> = { es, en };
 

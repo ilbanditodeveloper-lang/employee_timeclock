@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, X } from "lucide-react";
+import { useLocale } from "@/contexts/LocaleContext";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -10,6 +11,7 @@ type BeforeInstallPromptEvent = Event & {
 const DISMISS_KEY = "timeclock-pwa-install-dismissed";
 
 export default function PwaInstallPrompt() {
+  const { t } = useLocale();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -57,11 +59,9 @@ export default function PwaInstallPrompt() {
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="font-semibold text-slate-900">Instalar TimeClock</p>
+            <p className="font-semibold text-slate-900">{t("pwa.title")}</p>
             <p className="text-sm text-slate-600 mt-1">
-              {isIos
-                ? "En Safari: Compartir → Añadir a pantalla de inicio."
-                : "Añade TimeClock a tu móvil como app para fichar más rápido."}
+              {isIos ? t("pwa.iosHint") : t("pwa.androidHint")}
             </p>
           </div>
           <button type="button" onClick={dismiss} className="text-slate-400 hover:text-slate-600">
@@ -71,7 +71,7 @@ export default function PwaInstallPrompt() {
         {!isIos ? (
           <Button type="button" className="w-full mt-3" onClick={() => void install()}>
             <Download className="size-4 mr-2" />
-            Instalar app
+            {t("pwa.install")}
           </Button>
         ) : null}
       </div>

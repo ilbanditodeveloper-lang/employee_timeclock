@@ -20,15 +20,19 @@ type SuccessData = {
   scopedLogin: string;
 };
 
-const COUNTRY_OPTIONS = [{ code: "ES", label: "España" }];
-
-const TIMEZONE_OPTIONS = [
-  { value: "Europe/Madrid", label: "Europe/Madrid (España peninsular)" },
-  { value: "Atlantic/Canary", label: "Atlantic/Canary (Canarias)" },
-];
-
 export default function RegisterBusiness() {
   const { t } = useLocale();
+  const countryOptions = useMemo(
+    () => [{ code: "ES" as const, label: t("access.register.fields.countrySpain") }],
+    [t]
+  );
+  const timezoneOptions = useMemo(
+    () => [
+      { value: "Europe/Madrid" as const, label: t("access.register.fields.timezoneMadrid") },
+      { value: "Atlantic/Canary" as const, label: t("access.register.fields.timezoneCanary") },
+    ],
+    [t]
+  );
   const [, setLocation] = useLocation();
   const { setAdminSession, setEmployeeSession } = useAuthContext();
   const configQuery = trpc.publicApi.getAppConfig.useQuery();
@@ -338,7 +342,7 @@ export default function RegisterBusiness() {
               onChange={(e) => setCountry(e.target.value)}
               className="flex h-10 w-full rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2 text-sm"
             >
-              {COUNTRY_OPTIONS.map((opt) => (
+              {countryOptions.map((opt) => (
                 <option key={opt.code} value={opt.code}>
                   {opt.label}
                 </option>
@@ -352,7 +356,7 @@ export default function RegisterBusiness() {
               onChange={(e) => setTimezone(e.target.value)}
               className="flex h-10 w-full rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2 text-sm"
             >
-              {TIMEZONE_OPTIONS.map((opt) => (
+              {timezoneOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

@@ -22,6 +22,7 @@ import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
 import { AppShellKpiCard, AppShellPanel } from "@/components/AppShellLayout";
 import { useLocale } from "@/contexts/LocaleContext";
+import type { AppLocale } from "@/i18n/types";
 import { cn } from "@/lib/utils";
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_PLAN_LABELS } from "@shared/subscriptionPlans";
 import type { SubscriptionPlan } from "@shared/subscriptionPlans";
@@ -71,17 +72,19 @@ type CompanyRow = {
   atEmployeeLimit?: boolean;
 };
 
-function formatDt(value: Date | string | null | undefined) {
+function formatDt(value: Date | string | null | undefined, locale: AppLocale) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("es-ES", {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "es-ES", {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
 }
 
-function formatDateOnly(value: Date | string | null | undefined) {
+function formatDateOnly(value: Date | string | null | undefined, locale: AppLocale) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("es-ES", { dateStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "es-ES", {
+    dateStyle: "short",
+  }).format(new Date(value));
 }
 
 function toDatetimeLocal(value: Date | string | null | undefined) {
@@ -96,7 +99,7 @@ export default function SuperAdminCompaniesPanel({
 }: {
   planLabels?: Record<SubscriptionPlan, string>;
 } = {}) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const planLabels = planLabelsProp ?? SUBSCRIPTION_PLAN_LABELS;
   const listCompanies = trpc.publicApi.superAdminListCompanies.useQuery(emptyCreds);
   const setStatus = trpc.publicApi.superAdminSetCompanyStatus.useMutation();
@@ -222,12 +225,12 @@ export default function SuperAdminCompaniesPanel({
     event.preventDefault();
     try {
       await createCompany.mutateAsync({ ...emptyCreds, ...createForm });
-      toast.success("Empresa creada");
+      toast.success(t("superadmin.companies.toasts.created"));
       setShowCreateCompany(false);
       setCreateForm({ companyName: "", companySlug: "", adminUsername: "", adminPassword: "" });
       refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo crear");
+      toast.error(error instanceof Error ? error.message : t("superadmin.companies.toasts.createFailed"));
     }
   };
 
@@ -245,10 +248,10 @@ export default function SuperAdminCompaniesPanel({
           ? new Date(crmForm.crmNextFollowUpAt).toISOString()
           : null,
       });
-      toast.success("CRM actualizado");
+      toast.success(t("superadmin.companies.toasts.crmUpdated"));
       refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error al guardar CRM");
+      toast.error(error instanceof Error ? error.message : t("superadmin.companies.toasts.crmSaveFailed"));
     }
   };
 
@@ -263,9 +266,9 @@ export default function SuperAdminCompaniesPanel({
       });
       setNewActivity((p) => ({ ...p, body: "" }));
       await activitiesQuery.refetch();
-      toast.success("Actividad registrada");
+      toast.success(t("superadmin.companies.toasts.activityLogged"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo guardar");
+      toast.error(error instanceof Error ? error.message : t("superadmin.companies.toasts.activitySaveFailed"));
     }
   };
 
@@ -282,16 +285,16 @@ export default function SuperAdminCompaniesPanel({
         billingStatus: subscriptionForm.billingStatus || null,
         isActive: subscriptionForm.isActive,
       });
-      toast.success("Suscripción actualizada");
+      toast.success(t("superadmin.companies.toasts.subscriptionUpdated"));
       refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error");
+      toast.error(error instanceof Error ? error.message : t("superadmin.companies.toasts.genericError"));
     }
   };
 
   const handleSaveAdmin = async () => {
     if (editingCompanyId == null || !adminForm.adminPassword) {
-      toast.error("Introduce contraseña para actualizar admin");
+      toast.error(t("superadmin.companies.toasts.passwordRequired"));
       return;
     }
     try {
@@ -301,39 +304,40 @@ export default function SuperAdminCompaniesPanel({
         adminUsername: adminForm.adminUsername,
         adminPassword: adminForm.adminPassword,
       });
-      toast.success("Admin actualizado");
+      toast.success(t("superadmin.companies.toasts.adminUpdated"));
       setAdminForm((p) => ({ ...p, adminPassword: "" }));
       refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error");
+      toast.error(error instanceof Error ? error.message : t("superadmin.companies.toasts.genericError"));
     }
   };
 
   const toggleStatus = async (company: CompanyRow) => {
     const next = !company.isActive;
     const msg = next
-      ? `¿Dar de alta a "${company.name}"?`
-      : `¿Dar de baja a "${company.name}"?`;
+      ? t("superadmin.companies.confirms.activate", { name: company.name })
+      : t("superadmin.companies.confirms.deactivate", { name: company.name });
     if (!window.confirm(msg)) return;
     try {
       await setStatus.mutateAsync({ ...emptyCreds, companyId: company.id, isActive: next });
-      toast.success(next ? "Empresa activada" : "Empresa dada de baja");
+      toast.success(
+        next ? t("superadmin.companies.toasts.activated") : t("superadmin.companies.toasts.deactivated")
+      );
       refetch();
     } catch {
-      toast.error("No se pudo cambiar el estado");
+      toast.error(t("superadmin.companies.toasts.statusChangeFailed"));
     }
   };
 
   const handleDeleteCompany = async (company: CompanyRow) => {
-    const warning =
-      `BORRADO PERMANENTE de "${company.name}" (${company.slug}).\n\n` +
-      `Se eliminarán empleados, fichajes, incidencias, CRM y datos de la empresa. ` +
-      `Esta acción no se puede deshacer.\n\n` +
-      `Escribe el slug exacto para confirmar: ${company.slug}`;
+    const warning = t("superadmin.companies.confirms.deleteWarning", {
+      name: company.name,
+      slug: company.slug,
+    });
     const typed = window.prompt(warning);
     if (typed == null) return;
     if (typed.trim() !== company.slug) {
-      toast.error("Slug incorrecto — no se borró nada");
+      toast.error(t("superadmin.companies.toasts.wrongSlug"));
       return;
     }
     try {
@@ -342,11 +346,11 @@ export default function SuperAdminCompaniesPanel({
         companyId: company.id,
         confirmSlug: typed.trim(),
       });
-      toast.success(`Empresa "${company.name}" eliminada`);
+      toast.success(t("superadmin.companies.toasts.deleted", { name: company.name }));
       if (editingCompanyId === company.id) setEditingCompanyId(null);
       refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo borrar la empresa");
+      toast.error(error instanceof Error ? error.message : t("superadmin.companies.toasts.deleteFailed"));
     }
   };
 
@@ -355,24 +359,27 @@ export default function SuperAdminCompaniesPanel({
 
   const waLink = (phone: string | null | undefined, name: string) => {
     if (!phone) return null;
-    return buildWhatsAppHref(phone, `Hola ${name}, te escribo desde TimeClock.`);
+    return buildWhatsAppHref(
+      phone,
+      t("superadmin.companies.whatsappMessage", { name })
+    );
   };
 
   return (
     <div className="w-full space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <AppShellKpiCard label="Clientes" value={String(crmStats.total)} icon={<User className="size-5" />} accent="blue" />
-        <AppShellKpiCard label="Activos" value={String(crmStats.active)} icon={<UserCheck className="size-5" />} accent="emerald" />
-        <AppShellKpiCard label="Trials ≤7 días" value={String(crmStats.trialsExpiring)} icon={<Clock className="size-5" />} accent="amber" />
-        <AppShellKpiCard label="Seguimientos vencidos" value={String(crmStats.followUpsDue)} icon={<AlertTriangle className="size-5" />} accent="rose" />
-        <AppShellKpiCard label="Pagando (Stripe)" value={String(crmStats.paying)} icon={<CalendarClock className="size-5" />} accent="blue" />
+        <AppShellKpiCard label={t("superadmin.companies.kpis.clients")} value={String(crmStats.total)} icon={<User className="size-5" />} accent="blue" />
+        <AppShellKpiCard label={t("superadmin.companies.kpis.active")} value={String(crmStats.active)} icon={<UserCheck className="size-5" />} accent="emerald" />
+        <AppShellKpiCard label={t("superadmin.companies.kpis.trialsExpiring")} value={String(crmStats.trialsExpiring)} icon={<Clock className="size-5" />} accent="amber" />
+        <AppShellKpiCard label={t("superadmin.companies.kpis.followUpsDue")} value={String(crmStats.followUpsDue)} icon={<AlertTriangle className="size-5" />} accent="rose" />
+        <AppShellKpiCard label={t("superadmin.companies.kpis.paying")} value={String(crmStats.paying)} icon={<CalendarClock className="size-5" />} accent="blue" />
       </div>
 
-      <AppShellPanel title="Nueva empresa" description="Alta manual de cliente">
+      <AppShellPanel title={t("superadmin.companies.create.title")} description={t("superadmin.companies.create.description")}>
         {showCreateCompany ? (
           <form onSubmit={handleCreateCompany} className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>Nombre</Label>
+              <Label>{t("superadmin.companies.create.name")}</Label>
               <Input
                 value={createForm.companyName}
                 onChange={(e) => setCreateForm((p) => ({ ...p, companyName: e.target.value }))}
@@ -381,7 +388,7 @@ export default function SuperAdminCompaniesPanel({
               />
             </div>
             <div>
-              <Label>Slug</Label>
+              <Label>{t("superadmin.companies.create.slug")}</Label>
               <Input
                 value={createForm.companySlug}
                 onChange={(e) => setCreateForm((p) => ({ ...p, companySlug: e.target.value }))}
@@ -390,7 +397,7 @@ export default function SuperAdminCompaniesPanel({
               />
             </div>
             <div>
-              <Label>Usuario admin</Label>
+              <Label>{t("superadmin.companies.create.adminUsername")}</Label>
               <Input
                 value={createForm.adminUsername}
                 onChange={(e) => setCreateForm((p) => ({ ...p, adminUsername: e.target.value }))}
@@ -399,7 +406,7 @@ export default function SuperAdminCompaniesPanel({
               />
             </div>
             <div>
-              <Label>Contraseña admin</Label>
+              <Label>{t("superadmin.companies.create.adminPassword")}</Label>
               <Input
                 type="password"
                 value={createForm.adminPassword}
@@ -410,10 +417,10 @@ export default function SuperAdminCompaniesPanel({
             </div>
             <div className="sm:col-span-2 flex gap-2">
               <Button type="submit" disabled={createCompany.isPending}>
-                Crear
+                {t("superadmin.companies.create.submit")}
               </Button>
               <Button type="button" variant="outline" onClick={() => setShowCreateCompany(false)}>
-                Cancelar
+                {t("superadmin.companies.create.cancel")}
               </Button>
             </div>
           </form>
@@ -426,8 +433,8 @@ export default function SuperAdminCompaniesPanel({
       </AppShellPanel>
 
       <AppShellPanel
-        title="CRM — Clientes"
-        description="Contacto, seguimiento, historial y suscripción en un solo sitio"
+        title={t("superadmin.companies.crm.title")}
+        description={t("superadmin.companies.crm.description")}
       >
         <div className="flex flex-wrap gap-3 mb-4">
           <div className="relative flex-1 min-w-[200px]">
@@ -444,7 +451,7 @@ export default function SuperAdminCompaniesPanel({
             value={filterPlan}
             onChange={(e) => setFilterPlan(e.target.value)}
           >
-            <option value="all">Todos los planes</option>
+            <option value="all">{t("superadmin.companies.filters.allPlans")}</option>
             {SUBSCRIPTION_PLANS.map((p) => (
               <option key={p} value={p}>
                 {planLabels[p]}
@@ -456,7 +463,7 @@ export default function SuperAdminCompaniesPanel({
             value={filterStage}
             onChange={(e) => setFilterStage(e.target.value)}
           >
-            <option value="all">Todas las etapas CRM</option>
+            <option value="all">{t("superadmin.companies.filters.allStages")}</option>
             {CRM_STAGES.map((s) => (
               <option key={s} value={s}>
                 {CRM_STAGE_LABELS[s]}
@@ -468,9 +475,9 @@ export default function SuperAdminCompaniesPanel({
             value={filterActive}
             onChange={(e) => setFilterActive(e.target.value)}
           >
-            <option value="all">Activas + bajas</option>
-            <option value="active">Solo activas</option>
-            <option value="inactive">Solo bajas</option>
+            <option value="all">{t("superadmin.companies.filters.allStatuses")}</option>
+            <option value="active">{t("superadmin.companies.filters.activeOnly")}</option>
+            <option value="inactive">{t("superadmin.companies.filters.inactiveOnly")}</option>
           </select>
           <label className="flex items-center gap-2 text-sm px-2">
             <input
@@ -478,7 +485,7 @@ export default function SuperAdminCompaniesPanel({
               checked={filterUrgent}
               onChange={(e) => setFilterUrgent(e.target.checked)}
             />
-            Urgentes
+            {t("superadmin.companies.filters.urgent")}
           </label>
         </div>
 
@@ -511,19 +518,23 @@ export default function SuperAdminCompaniesPanel({
                       </span>
                       {company.followUpOverdue ? (
                         <span className="text-xs text-orange-700 flex items-center gap-1">
-                          <AlertTriangle className="size-3" /> Seguimiento vencido
+                          <AlertTriangle className="size-3" /> {t("superadmin.companies.crm.followUpOverdue")}
                         </span>
                       ) : null}
                       {company.trialDaysRemaining != null && !company.trialExpired ? (
                         <span className="text-xs text-sky-700 font-medium">
-                          {company.trialDaysRemaining}d para pagar
+                          {t("superadmin.companies.crm.daysToPay", {
+                            days: company.trialDaysRemaining ?? 0,
+                          })}
                         </span>
                       ) : company.trialExpired ? (
-                        <span className="text-xs text-red-700">Prueba vencida</span>
+                        <span className="text-xs text-red-700">{t("superadmin.companies.crm.trialExpired")}</span>
                       ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {company.slug} · Alta {formatDateOnly(company.createdAt)}
+                      {company.slug} · {t("superadmin.companies.crm.registered", {
+                        date: formatDateOnly(company.createdAt, locale),
+                      })}
                     </p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                       {email ? (
@@ -537,10 +548,17 @@ export default function SuperAdminCompaniesPanel({
                         </span>
                       ) : null}
                       <span>
-                        {company.employeeCount} emp · {company.locationCount} sede(s) ·{" "}
-                        {company.planName ?? company.planLabel}
+                        {t("superadmin.companies.crm.employeesLocations", {
+                          employees: company.employeeCount,
+                          locations: company.locationCount,
+                          plan: company.planName ?? company.planLabel ?? "",
+                        })}
                       </span>
-                      <span>Último acceso admin: {formatDt(company.adminLastSignedIn)}</span>
+                      <span>
+                        {t("superadmin.companies.crm.lastAdminAccess", {
+                          date: formatDt(company.adminLastSignedIn, locale),
+                        })}
+                      </span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 items-center">
@@ -556,13 +574,13 @@ export default function SuperAdminCompaniesPanel({
                       <a href={`mailto:${email}`}>
                         <Button type="button" size="sm" variant="outline">
                           <Mail className="size-3.5 mr-1" />
-                          Email
+                          {t("superadmin.companies.crm.email")}
                         </Button>
                       </a>
                     ) : null}
                     <Button type="button" size="sm" variant="outline" onClick={() => openCompanyEditor(company)}>
                       <Pencil className="size-3.5 mr-1" />
-                      Ficha CRM
+                      {t("superadmin.companies.crm.openCrm")}
                     </Button>
                     <Button
                       type="button"
@@ -570,7 +588,9 @@ export default function SuperAdminCompaniesPanel({
                       variant={company.isActive ? "destructive" : "outline"}
                       onClick={() => void toggleStatus(company)}
                     >
-                      {company.isActive ? "Baja" : "Alta"}
+                      {company.isActive
+                        ? t("superadmin.companies.crm.deactivate")
+                        : t("superadmin.companies.crm.activate")}
                     </Button>
                     <Button
                       type="button"
@@ -581,7 +601,7 @@ export default function SuperAdminCompaniesPanel({
                       onClick={() => void handleDeleteCompany(company)}
                     >
                       <Trash2 className="size-3.5 mr-1" />
-                      Borrar
+                      {t("superadmin.companies.crm.delete")}
                     </Button>
                   </div>
                 </div>
@@ -591,10 +611,10 @@ export default function SuperAdminCompaniesPanel({
                     <div className="grid gap-4 lg:grid-cols-3">
                       <div className="space-y-3">
                         <h4 className="font-semibold text-sm flex items-center gap-1">
-                          <User className="size-4" /> Contacto CRM
+                          <User className="size-4" /> {t("superadmin.companies.editor.contactTitle")}
                         </h4>
                         <div>
-                          <Label>Etapa CRM</Label>
+                          <Label>{t("superadmin.companies.editor.crmStage")}</Label>
                           <select
                             className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={crmForm.crmStage}
@@ -610,7 +630,7 @@ export default function SuperAdminCompaniesPanel({
                           </select>
                         </div>
                         <div>
-                          <Label>Persona de contacto</Label>
+                          <Label>{t("superadmin.companies.editor.contactPerson")}</Label>
                           <Input
                             value={crmForm.crmContactName}
                             onChange={(e) =>
@@ -620,7 +640,7 @@ export default function SuperAdminCompaniesPanel({
                           />
                         </div>
                         <div>
-                          <Label>Teléfono / WhatsApp</Label>
+                          <Label>{t("superadmin.companies.editor.phoneWhatsapp")}</Label>
                           <Input
                             value={crmForm.crmContactPhone}
                             onChange={(e) =>
@@ -632,7 +652,7 @@ export default function SuperAdminCompaniesPanel({
                         </div>
                         <div>
                           <Label className="flex items-center gap-1">
-                            <CalendarClock className="size-3.5" /> Próximo seguimiento
+                            <CalendarClock className="size-3.5" /> {t("superadmin.companies.editor.nextFollowUp")}
                           </Label>
                           <Input
                             type="datetime-local"
@@ -644,7 +664,7 @@ export default function SuperAdminCompaniesPanel({
                           />
                         </div>
                         <div>
-                          <Label>Notas internas</Label>
+                          <Label>{t("superadmin.companies.editor.internalNotes")}</Label>
                           <Textarea
                             value={crmForm.crmNotes}
                             onChange={(e) => setCrmForm((p) => ({ ...p, crmNotes: e.target.value }))}
@@ -653,18 +673,38 @@ export default function SuperAdminCompaniesPanel({
                           />
                         </div>
                         <Button type="button" size="sm" onClick={() => void handleSaveCrm()} disabled={updateCrm.isPending}>
-                          Guardar CRM
+                          {t("superadmin.companies.editor.saveCrm")}
                         </Button>
                         <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-                          <p>Email admin: {email ?? "—"}</p>
-                          <p>Dirección: {company.address ?? "—"}</p>
-                          <p>Onboarding: {company.onboardingCompleted ? "Completado" : "Pendiente"}</p>
-                          {company.billingStatus ? <p>Stripe: {company.billingStatus}</p> : null}
+                          <p>
+                            {t("superadmin.companies.editor.adminEmail", {
+                              email: email ?? "—",
+                            })}
+                          </p>
+                          <p>
+                            {t("superadmin.companies.editor.address", {
+                              address: company.address ?? "—",
+                            })}
+                          </p>
+                          <p>
+                            {t("superadmin.companies.editor.onboarding", {
+                              status: company.onboardingCompleted
+                                ? t("superadmin.companies.editor.onboardingCompleted")
+                                : t("superadmin.companies.editor.onboardingPending"),
+                            })}
+                          </p>
+                          {company.billingStatus ? (
+                            <p>
+                              {t("superadmin.companies.editor.stripe", {
+                                status: company.billingStatus,
+                              })}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
 
                       <div className="space-y-3">
-                        <h4 className="font-semibold text-sm">Historial de actividades</h4>
+                        <h4 className="font-semibold text-sm">{t("superadmin.companies.editor.activityHistory")}</h4>
                         <div className="flex gap-2">
                           <select
                             className="rounded-md border border-input bg-background px-2 py-1 text-sm"
@@ -684,7 +724,7 @@ export default function SuperAdminCompaniesPanel({
                           </select>
                         </div>
                         <Textarea
-                          placeholder="Ej: Llamada — interesado en plan Pro..."
+                          placeholder={t("superadmin.companies.editor.activityPlaceholder")}
                           value={newActivity.body}
                           onChange={(e) => setNewActivity((p) => ({ ...p, body: e.target.value }))}
                           rows={3}
@@ -696,27 +736,29 @@ export default function SuperAdminCompaniesPanel({
                           onClick={() => void handleAddActivity()}
                           disabled={addActivity.isPending}
                         >
-                          Añadir actividad
+                          {t("superadmin.companies.editor.addActivity")}
                         </Button>
                         <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
                           {(activitiesQuery.data ?? []).map((act) => (
                             <div key={act.id} className="rounded-lg bg-white border px-3 py-2">
                               <p className="text-xs text-muted-foreground">
-                                {formatDt(act.createdAt)} ·{" "}
+                                {formatDt(act.createdAt, locale)} ·{" "}
                                 {CRM_ACTIVITY_LABELS[act.activityType as CrmActivityType] ?? act.activityType}
                               </p>
                               <p className="text-foreground whitespace-pre-wrap">{act.body}</p>
                             </div>
                           ))}
                           {activitiesQuery.data?.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Sin actividades aún.</p>
+                            <p className="text-xs text-muted-foreground">
+                              {t("superadmin.companies.editor.noActivities")}
+                            </p>
                           ) : null}
                         </div>
                       </div>
 
                       <div className="space-y-4">
                         <div className="space-y-3">
-                          <h4 className="font-semibold text-sm">Suscripción</h4>
+                          <h4 className="font-semibold text-sm">{t("superadmin.companies.editor.subscription")}</h4>
                           <select
                             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                             value={subscriptionForm.plan}
@@ -735,7 +777,7 @@ export default function SuperAdminCompaniesPanel({
                           </select>
                           {subscriptionForm.plan !== "legacy" ? (
                             <div className="space-y-1">
-                              <Label className="text-xs">Fin periodo de prueba / pago</Label>
+                              <Label className="text-xs">{t("superadmin.companies.editor.trialEnd")}</Label>
                               <Input
                                 type="datetime-local"
                                 value={subscriptionForm.trialEndsAt}
@@ -746,7 +788,7 @@ export default function SuperAdminCompaniesPanel({
                             </div>
                           ) : null}
                           <Input
-                            placeholder="Estado facturación"
+                            placeholder={t("superadmin.companies.editor.billingStatus")}
                             value={subscriptionForm.billingStatus}
                             onChange={(e) =>
                               setSubscriptionForm((p) => ({ ...p, billingStatus: e.target.value }))
@@ -760,14 +802,14 @@ export default function SuperAdminCompaniesPanel({
                                 setSubscriptionForm((p) => ({ ...p, isActive: e.target.checked }))
                               }
                             />
-                            Empresa activa
+                            {t("superadmin.companies.editor.companyActive")}
                           </label>
                           <Button type="button" size="sm" onClick={() => void handleSaveSubscription()}>
-                            Guardar plan
+                            {t("superadmin.companies.editor.savePlan")}
                           </Button>
                         </div>
                         <div className="space-y-3 pt-3 border-t">
-                          <h4 className="font-semibold text-sm">Admin</h4>
+                          <h4 className="font-semibold text-sm">{t("superadmin.companies.editor.admin")}</h4>
                           <Input
                             value={adminForm.adminUsername}
                             onChange={(e) =>
@@ -776,14 +818,14 @@ export default function SuperAdminCompaniesPanel({
                           />
                           <Input
                             type="password"
-                            placeholder="Nueva contraseña"
+                            placeholder={t("superadmin.companies.editor.newPassword")}
                             value={adminForm.adminPassword}
                             onChange={(e) =>
                               setAdminForm((p) => ({ ...p, adminPassword: e.target.value }))
                             }
                           />
                           <Button type="button" size="sm" variant="secondary" onClick={() => void handleSaveAdmin()}>
-                            Actualizar admin
+                            {t("superadmin.companies.editor.updateAdmin")}
                           </Button>
                         </div>
                         <SuperAdminCompanyLocationsPanel
@@ -792,7 +834,7 @@ export default function SuperAdminCompaniesPanel({
                           locationCount={company.locationCount}
                         />
                         <Button type="button" size="sm" variant="ghost" onClick={() => setEditingCompanyId(null)}>
-                          Cerrar ficha
+                          {t("superadmin.companies.editor.closeCard")}
                         </Button>
                       </div>
                     </div>
@@ -802,7 +844,7 @@ export default function SuperAdminCompaniesPanel({
             );
           })}
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay clientes con estos filtros.</p>
+            <p className="text-sm text-muted-foreground">{t("superadmin.companies.crm.noResults")}</p>
           ) : null}
         </div>
       </AppShellPanel>

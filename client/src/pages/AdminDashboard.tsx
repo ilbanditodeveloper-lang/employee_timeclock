@@ -62,18 +62,22 @@ import {
 } from '@shared/scheduleDefaults';
 import { validateEmployeeEmailOrPhone } from '@shared/employeeContact';
 
-const scheduleDays = [
-  { key: 'monday', label: 'Lunes' },
-  { key: 'tuesday', label: 'Martes' },
-  { key: 'wednesday', label: 'Miércoles' },
-  { key: 'thursday', label: 'Jueves' },
-  { key: 'friday', label: 'Viernes' },
-  { key: 'saturday', label: 'Sábado' },
-  { key: 'sunday', label: 'Domingo' },
-] as const;
-
 export default function AdminDashboard() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const dateLocale = locale === 'en' ? 'en-US' : 'es-ES';
+  const scheduleDays = useMemo(
+    () =>
+      [
+        { key: 'monday', label: t('common.weekdays.monday') },
+        { key: 'tuesday', label: t('common.weekdays.tuesday') },
+        { key: 'wednesday', label: t('common.weekdays.wednesday') },
+        { key: 'thursday', label: t('common.weekdays.thursday') },
+        { key: 'friday', label: t('common.weekdays.friday') },
+        { key: 'saturday', label: t('common.weekdays.saturday') },
+        { key: 'sunday', label: t('common.weekdays.sunday') },
+      ] as const,
+    [t]
+  );
   const adminNav = useMemo<AppShellNavItem[]>(
     () => [
       { id: 'dashboard', label: t('nav.admin.dashboard'), icon: LayoutDashboard },
@@ -132,9 +136,7 @@ export default function AdminDashboard() {
     entryTime: string | null;
   } | null>(null);
   const [forceClockOutExitTime, setForceClockOutExitTime] = useState('');
-  const [forceClockOutReason, setForceClockOutReason] = useState(
-    'Empleado terminó jornada sin fichar salida'
-  );
+  const [forceClockOutReason, setForceClockOutReason] = useState('');
 
   const trpcUtils = trpc.useUtils();
   const [employeeSchedule, setEmployeeSchedule] = useState<WeekSchedule>(() => createDefaultEmployeeSchedule());
@@ -263,12 +265,15 @@ export default function AdminDashboard() {
   const decideIncident = trpc.publicApi.decideIncident.useMutation({
     onSuccess: (_data, variables) => {
       toast.success(
-        variables.decision === "approved" ? "Incidencia aprobada" : "Incidencia rechazada"
+        variables.decision === 'approved'
+          ? t('admin.toasts.incidentApproved')
+          : t('admin.toasts.incidentRejected')
       );
       void listIncidents.refetch();
       void trpcUtils.publicApi.getAdminNotificationCenter.invalidate();
     },
-    onError: (error) => toast.error(error.message || "No se pudo actualizar la incidencia"),
+    onError: (error) =>
+      toast.error(error.message || t('admin.toasts.incidentUpdateFailed')),
   });
   const timeOffPendingQuery = trpc.publicApi.listTimeOffRequests.useQuery(
     { ...adminApiInput(), status: 'pending' },
@@ -294,21 +299,21 @@ export default function AdminDashboard() {
   });
   const decideTimeOff = trpc.publicApi.decideTimeOffRequest.useMutation({
     onSuccess: () => {
-      toast.success('Solicitud actualizada');
+      toast.success(t('admin.toasts.timeOffUpdated'));
       void timeOffPendingQuery.refetch();
       void timeOffAllQuery.refetch();
       void timeOffCalendarQuery.refetch();
     },
-    onError: () => toast.error('No se pudo actualizar la solicitud'),
+    onError: () => toast.error(t('admin.toasts.timeOffUpdateFailed')),
   });
   const adminDeleteTimeOff = trpc.publicApi.adminDeleteTimeOffRequest.useMutation({
     onSuccess: () => {
-      toast.success('Solicitud anulada');
+      toast.success(t('admin.toasts.timeOffCancelled'));
       void timeOffPendingQuery.refetch();
       void timeOffAllQuery.refetch();
       void timeOffCalendarQuery.refetch();
     },
-    onError: () => toast.error('No se pudo anular la solicitud'),
+    onError: () => toast.error(t('admin.toasts.timeOffCancelFailed')),
   });
 
   const filteredTimeclocks = (timeclocksQuery.data || [])
@@ -414,12 +419,16 @@ export default function AdminDashboard() {
 
   const reportContextLabel = () => {
     const employeeLabel = selectedEmployeeId
-      ? employeeNameById.get(Number(selectedEmployeeId)) || `Empleado #${selectedEmployeeId}`
-      : 'Todos los empleados';
+      ? employeeNameById.get(Number(selectedEmployeeId)) ||
+        t('common.employeeFallback', { id: selectedEmployeeId })
+      : t('common.allEmployees');
     const rangeLabel =
       rangeStart || rangeEnd
-        ? `${rangeStart || 'Inicio'} → ${rangeEnd || 'Hoy'}`
-        : 'Sin filtro de fechas';
+        ? t('admin.hours.report.rangeLabel', {
+            start: rangeStart || t('common.start'),
+            end: rangeEnd || t('common.today'),
+          })
+        : t('admin.hours.report.noDateFilter');
     return { employeeLabel, rangeLabel };
   };
 
@@ -442,85 +451,95 @@ export default function AdminDashboard() {
   };
 
   const buildReportExtras = () => {
+    const timeOffType = (kind: string) =>
+      kind === 'vacation' ? t('common.timeOff.vacation') : t('common.timeOff.dayOff');
+    const timeOffStatus = (status: string) =>
+      status === 'approved'
+        ? t('common.timeOff.status.approved')
+        : status === 'rejected'
+          ? t('common.timeOff.status.rejected')
+          : t('common.timeOff.status.pending');
+    const incidentType = (type: string) =>
+      type === 'late_arrival'
+        ? t('common.incidents.lateArrivalShort')
+        : type === 'early_exit'
+          ? t('common.incidents.earlyExitShort')
+          : t('common.incidents.otherShort');
+    const incidentStatus = (status: string) =>
+      status === 'approved'
+        ? t('common.incidents.status.approved')
+        : status === 'rejected'
+          ? t('common.incidents.status.rejected')
+          : t('common.incidents.status.pending');
+
     const timeOffRows = filteredTimeOffForReport.map((row) => ({
-      Empleado: row.employeeName || employeeNameById.get(row.employeeId) || `#${row.employeeId}`,
-      Tipo: row.kind === 'vacation' ? 'Vacaciones' : 'Día libre',
-      Desde: toYmd(row.startDate),
-      Hasta: toYmd(row.endDate),
-      Estado:
-        row.status === 'approved' ? 'Aprobada' : row.status === 'rejected' ? 'Denegada' : 'Pendiente',
-      Comentario: row.comment || '',
+      [t('admin.hours.report.columns.employee')]:
+        row.employeeName || employeeNameById.get(row.employeeId) || `#${row.employeeId}`,
+      [t('admin.hours.report.columns.type')]: timeOffType(row.kind),
+      [t('admin.hours.report.columns.from')]: toYmd(row.startDate),
+      [t('admin.hours.report.columns.to')]: toYmd(row.endDate),
+      [t('admin.hours.report.columns.status')]: timeOffStatus(row.status),
+      [t('admin.hours.report.columns.comment')]: row.comment || '',
     }));
     const incidentRows = filteredIncidentsForReport.map((incident) => ({
-      Empleado: employeeNameById.get(incident.employeeId) || `#${incident.employeeId}`,
-      Tipo:
-        incident.type === 'late_arrival'
-          ? 'Retraso entrada'
-          : incident.type === 'early_exit'
-          ? 'Salida temprana'
-          : 'Otra',
-      Estado:
-        incident.status === 'approved'
-          ? 'Aprobada'
-          : incident.status === 'rejected'
-          ? 'Denegada'
-          : 'Pendiente',
-      Motivo: incident.reason,
-      Fecha: incident.createdAt ? new Date(incident.createdAt).toLocaleString('es-ES') : '',
+      [t('admin.hours.report.columns.employee')]:
+        employeeNameById.get(incident.employeeId) || `#${incident.employeeId}`,
+      [t('admin.hours.report.columns.type')]: incidentType(incident.type),
+      [t('admin.hours.report.columns.status')]: incidentStatus(incident.status),
+      [t('admin.hours.report.columns.reason')]: incident.reason,
+      [t('admin.hours.report.columns.date')]: incident.createdAt
+        ? new Date(incident.createdAt).toLocaleString(dateLocale)
+        : '',
     }));
     const timeOffPdf = filteredTimeOffForReport.map((row) => [
       row.employeeName || employeeNameById.get(row.employeeId) || `#${row.employeeId}`,
-      row.kind === 'vacation' ? 'Vacaciones' : 'Día libre',
+      timeOffType(row.kind),
       toYmd(row.startDate),
       toYmd(row.endDate),
-      row.status === 'approved' ? 'Aprobada' : row.status === 'rejected' ? 'Denegada' : 'Pendiente',
+      timeOffStatus(row.status),
       row.comment || '',
     ]);
     const incidentPdf = filteredIncidentsForReport.map((incident) => [
       employeeNameById.get(incident.employeeId) || `#${incident.employeeId}`,
-      incident.type === 'late_arrival'
-        ? 'Retraso entrada'
-        : incident.type === 'early_exit'
-        ? 'Salida temprana'
-        : 'Otra',
-      incident.status === 'approved' ? 'Aprobada' : incident.status === 'rejected' ? 'Denegada' : 'Pendiente',
+      incidentType(incident.type),
+      incidentStatus(incident.status),
       incident.reason || '',
-      incident.createdAt ? new Date(incident.createdAt).toLocaleString('es-ES') : '',
+      incident.createdAt ? new Date(incident.createdAt).toLocaleString(dateLocale) : '',
     ]);
     return { timeOffRows, incidentRows, timeOffPdf, incidentPdf };
   };
 
   const runExport = async (kind: 'csv' | 'official-pdf' | 'excel' | 'pdf') => {
     if (!hasReportData && kind !== 'csv') {
-      toast.error('No hay datos para exportar con los filtros actuales');
+      toast.error(t('admin.toasts.noExportData'));
       return;
     }
     setExportBusy(true);
     try {
       const bundle = await fetchReportBundle(true, kind === 'official-pdf');
       if (bundle.rows.length === 0 && !filteredTimeOffForReport.length && !filteredIncidentsForReport.length) {
-        toast.error('No hay fichajes en el periodo seleccionado');
+        toast.error(t('admin.toasts.noClockEntriesInPeriod'));
         return;
       }
       const extras = buildReportExtras();
       if (kind === 'csv') {
         downloadLaborReportCsv(bundle);
-        toast.success('CSV descargado');
+        toast.success(t('admin.toasts.csvDownloaded'));
       } else if (kind === 'official-pdf') {
         downloadOfficialLaborReportPdf(bundle);
-        toast.success('Informe registro horario descargado');
+        toast.success(t('admin.toasts.officialPdfDownloaded'));
       } else if (kind === 'excel') {
         downloadEnhancedLaborReportExcel(bundle, extras);
-        toast.success('Excel descargado');
+        toast.success(t('admin.toasts.excelDownloaded'));
       } else {
         downloadEnhancedLaborReportPdf(bundle, {
           timeOffRows: extras.timeOffPdf,
           incidentRows: extras.incidentPdf,
         });
-        toast.success('PDF descargado');
+        toast.success(t('admin.toasts.pdfDownloaded'));
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al exportar');
+      toast.error(error instanceof Error ? error.message : t('admin.toasts.exportFailed'));
     } finally {
       setExportBusy(false);
     }
@@ -546,23 +565,23 @@ export default function AdminDashboard() {
         employeeId,
       });
       downloadEmployeeDataJson(data, employeeName);
-      toast.success('Exportación JSON descargada');
+      toast.success(t('admin.toasts.jsonExportDownloaded'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo exportar');
+      toast.error(error instanceof Error ? error.message : t('admin.toasts.exportEmployeeFailed'));
     }
   };
 
   const handleDeactivateEmployee = (employee: { id: number; name: string; isActive?: boolean }) => {
     if (employee.isActive === false) {
-      toast.info('Este empleado ya está inactivo');
+      toast.info(t('admin.toasts.employeeAlreadyInactive'));
       return;
     }
     const reason = window.prompt(
-      `Motivo de desactivación de ${employee.name} (opcional, mín. 3 caracteres si se indica):`
+      t('admin.dialogs.deactivateEmployee', { name: employee.name })
     );
     if (reason === null) return;
     if (reason.trim().length > 0 && reason.trim().length < 3) {
-      toast.error('El motivo debe tener al menos 3 caracteres');
+      toast.error(t('admin.toasts.deactivateReasonTooShort'));
       return;
     }
     deactivateEmployee
@@ -572,21 +591,21 @@ export default function AdminDashboard() {
         reason: reason.trim() || undefined,
       })
       .then(() => {
-        toast.success('Empleado desactivado. Sus fichajes se conservan (mín. 4 años).');
+        toast.success(t('admin.toasts.employeeDeactivated'));
         listEmployees.refetch();
       })
-      .catch((error) => toast.error(error?.message || 'No se pudo desactivar'));
+      .catch((error) => toast.error(error?.message || t('admin.toasts.deactivateFailed')));
   };
 
   const timeclockStatusBadge = (entry: { status?: string; exitTime?: string | Date | null }) => {
     if (entry.status === 'voided') {
-      return <Badge variant="destructive">Anulado</Badge>;
+      return <Badge variant="destructive">{t('admin.timeclock.voided')}</Badge>;
     }
     if (entry.status === 'corrected') {
-      return <Badge variant="secondary">Corregido</Badge>;
+      return <Badge variant="secondary">{t('admin.timeclock.corrected')}</Badge>;
     }
     if (!entry.exitTime) {
-      return <Badge variant="outline">Incompleto</Badge>;
+      return <Badge variant="outline">{t('admin.timeclock.incomplete')}</Badge>;
     }
     return null;
   };
@@ -671,7 +690,7 @@ export default function AdminDashboard() {
 
   const handleSaveEmployeeShifts = () => {
     if (!shiftEmployeeId) {
-      toast.error('Selecciona un empleado');
+      toast.error(t('admin.toasts.selectEmployee'));
       return;
     }
     updateEmployeeSchedule
@@ -681,11 +700,11 @@ export default function AdminDashboard() {
         schedule: shiftSchedule,
       })
       .then(() => {
-        toast.success('Turnos guardados correctamente');
+        toast.success(t('admin.toasts.shiftsSaved'));
         shiftScheduleQuery.refetch();
       })
       .catch((error) => {
-        toast.error('No se pudieron guardar los turnos');
+        toast.error(t('admin.toasts.shiftsSaveFailed'));
         console.error(error);
       });
   };
@@ -709,7 +728,7 @@ export default function AdminDashboard() {
   }) => {
     setForceClockOutTarget(row);
     setForceClockOutExitTime(formatDateTimeInput(new Date()));
-    setForceClockOutReason('Empleado terminó jornada sin fichar salida');
+    setForceClockOutReason(t('admin.dialogs.forceClockOut.defaultReason'));
   };
 
   const closeForceClockOutDialog = () => {
@@ -720,22 +739,22 @@ export default function AdminDashboard() {
   const submitAdminForceClockOut = () => {
     if (!forceClockOutTarget) return;
     if (!forceClockOutReason.trim() || forceClockOutReason.trim().length < 3) {
-      toast.error('Indica un motivo de al menos 3 caracteres');
+      toast.error(t('admin.toasts.forceClockOutReasonTooShort'));
       return;
     }
     if (!forceClockOutExitTime) {
-      toast.error('Indica la hora de salida');
+      toast.error(t('admin.toasts.forceClockOutExitRequired'));
       return;
     }
     const exitDate = new Date(forceClockOutExitTime);
     if (Number.isNaN(exitDate.getTime())) {
-      toast.error('Hora de salida inválida');
+      toast.error(t('admin.toasts.forceClockOutExitInvalid'));
       return;
     }
     if (forceClockOutTarget.entryTime) {
       const entryDate = new Date(forceClockOutTarget.entryTime);
       if (!Number.isNaN(entryDate.getTime()) && exitDate <= entryDate) {
-        toast.error('La salida debe ser posterior a la entrada');
+        toast.error(t('admin.toasts.exitMustBeAfterEntry'));
         return;
       }
     }
@@ -747,36 +766,38 @@ export default function AdminDashboard() {
         reason: forceClockOutReason.trim(),
       })
       .then(() => {
-        toast.success(`Salida registrada para ${forceClockOutTarget.employeeName}`);
+        toast.success(
+          t('admin.toasts.forceClockOutSuccess', { name: forceClockOutTarget.employeeName })
+        );
         setForceClockOutTarget(null);
         void workforceTodayQuery.refetch();
         void timeclocksQuery.refetch();
         void trpcUtils.publicApi.getAdminTodayActivity.invalidate();
       })
       .catch((error) => {
-        toast.error(error?.message || 'No se pudo registrar la salida');
+        toast.error(error?.message || t('admin.toasts.forceClockOutFailed'));
       });
   };
 
   const handleSaveTimeclock = () => {
     if (!editingTimeclockId) return;
     if (!editingEntryTime) {
-      toast.error('La hora de entrada es obligatoria');
+      toast.error(t('admin.toasts.entryTimeRequired'));
       return;
     }
     if (!editingCorrectionReason || editingCorrectionReason.trim().length < 3) {
-      toast.error('Indica el motivo de la corrección (mínimo 3 caracteres)');
+      toast.error(t('admin.toasts.correctionReasonRequired'));
       return;
     }
     if (editingExitTime) {
       const entryDate = new Date(editingEntryTime);
       const exitDate = new Date(editingExitTime);
       if (Number.isNaN(entryDate.getTime()) || Number.isNaN(exitDate.getTime())) {
-        toast.error('Formato de fecha inválido');
+        toast.error(t('admin.toasts.invalidDateFormat'));
         return;
       }
       if (exitDate <= entryDate) {
-        toast.error('La salida debe ser posterior a la entrada');
+        toast.error(t('admin.toasts.exitMustBeAfterEntry'));
         return;
       }
     }
@@ -789,20 +810,20 @@ export default function AdminDashboard() {
         correctionReason: editingCorrectionReason.trim(),
       })
       .then(() => {
-        toast.success('Fichaje actualizado (queda registrado en auditoría)');
+        toast.success(t('admin.toasts.timeclockUpdated'));
         handleCancelTimeclockEdit();
         setEditingCorrectionReason('');
         timeclocksQuery.refetch();
       })
       .catch((error) => {
-        toast.error(error?.message || 'No se pudo actualizar el fichaje');
+        toast.error(error?.message || t('admin.toasts.timeclockUpdateFailed'));
         console.error(error);
       });
   };
 
   const handleSendTestNotification = () => {
     if (!selectedEmployeeId) {
-      toast.error('Selecciona un empleado primero');
+      toast.error(t('admin.toasts.selectEmployeeFirst'));
       return;
     }
     sendTestNotification
@@ -811,28 +832,33 @@ export default function AdminDashboard() {
         employeeId: Number(selectedEmployeeId),
       })
       .then((result) => {
-        toast.success(`Notificación enviada (${result.sent} ok${result.failed ? `, ${result.failed} fallidas` : ''})`);
+        toast.success(
+          t('admin.toasts.notificationSent', {
+            sent: result.sent,
+            failedPart: result.failed
+              ? t('admin.toasts.notificationFailedPart', { failed: result.failed })
+              : '',
+          })
+        );
       })
       .catch((error) => {
-        toast.error(error?.message || 'No se pudo enviar la notificación');
+        toast.error(error?.message || t('admin.toasts.notificationFailed'));
         console.error(error);
       });
   };
 
   const handleClearAllIncidents = () => {
-    const confirmed = window.confirm(
-      'Esto borrará TODAS las incidencias de tus empleados. ¿Quieres continuar?'
-    );
+    const confirmed = window.confirm(t('admin.dialogs.clearAllIncidents'));
     if (!confirmed) return;
 
     clearAllIncidents
       .mutateAsync({ ...adminApiInput() })
       .then(() => {
-        toast.success('Todas las incidencias se han borrado');
+        toast.success(t('admin.toasts.allIncidentsCleared'));
         listIncidents.refetch();
       })
       .catch((error) => {
-        toast.error('No se pudieron borrar las incidencias');
+        toast.error(t('admin.toasts.clearIncidentsFailed'));
         console.error(error);
       });
   };
@@ -852,7 +878,7 @@ export default function AdminDashboard() {
 
   const handleSaveRestaurant = async () => {
     if (!restaurantName || !restaurantAddress) {
-      toast.error('Por favor completa todos los campos');
+      toast.error(t('admin.toasts.completeAllFields'));
       return;
     }
 
@@ -871,14 +897,14 @@ export default function AdminDashboard() {
         setRestaurantAddress(address);
       }
     } catch {
-      toast.error('No se pudo geocodificar la dirección. Confirma el pin en el mapa.');
+      toast.error(t('admin.toasts.geocodeFailed'));
       return;
     }
 
     const safeRadius = Math.max(radiusMeters, 50);
     if (safeRadius !== radiusMeters) {
       setRadiusMeters(safeRadius);
-      toast.message('Radio mínimo 50 m aplicado (GPS puede variar unos metros).');
+      toast.message(t('admin.toasts.minRadiusApplied'));
     }
 
     try {
@@ -890,10 +916,10 @@ export default function AdminDashboard() {
         longitude: lng,
         radiusMeters: safeRadius,
       });
-      toast.success('Restaurante guardado correctamente');
+      toast.success(t('admin.toasts.restaurantSaved'));
       void getRestaurant.refetch();
     } catch (error) {
-      toast.error('Error al guardar restaurante');
+      toast.error(t('admin.toasts.restaurantSaveFailed'));
       console.error(error);
     }
   };
@@ -907,12 +933,12 @@ export default function AdminDashboard() {
       (!editingEmployeeId && !employeePassword)
     ) {
       toast.error(
-        contact.message ?? 'Completa nombre, usuario, contraseña y al menos email o teléfono de contacto'
+        contact.message ?? t('admin.toasts.employeeFormIncomplete')
       );
       return;
     }
     if (employeePassword && employeePassword.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
+      toast.error(t('admin.toasts.passwordTooShort'));
       return;
     }
     const parsedGraceMinutes = Number(lateGraceMinutes);
@@ -952,8 +978,8 @@ export default function AdminDashboard() {
       .then(() => {
         toast.success(
           editingEmployeeId
-            ? `Empleado ${employeeName} actualizado correctamente`
-            : `Empleado ${employeeName} creado correctamente`
+            ? t('admin.toasts.employeeUpdated', { name: employeeName })
+            : t('admin.toasts.employeeCreated', { name: employeeName })
         );
         if (adminSession?.companySlug) {
           saveDefaultSchedule(adminSession.companySlug, employeeSchedule);
@@ -964,7 +990,9 @@ export default function AdminDashboard() {
       })
       .catch((error) => {
         toast.error(
-          editingEmployeeId ? 'Error al actualizar empleado' : 'Error al crear empleado'
+          editingEmployeeId
+            ? t('admin.toasts.employeeUpdateFailed')
+            : t('admin.toasts.employeeCreateFailed')
         );
         console.error(error);
       });
@@ -1114,14 +1142,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('billing') === 'success') {
-      toast.success('Pago completado. Tu plan se activará en unos segundos.');
+      toast.success(t('admin.toasts.billingPaymentSuccess'));
       window.history.replaceState({}, '', '/admin');
       void onboardingQuery.refetch();
     } else if (params.get('billing') === 'cancel') {
-      toast.message('Pago cancelado');
+      toast.message(t('admin.toasts.billingPaymentCancelled'));
       window.history.replaceState({}, '', '/admin');
     }
-  }, []);
+  }, [t]);
   const activeNav = adminNav.find((item) => item.id === activeTab);
 
   if (isAuthLoading || !isAdminAuthenticated) {
@@ -1458,11 +1486,11 @@ export default function AdminDashboard() {
               <div key={employeeFormKey} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Nombre del Empleado
+                    {t('admin.employees.form.nameLabel')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Juan García"
+                    placeholder={t('admin.employees.form.namePlaceholder')}
                     value={employeeName}
                     onChange={(e) => setEmployeeName(e.target.value)}
                     className="input-elegant"
@@ -1472,11 +1500,11 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Email de contacto
+                    {t('admin.employees.form.emailContact')}
                   </label>
                   <input
                     type="email"
-                    placeholder="empleado@empresa.com (opcional si hay teléfono)"
+                    placeholder={t('admin.employees.form.emailPlaceholder')}
                     value={employeeEmail}
                     onChange={(e) => setEmployeeEmail(e.target.value)}
                     className="input-elegant"
@@ -1485,27 +1513,27 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Teléfono de contacto
+                    {t('admin.employees.form.phoneContact')}
                   </label>
                   <input
                     type="tel"
-                    placeholder="+34 600 123 456 (opcional si hay email)"
+                    placeholder={t('admin.employees.form.phonePlaceholder')}
                     value={employeePhone}
                     onChange={(e) => setEmployeePhone(e.target.value)}
                     className="input-elegant"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Al menos uno: email o teléfono. Para fichar el empleado usa su usuario y contraseña.
+                    {t('admin.employees.form.contactHint')}
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Usuario para fichar
+                    {t('admin.employees.form.usernameClock')}
                   </label>
                   <input
                     type="text"
-                    placeholder="juan.garcia"
+                    placeholder={t('admin.employees.form.usernamePlaceholder')}
                     value={employeeUsername}
                     onChange={(e) => setEmployeeUsername(e.target.value)}
                     className="input-elegant"
@@ -1516,11 +1544,11 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Contraseña
+                    {t('admin.employees.form.password')}
                   </label>
                   <input
                     type="password"
-                    placeholder="••••••••"
+                    placeholder={t('admin.employees.form.passwordPlaceholder')}
                     value={employeePassword}
                     onChange={(e) => setEmployeePassword(e.target.value)}
                     className="input-elegant"
@@ -1530,7 +1558,7 @@ export default function AdminDashboard() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Tipo de contrato
+                      {t('admin.employees.form.contractType')}
                     </label>
                     <select
                       value={employeeContractType}
@@ -1541,22 +1569,22 @@ export default function AdminDashboard() {
                       }
                       className="input-elegant w-full"
                     >
-                      <option value="full_time">Tiempo completo</option>
-                      <option value="part_time">Tiempo parcial</option>
-                      <option value="temporary">Temporal</option>
-                      <option value="other">Otro</option>
+                      <option value="full_time">{t('common.contractTypes.full_time')}</option>
+                      <option value="part_time">{t('common.contractTypes.part_time')}</option>
+                      <option value="temporary">{t('common.contractTypes.temporary')}</option>
+                      <option value="other">{t('common.contractTypes.other')}</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Horas semanales contratadas
+                      {t('admin.employees.form.weeklyHours')}
                     </label>
                     <input
                       type="number"
                       min="0"
                       max="80"
                       step="0.5"
-                      placeholder="20"
+                      placeholder={t('admin.employees.form.weeklyHoursPlaceholder')}
                       value={employeeWeeklyHours}
                       onChange={(e) => setEmployeeWeeklyHours(e.target.value)}
                       className="input-elegant"
@@ -1566,11 +1594,11 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    DNI/NIE (opcional)
+                    {t('admin.employees.form.nationalId')}
                   </label>
                   <input
                     type="text"
-                    placeholder="12345678A"
+                    placeholder={t('admin.employees.form.nationalIdPlaceholder')}
                     value={employeeNationalId}
                     onChange={(e) => setEmployeeNationalId(e.target.value)}
                     className="input-elegant"
@@ -1579,19 +1607,19 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Minutos de gracia (retraso)
+                    {t('admin.employees.form.lateGraceMinutes')}
                   </label>
                   <input
                     type="number"
                     min="0"
                     max="120"
-                    placeholder="5"
+                    placeholder={t('admin.employees.form.lateGracePlaceholder')}
                     value={lateGraceMinutes}
                     onChange={(e) => setLateGraceMinutes(e.target.value)}
                     className="input-elegant"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Tras estos minutos desde la hora de entrada, el botón de fichar se bloquea.
+                    {t('admin.employees.form.lateGraceHint')}
                   </p>
                 </div>
 
@@ -1603,10 +1631,10 @@ export default function AdminDashboard() {
                   <CollapsibleTrigger className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 rounded-lg">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">
-                        Horario de entrada
+                        {t('admin.employees.form.scheduleEntry')}
                       </h3>
                       <p className="text-xs text-muted-foreground">
-                        Se aplica al crear empleado y rellena turnos automáticamente (L–V 09:00 por defecto).
+                        {t('admin.employees.form.scheduleEntryHint')}
                       </p>
                     </div>
                     <ChevronDown
@@ -1668,7 +1696,7 @@ export default function AdminDashboard() {
                             variant="ghost"
                             onClick={() => handleScheduleChange(day.key, 'entry1', '')}
                           >
-                            Limpiar
+                            {t('common.clear')}
                           </Button>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1714,7 +1742,7 @@ export default function AdminDashboard() {
                             variant="ghost"
                             onClick={() => handleScheduleChange(day.key, 'entry2', '')}
                           >
-                            Limpiar
+                            {t('common.clear')}
                           </Button>
                         </div>
                         <label className="flex items-center gap-2 text-sm text-foreground">
@@ -1723,7 +1751,7 @@ export default function AdminDashboard() {
                             checked={employeeSchedule[day.key].isActive}
                             onChange={() => handleScheduleToggle(day.key)}
                           />
-                          Activo
+                          {t('common.active')}
                         </label>
                       </div>
                     ))}
@@ -1736,11 +1764,13 @@ export default function AdminDashboard() {
                   className="w-full btn-primary"
                   disabled={!editingEmployeeId && atEmployeeLimit}
                 >
-                  {editingEmployeeId ? "Guardar cambios" : "Crear Empleado"}
+                  {editingEmployeeId
+                    ? t('admin.employees.form.saveChanges')
+                    : t('admin.employees.form.createEmployee')}
                 </Button>
                 {!editingEmployeeId && atEmployeeLimit ? (
                   <p className="text-xs text-muted-foreground">
-                    Has alcanzado el límite de empleados de tu plan. La empresa será dada de baja automáticamente.
+                    {t('admin.employees.atLimit')}
                   </p>
                 ) : null}
               </div>
@@ -1752,21 +1782,21 @@ export default function AdminDashboard() {
           {/* Shifts Tab */}
           <TabsContent value="shifts" className="mt-0 space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-2">Configuración de Turnos</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">{t('admin.shifts.title')}</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Los empleados reciben notificaciones push 1 minuto antes y a la hora de entrada y salida según el turno guardado.
+                {t('admin.shifts.subtitle')}
               </p>
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Seleccionar Empleado
+                    {t('admin.shifts.selectEmployee')}
                   </label>
                   <select
                     className="input-elegant"
                     value={shiftEmployeeId}
                     onChange={(event) => setShiftEmployeeId(event.target.value)}
                   >
-                    <option value="">Selecciona un empleado</option>
+                    <option value="">{t('common.selectEmployee')}</option>
                     {listEmployees.data?.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name}
@@ -1781,7 +1811,7 @@ export default function AdminDashboard() {
                   <div key={day.key} className="border border-border rounded-lg p-4 space-y-3">
                     <p className="font-medium text-foreground">{day.label}</p>
                     <div>
-                      <label className="block text-xs text-muted-foreground mb-1">Tipo de turno</label>
+                      <label className="block text-xs text-muted-foreground mb-1">{t('admin.shifts.shiftTypeLabel')}</label>
                       <select
                         className="input-elegant"
                         value={getShiftType(day.key)}
@@ -1792,10 +1822,10 @@ export default function AdminDashboard() {
                           )
                         }
                       >
-                        <option value="off">Día libre</option>
-                        <option value="morning">Mañana</option>
-                        <option value="afternoon">Tarde</option>
-                        <option value="split">Turno Partido</option>
+                        <option value="off">{t('common.shiftTypes.off')}</option>
+                        <option value="morning">{t('common.shiftTypes.morning')}</option>
+                        <option value="afternoon">{t('common.shiftTypes.afternoon')}</option>
+                        <option value="split">{t('common.shiftTypes.split')}</option>
                       </select>
                     </div>
                   </div>
@@ -1807,7 +1837,7 @@ export default function AdminDashboard() {
                 className="w-full btn-primary"
                 disabled={!shiftEmployeeId || updateEmployeeSchedule.isPending}
               >
-                {updateEmployeeSchedule.isPending ? "Guardando..." : "Guardar turnos"}
+                {updateEmployeeSchedule.isPending ? t('common.saving') : t('admin.shifts.save')}
               </Button>
             </Card>
           </TabsContent>
@@ -1815,19 +1845,19 @@ export default function AdminDashboard() {
           {/* Hours Tab */}
           <TabsContent value="hours" className="mt-0 space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Calendario de Horas</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-6">{t('admin.hours.title')}</h2>
               
               <div className="space-y-4 mb-8">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Seleccionar Empleado
+                    {t('admin.hours.selectEmployee')}
                   </label>
                   <select
                     className="input-elegant"
                     value={selectedEmployeeId}
                     onChange={(event) => setSelectedEmployeeId(event.target.value)}
                   >
-                    <option value="">Selecciona un empleado</option>
+                    <option value="">{t('common.selectEmployee')}</option>
                     {listEmployees.data?.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name}
@@ -1837,10 +1867,10 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" onClick={() => setMonthRange(0)} disabled={exportBusy}>
-                    Mes actual
+                    {t('admin.hours.currentMonth')}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setMonthRange(-1)} disabled={exportBusy}>
-                    Mes anterior
+                    {t('admin.hours.previousMonth')}
                   </Button>
                   <Button
                     type="button"
@@ -1848,7 +1878,7 @@ export default function AdminDashboard() {
                     onClick={exportOfficialPdf}
                     disabled={exportBusy || !hasReportData}
                   >
-                    Informe registro horario (PDF)
+                    {t('admin.hours.officialPdf')}
                   </Button>
                   <Button
                     type="button"
@@ -1856,7 +1886,7 @@ export default function AdminDashboard() {
                     onClick={exportCsv}
                     disabled={exportBusy}
                   >
-                    CSV gestoría
+                    {t('admin.hours.csvPayroll')}
                   </Button>
                   <Button
                     type="button"
@@ -1864,7 +1894,7 @@ export default function AdminDashboard() {
                     onClick={exportReportsToExcel}
                     disabled={exportBusy || !hasReportData}
                   >
-                    Excel completo
+                    {t('admin.hours.fullExcel')}
                   </Button>
                   <Button
                     type="button"
@@ -1872,7 +1902,7 @@ export default function AdminDashboard() {
                     onClick={exportReportsToPdf}
                     disabled={exportBusy || !hasReportData}
                   >
-                    PDF completo
+                    {t('admin.hours.fullPdf')}
                   </Button>
                   <label className="flex items-center gap-2 text-sm text-muted-foreground px-2">
                     <input
@@ -1880,7 +1910,7 @@ export default function AdminDashboard() {
                       checked={includeAuditHistory}
                       onChange={(e) => setIncludeAuditHistory(e.target.checked)}
                     />
-                    Incluir historial de cambios
+                    {t('admin.hours.includeAuditHistory')}
                   </label>
                   <Button
                     type="button"
@@ -1888,14 +1918,16 @@ export default function AdminDashboard() {
                     onClick={handleSendTestNotification}
                     disabled={!selectedEmployeeId || sendTestNotification.isPending}
                   >
-                    {sendTestNotification.isPending ? "Enviando..." : "Notificación de prueba"}
+                    {sendTestNotification.isPending
+                      ? t('common.sending')
+                      : t('admin.hours.testNotification')}
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Desde
+                      {t('common.from')}
                     </label>
                     <input
                       type="date"
@@ -1906,7 +1938,7 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Hasta
+                      {t('common.to')}
                     </label>
                     <input
                       type="date"
@@ -1922,7 +1954,10 @@ export default function AdminDashboard() {
               <Accordion type="single" collapsible defaultValue="hours-register">
                 <AccordionItem value="hours-register">
                   <AccordionTrigger className="text-sm font-semibold text-foreground">
-                    Registro de horas ({filteredTimeclocks.length} fichajes, {totalHours.toFixed(2)} h)
+                    {t('admin.hours.registerTitle', {
+                      count: filteredTimeclocks.length,
+                      hours: totalHours.toFixed(2),
+                    })}
                   </AccordionTrigger>
                   <AccordionContent className="pt-2">
                     <div className="space-y-2">
@@ -1938,29 +1973,30 @@ export default function AdminDashboard() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm text-foreground">
-                            {employeeNameById.get(entry.employeeId) || `Empleado #${entry.employeeId}`}
+                            {employeeNameById.get(entry.employeeId) ||
+                              t('common.employeeFallback', { id: entry.employeeId })}
                           </p>
                           {timeclockStatusBadge(entry)}
                           {entry.isLate && entry.status !== "voided" ? (
                             <Badge variant="outline" className="text-amber-700">
-                              Tarde
+                              {t('admin.timeclock.late')}
                             </Badge>
                           ) : null}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Entrada:{" "}
-                          {entry.entryTime ? formatClockTime(entry.entryTime) : "Sin entrada"}
+                          {t('admin.timeclock.entryLabel')}{" "}
+                          {entry.entryTime ? formatClockTime(entry.entryTime) : t('admin.timeclock.noEntry')}
                           {" · "}
                           {entry.entryTime ? formatClockDateShort(entry.entryTime) : ""}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Salida:{" "}
-                          {entry.exitTime ? formatClockTime(entry.exitTime) : "Pendiente"}
+                          {t('admin.timeclock.exitLabel')}{" "}
+                          {entry.exitTime ? formatClockTime(entry.exitTime) : t('admin.timeclock.pending')}
                           {entry.exitTime ? ` · ${formatClockDateShort(entry.exitTime)}` : ""}
                         </p>
                         {(entry.correctionReason || entry.voidReason) && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Motivo: {entry.correctionReason || entry.voidReason}
+                            {t('admin.timeclock.reasonLabel')} {entry.correctionReason || entry.voidReason}
                           </p>
                         )}
                         {editingTimeclockId !== entry.id && entry.status !== "voided" && (
@@ -1970,7 +2006,9 @@ export default function AdminDashboard() {
                               variant="outline"
                               onClick={() => handleEditTimeclock(entry)}
                             >
-                              {entry.exitTime ? "Modificar fichaje" : "Completar entrada o salida"}
+                              {entry.exitTime
+                                ? t('admin.timeclock.editEntry')
+                                : t('admin.timeclock.completeEntryOrExit')}
                             </Button>
                           </div>
                         )}
@@ -1978,7 +2016,7 @@ export default function AdminDashboard() {
                           <div className="mt-3 grid gap-3 rounded-lg border border-border bg-background p-3">
                             <div>
                               <label className="block text-xs font-medium text-foreground mb-1">
-                                Entrada
+                                {t('common.entry')}
                               </label>
                               <input
                                 type="datetime-local"
@@ -2017,7 +2055,7 @@ export default function AdminDashboard() {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-foreground mb-1">
-                                Salida
+                                {t('common.exit')}
                               </label>
                               <input
                                 type="datetime-local"
@@ -2054,27 +2092,27 @@ export default function AdminDashboard() {
                                 />
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
-                                Si olvidó fichar salida, indica aquí la hora de fin de jornada.
+                                {t('admin.timeclock.exitHint')}
                               </p>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-foreground mb-1">
-                                Motivo del cambio (obligatorio)
+                                {t('admin.timeclock.correctionReason')}
                               </label>
                               <input
                                 type="text"
                                 value={editingCorrectionReason}
                                 onChange={(event) => setEditingCorrectionReason(event.target.value)}
-                                placeholder="Ej.: olvidó fichar salida, error de sistema..."
+                                placeholder={t('admin.timeclock.correctionReasonPlaceholder')}
                                 className="input-elegant w-full"
                               />
                             </div>
                             <div className="flex flex-wrap gap-2">
                               <Button size="sm" onClick={handleSaveTimeclock}>
-                                Guardar cambios
+                                {t('admin.employees.form.saveChanges')}
                               </Button>
                               <Button size="sm" variant="ghost" onClick={handleCancelTimeclockEdit}>
-                                Cancelar
+                                {t('common.cancel')}
                               </Button>
                             </div>
                           </div>
@@ -2082,13 +2120,13 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         {entry.status === "voided" ? (
-                          <span className="text-xs text-muted-foreground">No suma en totales</span>
+                          <span className="text-xs text-muted-foreground">{t('admin.timeclock.notCountedInTotals')}</span>
                         ) : null}
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No hay fichajes en este rango.</p>
+                  <p className="text-sm text-muted-foreground">{t('admin.hours.noEntries')}</p>
                 )}
                     </div>
                   </AccordionContent>
@@ -2096,11 +2134,11 @@ export default function AdminDashboard() {
               </Accordion>
               <div className="mt-6 border border-border rounded-lg p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-foreground">
-                  Calculadora de sueldo
+                  {t('admin.hours.salaryCalculator')}
                 </h3>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Horas trabajadas
+                    {t('admin.hours.workedHours')}
                   </label>
                   <input
                     type="number"
@@ -2109,12 +2147,12 @@ export default function AdminDashboard() {
                     value={workedHours}
                     onChange={(event) => setWorkedHours(event.target.value)}
                     className="input-elegant"
-                    placeholder="Ej. 160"
+                    placeholder={t('admin.hours.workedHoursPlaceholder')}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Sueldo por hora
+                    {t('admin.hours.hourlyRate')}
                   </label>
                   <input
                     type="number"
@@ -2123,13 +2161,13 @@ export default function AdminDashboard() {
                     value={hourlyRate}
                     onChange={(event) => setHourlyRate(event.target.value)}
                     className="input-elegant"
-                    placeholder="Ej. 12.50"
+                    placeholder={t('admin.hours.hourlyRatePlaceholder')}
                   />
                 </div>
                 <div className="p-3 rounded-lg border border-border bg-muted">
-                  <p className="text-sm text-muted-foreground">Total estimado</p>
+                  <p className="text-sm text-muted-foreground">{t('admin.hours.estimatedTotal')}</p>
                   <p className="text-lg font-semibold text-foreground">
-                    {salaryTotal.toLocaleString("es-ES", {
+                    {salaryTotal.toLocaleString(dateLocale, {
                       style: "currency",
                       currency: "EUR",
                     })}
@@ -2141,15 +2179,14 @@ export default function AdminDashboard() {
 
           <TabsContent value="timeoff" className="mt-0 space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-2">Vacaciones y días libres</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">{t('admin.timeOff.title')}</h2>
               <p className="text-sm text-muted-foreground mb-6">
-                Revisa las solicitudes pendientes. En el calendario, los días aprobados aparecen en verde con el
-                nombre del empleado; los pendientes de revisar, en ámbar.
+                {t('admin.timeOff.subtitle')}
               </p>
 
-              <h3 className="text-lg font-semibold text-foreground mb-3">Solicitudes pendientes</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-3">{t('admin.timeOff.pendingTitle')}</h3>
               {(timeOffPendingQuery.data || []).length === 0 ? (
-                <p className="text-sm text-muted-foreground mb-8">No hay solicitudes pendientes.</p>
+                <p className="text-sm text-muted-foreground mb-8">{t('admin.timeOff.noPending')}</p>
               ) : (
                 <div className="space-y-4 mb-8">
                   {(timeOffPendingQuery.data || []).map((row) => (
@@ -2158,8 +2195,10 @@ export default function AdminDashboard() {
                         <div>
                           <p className="font-semibold text-foreground">{row.employeeName}</p>
                           <p className="text-sm text-muted-foreground">
-                            {row.kind === 'vacation' ? 'Vacaciones' : 'Día(s) libre(s)'} ·{' '}
-                            {String(row.startDate)} → {String(row.endDate)}
+                            {row.kind === 'vacation'
+                              ? t('common.timeOff.vacation')
+                              : t('common.timeOff.daysOff')}{' '}
+                            · {String(row.startDate)} → {String(row.endDate)}
                           </p>
                         </div>
                         <div className="flex gap-2 shrink-0">
@@ -2175,7 +2214,7 @@ export default function AdminDashboard() {
                               })
                             }
                           >
-                            Aprobar
+                            {t('common.timeOff.approve')}
                           </Button>
                           <Button
                             size="sm"
@@ -2189,7 +2228,7 @@ export default function AdminDashboard() {
                               })
                             }
                           >
-                            Denegar
+                            {t('common.timeOff.deny')}
                           </Button>
                         </div>
                       </div>
@@ -2201,9 +2240,9 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <h3 className="text-lg font-semibold text-foreground mb-2">Historial en calendario</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-2">{t('admin.timeOff.calendarTitle')}</h3>
               <p className="text-xs text-muted-foreground mb-4">
-                Leyenda: verde = aprobado (día cogido) · ámbar = pendiente de revisar
+                {t('admin.timeOff.legend')}
               </p>
               <div className="w-full overflow-x-auto pb-2">
                 <UiCalendar
@@ -2260,7 +2299,7 @@ export default function AdminDashboard() {
                             <span
                               key={`${key}-${name}-p`}
                               className="text-[0.6rem] sm:text-[0.7rem] md:text-xs leading-tight w-full px-0.5 font-medium text-amber-950 dark:text-amber-50 truncate"
-                              title={`${name} (pendiente)`}
+                              title={`${name} ${t('admin.timeOff.pendingSuffix')}`}
                             >
                               {name}
                             </span>
@@ -2272,12 +2311,12 @@ export default function AdminDashboard() {
                 />
               </div>
               {timeOffCalendarQuery.isFetching ? (
-                <p className="text-center text-xs text-muted-foreground">Actualizando calendario…</p>
+                <p className="text-center text-xs text-muted-foreground">{t('admin.timeOff.updatingCalendar')}</p>
               ) : null}
 
-              <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">Historial de solicitudes</h3>
+              <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">{t('admin.timeOff.historyTitle')}</h3>
               {(timeOffAllQuery.data || []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">No hay solicitudes.</p>
+                <p className="text-sm text-muted-foreground">{t('admin.timeOff.noRequests')}</p>
               ) : (
                 <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                   {(timeOffAllQuery.data || []).map((row) => (
@@ -2289,7 +2328,10 @@ export default function AdminDashboard() {
                         <span className="font-medium text-foreground">{row.employeeName}</span>
                         <span className="text-muted-foreground">
                           {' '}
-                          · {row.kind === 'vacation' ? 'Vacaciones' : 'Libre'} · {String(row.startDate)} →{' '}
+                          · {row.kind === 'vacation'
+                            ? t('common.timeOff.vacation')
+                            : t('common.timeOff.dayOffShort')}{' '}
+                          · {String(row.startDate)} →{' '}
                           {String(row.endDate)}
                         </span>
                       </div>
@@ -2304,10 +2346,10 @@ export default function AdminDashboard() {
                           }
                         >
                           {row.status === 'approved'
-                            ? 'Aprobada'
+                            ? t('common.timeOff.status.approved')
                             : row.status === 'rejected'
-                              ? 'Denegada'
-                              : 'Pendiente'}
+                              ? t('common.timeOff.status.rejected')
+                              : t('common.timeOff.status.pending')}
                         </span>
                         {row.status === 'approved' || row.status === 'pending' ? (
                           <Button
@@ -2319,8 +2361,14 @@ export default function AdminDashboard() {
                             onClick={() => {
                               const msg =
                                 row.status === 'approved'
-                                  ? `¿Anular la aprobación de ${row.employeeName} (${String(row.startDate)} → ${String(row.endDate)})? Se borrará el registro.`
-                                  : `¿Eliminar la solicitud pendiente de ${row.employeeName}?`;
+                                  ? t('admin.timeOff.confirmCancelApproved', {
+                                      name: row.employeeName,
+                                      start: String(row.startDate),
+                                      end: String(row.endDate),
+                                    })
+                                  : t('admin.timeOff.confirmDeletePending', {
+                                      name: row.employeeName,
+                                    });
                               if (!window.confirm(msg)) return;
                               adminDeleteTimeOff.mutate({
                                 ...adminApiInput(),
@@ -2328,7 +2376,7 @@ export default function AdminDashboard() {
                               });
                             }}
                           >
-                            Anular
+                            {t('common.timeOff.cancel')}
                           </Button>
                         ) : null}
                       </div>
@@ -2342,19 +2390,19 @@ export default function AdminDashboard() {
           {/* Incidents Tab */}
           <TabsContent value="incidents" className="mt-0 space-y-6">
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Gestión de Incidencias</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-6">{t('admin.incidents.title')}</h2>
               
               <div className="space-y-4 mb-8">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Seleccionar Empleado
+                    {t('admin.incidents.selectEmployee')}
                   </label>
                   <select
                     className="input-elegant"
                     value={incidentEmployeeId}
                     onChange={(event) => setIncidentEmployeeId(event.target.value)}
                   >
-                    <option value="">Todos los empleados</option>
+                    <option value="">{t('common.allEmployees')}</option>
                     {listEmployees.data?.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name}
@@ -2369,7 +2417,9 @@ export default function AdminDashboard() {
                     onClick={handleClearAllIncidents}
                     disabled={clearAllIncidents.isPending}
                   >
-                    {clearAllIncidents.isPending ? "Borrando..." : "Borrar todas las incidencias"}
+                    {clearAllIncidents.isPending
+                      ? t('common.deleting')
+                      : t('admin.incidents.clearAll')}
                   </Button>
                 </div>
               </div>
@@ -2391,18 +2441,23 @@ export default function AdminDashboard() {
                         <div>
                           <h4 className="font-semibold text-foreground">
                             {incident.type === "late_arrival"
-                              ? "Retraso en la entrada"
+                              ? t('common.incidents.lateArrival')
                               : incident.type === "early_exit"
-                              ? "Salida anticipada"
-                              : "Incidencia"}
+                              ? t('common.incidents.earlyExit')
+                              : t('common.incidents.other')}
                           </h4>
                           <p className="text-sm text-muted-foreground">
-                            {employeeNameById.get(incident.employeeId) || `Empleado #${incident.employeeId}`}{" "}
+                            {employeeNameById.get(incident.employeeId) ||
+                              t('common.employeeFallback', { id: incident.employeeId })}{" "}
                             · {formatClockDateShort(incident.createdAt)}
                           </p>
                         </div>
                         <span className={incident.status === "pending" ? "badge-warning" : incident.status === "approved" ? "badge-success" : "badge-error"}>
-                          {incident.status === "pending" ? "Pendiente" : incident.status === "approved" ? "Aprobada" : "Rechazada"}
+                          {incident.status === "pending"
+                            ? t('common.incidents.status.pending')
+                            : incident.status === "approved"
+                              ? t('common.incidents.status.approved')
+                              : t('common.incidents.status.rejected')}
                         </span>
                       </div>
                       <p className="text-sm text-foreground mb-3">{incident.reason}</p>
@@ -2421,7 +2476,7 @@ export default function AdminDashboard() {
                               })
                             }
                           >
-                            Aprobar
+                            {t('common.incidents.approve')}
                           </Button>
                           <Button
                             type="button"
@@ -2436,14 +2491,14 @@ export default function AdminDashboard() {
                               })
                             }
                           >
-                            Rechazar
+                            {t('common.incidents.reject')}
                           </Button>
                         </div>
                       ) : null}
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No hay incidencias registradas.</p>
+                  <p className="text-sm text-muted-foreground">{t('admin.incidents.none')}</p>
                 )}
               </div>
             </Card>
@@ -2472,24 +2527,24 @@ export default function AdminDashboard() {
             ) : null}
 
             <Card className="p-6">
-              <h2 className="text-2xl font-bold text-foreground mb-2">Ajustes del negocio</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">{t('admin.settings.title')}</h2>
               <p className="text-sm text-muted-foreground mb-6">
-                Configuración de tu centro de trabajo y validación GPS al fichar (si está activa).
+                {t('admin.settings.subtitle')}
               </p>
 
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                 <MapPin className="w-4 h-4" />
-                Ubicación del negocio
+                {t('admin.settings.locationTitle')}
               </h3>
 
               <div className="space-y-4 mb-8">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Nombre del negocio
+                    {t('admin.settings.businessName')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Mi Restaurante"
+                    placeholder={t('admin.settings.businessNamePlaceholder')}
                     value={restaurantName}
                     onChange={(e) => setRestaurantName(e.target.value)}
                     className="input-elegant"
@@ -2498,11 +2553,11 @@ export default function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Dirección
+                    {t('admin.settings.address')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Calle Principal, 123"
+                    placeholder={t('admin.settings.addressPlaceholder')}
                     value={restaurantAddress}
                     onChange={(e) => setRestaurantAddress(e.target.value)}
                     className="input-elegant"
@@ -2512,25 +2567,25 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Radio de Validación (metros)
+                      {t('admin.settings.validationRadius')}
                     </label>
                     <input
                       type="number"
-                      placeholder="100"
+                      placeholder={t('admin.settings.radiusPlaceholder')}
                       min={50}
                       value={radiusMeters}
                       onChange={(e) => setRadiusMeters(Number(e.target.value))}
                       className="input-elegant"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Recomendado 100–150 m. Con menos de 50 m el GPS del móvil suele fallar al fichar.
+                      {t('admin.settings.radiusHint')}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-foreground mb-4">Seleccionar Ubicación</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">{t('admin.settings.selectLocation')}</h3>
                 <RestaurantMap
                   latitude={latitude}
                   longitude={longitude}
@@ -2544,7 +2599,7 @@ export default function AdminDashboard() {
               </div>
 
               <Button onClick={handleSaveRestaurant} className="w-full btn-primary">
-                Guardar ubicación
+                {t('admin.settings.saveLocation')}
               </Button>
             </Card>
           </TabsContent>
@@ -2559,22 +2614,26 @@ export default function AdminDashboard() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Fichar salida manual</DialogTitle>
+            <DialogTitle>{t('admin.dialogs.forceClockOut.title')}</DialogTitle>
             <DialogDescription>
               {forceClockOutTarget
-                ? `Registrar la salida de ${forceClockOutTarget.employeeName}. Puedes ajustar la hora si terminó antes.`
+                ? t('admin.dialogs.forceClockOut.description', {
+                    name: forceClockOutTarget.employeeName,
+                  })
                 : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-1">
             {forceClockOutTarget?.entryTime ? (
               <p className="text-sm text-muted-foreground">
-                Entrada registrada: {formatClockTime(forceClockOutTarget.entryTime)}
+                {t('admin.dialogs.forceClockOut.entryRecorded', {
+                  time: formatClockTime(forceClockOutTarget.entryTime),
+                })}
               </p>
             ) : null}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Hora de salida
+                {t('admin.dialogs.forceClockOut.exitTime')}
               </label>
               <input
                 type="datetime-local"
@@ -2613,13 +2672,13 @@ export default function AdminDashboard() {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Motivo
+                {t('common.reason')}
               </label>
               <Textarea
                 value={forceClockOutReason}
                 onChange={(event) => setForceClockOutReason(event.target.value)}
                 rows={3}
-                placeholder="Motivo del cierre manual (mín. 3 caracteres)"
+                placeholder={t('admin.dialogs.forceClockOut.reasonPlaceholder')}
               />
             </div>
           </div>
@@ -2630,14 +2689,16 @@ export default function AdminDashboard() {
               onClick={closeForceClockOutDialog}
               disabled={adminForceClockOut.isPending}
             >
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button
               type="button"
               onClick={submitAdminForceClockOut}
               disabled={adminForceClockOut.isPending}
             >
-              {adminForceClockOut.isPending ? 'Guardando…' : 'Registrar salida'}
+              {adminForceClockOut.isPending
+                ? t('common.savingEllipsis')
+                : t('admin.dialogs.forceClockOut.registerExit')}
             </Button>
           </DialogFooter>
         </DialogContent>

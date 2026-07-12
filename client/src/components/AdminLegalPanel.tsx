@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,15 +25,22 @@ import {
   downloadInspectionPackageBundle,
   downloadMonthlyLaborReportCsv,
 } from "@/lib/laborReportExport";
-import { SAAS_PROCESSOR_NOTICE, validateCompanyLegalForOfficialExport } from "@shared/legalCompliance";
+import { validateCompanyLegalForOfficialExport } from "@shared/legalCompliance";
 import {
-  DEFAULT_WORKPLACE_GPS_JUSTIFICATION,
   GPS_JUSTIFICATION_CATEGORIES,
   type GpsJustificationCategory,
 } from "@shared/gpsJustification";
 import { format } from "date-fns";
+import { useLocale } from "@/contexts/LocaleContext";
+
+const MISSING_FIELD_KEYS: Record<string, string> = {
+  "razón social": "admin.legal.missingFields.legalName",
+  "CIF/NIF": "admin.legal.missingFields.taxId",
+  "email de contacto privacidad": "admin.legal.missingFields.privacyEmail",
+};
 
 export default function AdminLegalPanel() {
+  const { t } = useLocale();
   const printRef = useRef<HTMLDivElement>(null);
   const [legalName, setLegalName] = useState("");
   const [taxId, setTaxId] = useState("");
@@ -51,6 +58,22 @@ export default function AdminLegalPanel() {
   const [inspectionTo, setInspectionTo] = useState("");
   const [complianceBusy, setComplianceBusy] = useState(false);
 
+  const translateMissingFields = useCallback(
+    (fields: string[]) =>
+      fields.map((field) => (MISSING_FIELD_KEYS[field] ? t(MISSING_FIELD_KEYS[field]) : field)),
+    [t]
+  );
+
+  const gpsCategoryOptions = useMemo(
+    () =>
+      GPS_JUSTIFICATION_CATEGORIES.map((option) => ({
+        value: option.value,
+        label: t(`admin.legal.gps.categories.${option.value}.label`),
+        hint: t(`admin.legal.gps.categories.${option.value}.hint`),
+      })),
+    [t]
+  );
+
   const companyLegalQuery = trpc.publicApi.getCompanyLegal.useQuery(emptyCreds);
   const acceptancesQuery = trpc.publicApi.listEmployeePrivacyAcceptances.useQuery(emptyCreds);
   const companyAcceptancesQuery = trpc.publicApi.listCompanyLegalAcceptances.useQuery(emptyCreds);
@@ -59,7 +82,7 @@ export default function AdminLegalPanel() {
   const trpcUtils = trpc.useUtils();
   const updateLegal = trpc.publicApi.updateCompanyLegal.useMutation({
     onSuccess: () => {
-      toast.success("Datos legales guardados");
+      toast.success(t("admin.legal.toasts.saved"));
       companyLegalQuery.refetch();
       acceptancesQuery.refetch();
     },
@@ -80,7 +103,7 @@ export default function AdminLegalPanel() {
   const companyInfo: CompanyLegalInfo = useMemo(() => {
     const c = companyLegalQuery.data;
     return {
-      name: c?.name ?? "Su empresa",
+      name: c?.name ?? t("admin.legal.defaults.companyName"),
       legalName: legalName || c?.legalName,
       taxId: taxId || c?.taxId,
       address: address || c?.address,
@@ -89,7 +112,16 @@ export default function AdminLegalPanel() {
       locationEnabled,
       dataRetentionYears: Number(dataRetentionYears) || 4,
     };
-  }, [companyLegalQuery.data, legalName, taxId, address, privacyContactEmail, locationEnabled, dataRetentionYears]);
+  }, [
+    companyLegalQuery.data,
+    legalName,
+    taxId,
+    address,
+    privacyContactEmail,
+    locationEnabled,
+    dataRetentionYears,
+    t,
+  ]);
 
   const noticeDocument = useMemo(
     () => buildEmployeePrivacyNotice(companyInfo),
@@ -103,6 +135,11 @@ export default function AdminLegalPanel() {
   const legalExportReady = useMemo(
     () => validateCompanyLegalForOfficialExport(companyInfo),
     [companyInfo]
+  );
+
+  const translatedMissing = useMemo(
+    () => translateMissingFields(legalExportReady.missing),
+    [legalExportReady.missing, translateMissingFields]
   );
 
   useEffect(() => {
@@ -119,7 +156,7 @@ export default function AdminLegalPanel() {
   const handleSave = () => {
     const years = Number(dataRetentionYears);
     if (Number.isNaN(years) || years < 4) {
-      toast.error("La conservación mínima legal es 4 años");
+      toast.error(t("admin.legal.toasts.minRetention"));
       return;
     }
     const legalCheck = validateCompanyLegalForOfficialExport({
@@ -129,11 +166,15 @@ export default function AdminLegalPanel() {
       privacyContactEmail,
     });
     if (!legalCheck.valid) {
-      toast.error(`Datos legales incompletos: ${legalCheck.missing.join(", ")}`);
+      toast.error(
+        t("admin.legal.toasts.incomplete", {
+          missing: translateMissingFields(legalCheck.missing).join(", "),
+        })
+      );
     }
     if (locationEnabled && !companyLegalQuery.data?.locationEnabled) {
       if (!gpsJustificationCategory || gpsJustification.trim().length < 10) {
-        toast.error("Para activar GPS indique motivo y justificación (mín. 10 caracteres)");
+        toast.error(t("admin.legal.toasts.gpsRequired"));
         return;
       }
     }
@@ -155,7 +196,7 @@ export default function AdminLegalPanel() {
   const handleMonthlyExport = async () => {
     const employeeId = Number(monthlyEmployeeId);
     if (!employeeId) {
-      toast.error("Seleccione un empleado");
+      toast.error(t("admin.legal.toasts.selectEmployee"));
       return;
     }
     setComplianceBusy(true);
@@ -168,9 +209,9 @@ export default function AdminLegalPanel() {
         recordDelivery: true,
       });
       downloadMonthlyLaborReportCsv(report);
-      toast.success("Resumen mensual generado");
+      toast.success(t("admin.legal.toasts.monthlyGenerated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo exportar");
+      toast.error(e instanceof Error ? e.message : t("admin.legal.toasts.exportFailed"));
     } finally {
       setComplianceBusy(false);
     }
@@ -178,7 +219,7 @@ export default function AdminLegalPanel() {
 
   const handleInspectionExport = async () => {
     if (!inspectionFrom || !inspectionTo) {
-      toast.error("Indique periodo de inspección");
+      toast.error(t("admin.legal.toasts.inspectionPeriodRequired"));
       return;
     }
     setComplianceBusy(true);
@@ -189,9 +230,9 @@ export default function AdminLegalPanel() {
         dateTo: inspectionTo,
       });
       downloadInspectionPackageBundle(pkg);
-      toast.success("Paquete de inspección generado");
+      toast.success(t("admin.legal.toasts.inspectionGenerated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo generar el paquete");
+      toast.error(e instanceof Error ? e.message : t("admin.legal.toasts.inspectionFailed"));
     } finally {
       setComplianceBusy(false);
     }
@@ -219,8 +260,7 @@ export default function AdminLegalPanel() {
   return (
     <div className="space-y-6">
       <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-        {SAAS_PROCESSOR_NOTICE} Los documentos siguientes son plantillas orientativas; requieren
-        revisión por asesoría laboral, abogado o DPO antes de uso oficial.
+        {t("admin.legal.processorNotice")} {t("admin.legal.templateDisclaimer")}
       </p>
 
       <Card className="p-6">
@@ -228,62 +268,63 @@ export default function AdminLegalPanel() {
           <div>
             <h2 className="flex items-center gap-2 text-2xl font-bold text-foreground">
               <Scale className="h-6 w-6" />
-              A) Información para empleados
+              {t("admin.legal.employeeInfo.title")}
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Cláusula informativa RGPD (art. 13) para entregar al trabajador. Debe comunicarse antes
-              o al inicio del uso del sistema de registro horario.
+              {t("admin.legal.employeeInfo.description")}
             </p>
           </div>
           <span className="rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
-            Versión {EMPLOYEE_PRIVACY_NOTICE_VERSION}
+            {t("admin.legal.employeeInfo.version", {
+              version: EMPLOYEE_PRIVACY_NOTICE_VERSION,
+            })}
           </span>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <Label htmlFor="legalName">Razón social / Responsable</Label>
+            <Label htmlFor="legalName">{t("admin.legal.fields.legalName")}</Label>
             <Input
               id="legalName"
               value={legalName}
               onChange={(e) => setLegalName(e.target.value)}
-              placeholder="Empresa Ejemplo S.L."
+              placeholder={t("admin.legal.placeholders.legalName")}
               className="mt-1"
             />
           </div>
           <div>
-            <Label htmlFor="taxId">NIF / CIF</Label>
+            <Label htmlFor="taxId">{t("admin.legal.fields.taxId")}</Label>
             <Input
               id="taxId"
               value={taxId}
               onChange={(e) => setTaxId(e.target.value)}
-              placeholder="B12345678"
+              placeholder={t("admin.legal.placeholders.taxId")}
               className="mt-1"
             />
           </div>
           <div className="md:col-span-2">
-            <Label htmlFor="address">Domicilio social</Label>
+            <Label htmlFor="address">{t("admin.legal.fields.address")}</Label>
             <Input
               id="address"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Calle, número, CP, ciudad"
+              placeholder={t("admin.legal.placeholders.address")}
               className="mt-1"
             />
           </div>
           <div>
-            <Label htmlFor="privacyEmail">Email protección de datos</Label>
+            <Label htmlFor="privacyEmail">{t("admin.legal.fields.privacyEmail")}</Label>
             <Input
               id="privacyEmail"
               type="email"
               value={privacyContactEmail}
               onChange={(e) => setPrivacyContactEmail(e.target.value)}
-              placeholder="privacidad@empresa.com"
+              placeholder={t("admin.legal.placeholders.privacyEmail")}
               className="mt-1"
             />
           </div>
           <div>
-            <Label htmlFor="retention">Años conservación fichajes (mín. 4)</Label>
+            <Label htmlFor="retention">{t("admin.legal.fields.retentionYears")}</Label>
             <Input
               id="retention"
               type="number"
@@ -301,17 +342,14 @@ export default function AdminLegalPanel() {
               onCheckedChange={setLocationEnabled}
             />
             <Label htmlFor="locationEnabled" className="leading-snug">
-              Geolocalización al fichar (desactivada por defecto; solo si es necesario y proporcionado)
+              {t("admin.legal.fields.locationEnabled")}
             </Label>
           </div>
           {locationEnabled && !companyLegalQuery.data?.locationEnabled ? (
             <div className="md:col-span-2 space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-              <p className="text-sm text-amber-900">
-                Active GPS solo si es necesario. Para centros físicos se recomienda fichaje desde
-                dispositivo del centro (panel/tablet) sin GPS.
-              </p>
+              <p className="text-sm text-amber-900">{t("admin.legal.gps.activationWarning")}</p>
               <div>
-                <Label htmlFor="gpsCategory">Motivo de activación</Label>
+                <Label htmlFor="gpsCategory">{t("admin.legal.fields.gpsCategory")}</Label>
                 <select
                   id="gpsCategory"
                   value={gpsJustificationCategory}
@@ -320,8 +358,8 @@ export default function AdminLegalPanel() {
                   }
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="">Seleccione…</option>
-                  {GPS_JUSTIFICATION_CATEGORIES.map((option) => (
+                  <option value="">{t("admin.legal.placeholders.selectCategory")}</option>
+                  {gpsCategoryOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -330,19 +368,18 @@ export default function AdminLegalPanel() {
                 {gpsJustificationCategory ? (
                   <p className="text-xs text-muted-foreground mt-1">
                     {
-                      GPS_JUSTIFICATION_CATEGORIES.find((o) => o.value === gpsJustificationCategory)
-                        ?.hint
+                      gpsCategoryOptions.find((o) => o.value === gpsJustificationCategory)?.hint
                     }
                   </p>
                 ) : null}
               </div>
               <div>
-                <Label htmlFor="gpsJustification">Justificación (obligatoria)</Label>
+                <Label htmlFor="gpsJustification">{t("admin.legal.fields.gpsJustification")}</Label>
                 <Input
                   id="gpsJustification"
                   value={gpsJustification}
                   onChange={(e) => setGpsJustification(e.target.value)}
-                  placeholder={DEFAULT_WORKPLACE_GPS_JUSTIFICATION}
+                  placeholder={t("admin.legal.gps.defaultJustification")}
                   className="mt-1"
                 />
               </div>
@@ -352,7 +389,7 @@ export default function AdminLegalPanel() {
 
         <Button onClick={handleSave} disabled={updateLegal.isPending} className="mt-6 gap-2">
           <Save className="h-4 w-4" />
-          {updateLegal.isPending ? "Guardando..." : "Guardar datos legales"}
+          {updateLegal.isPending ? t("admin.legal.actions.saving") : t("admin.legal.actions.save")}
         </Button>
       </Card>
 
@@ -360,18 +397,18 @@ export default function AdminLegalPanel() {
         <div className="mb-4 flex flex-wrap gap-2">
           <Button variant="outline" onClick={handlePrint} className="gap-2">
             <Printer className="h-4 w-4" />
-            Imprimir
+            {t("admin.legal.actions.print")}
           </Button>
           <Button variant="outline" onClick={() => handlePdf()} className="gap-2">
             <FileDown className="h-4 w-4" />
-            PDF (modelo en blanco)
+            {t("admin.legal.actions.pdfBlank")}
           </Button>
           <select
             value={pdfEmployeeId}
             onChange={(e) => setPdfEmployeeId(e.target.value)}
             className="rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            <option value="">PDF con nombre de empleado…</option>
+            <option value="">{t("admin.legal.placeholders.pdfEmployee")}</option>
             {(acceptancesQuery.data ?? []).map((emp) => (
               <option key={emp.employeeId} value={String(emp.employeeId)}>
                 {emp.employeeName} ({emp.username})
@@ -391,7 +428,7 @@ export default function AdminLegalPanel() {
             className="gap-2"
           >
             <FileDown className="h-4 w-4" />
-            PDF empleado
+            {t("admin.legal.actions.pdfEmployee")}
           </Button>
         </div>
 
@@ -410,21 +447,22 @@ export default function AdminLegalPanel() {
       </Card>
 
       <Card className="p-6">
-        <h3 className="mb-2 text-lg font-semibold text-foreground">Acuses de recibo (app)</h3>
+        <h3 className="mb-2 text-lg font-semibold text-foreground">
+          {t("admin.legal.acceptances.title")}
+        </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Los empleados marcan «He leído la información…» al primer acceso. Quedan registrados con
-          fecha e IP. Pendientes activos:{" "}
+          {t("admin.legal.acceptances.description")}{" "}
           <strong>{pendingCount}</strong>
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
-                <th className="py-2 pr-4">Empleado</th>
-                <th className="py-2 pr-4">Usuario</th>
-                <th className="py-2 pr-4">Estado</th>
-                <th className="py-2 pr-4">Fecha acuse</th>
-                <th className="py-2">IP</th>
+                <th className="py-2 pr-4">{t("admin.legal.acceptances.columns.employee")}</th>
+                <th className="py-2 pr-4">{t("admin.legal.acceptances.columns.username")}</th>
+                <th className="py-2 pr-4">{t("admin.legal.acceptances.columns.status")}</th>
+                <th className="py-2 pr-4">{t("admin.legal.acceptances.columns.acceptedAt")}</th>
+                <th className="py-2">{t("admin.legal.acceptances.columns.ip")}</th>
               </tr>
             </thead>
             <tbody>
@@ -434,11 +472,17 @@ export default function AdminLegalPanel() {
                   <td className="py-2 pr-4">{row.username}</td>
                   <td className="py-2 pr-4">
                     {row.acceptedAt ? (
-                      <span className="text-green-700">Acuse digital</span>
+                      <span className="text-green-700">
+                        {t("admin.legal.acceptances.status.digital")}
+                      </span>
                     ) : row.isActive ? (
-                      <span className="text-amber-700">Pendiente</span>
+                      <span className="text-amber-700">
+                        {t("admin.legal.acceptances.status.pending")}
+                      </span>
                     ) : (
-                      <span className="text-muted-foreground">Inactivo</span>
+                      <span className="text-muted-foreground">
+                        {t("admin.legal.acceptances.status.inactive")}
+                      </span>
                     )}
                   </td>
                   <td className="py-2 pr-4">
@@ -452,7 +496,7 @@ export default function AdminLegalPanel() {
             </tbody>
           </table>
           {!acceptancesQuery.data?.length && (
-            <p className="py-4 text-sm text-muted-foreground">No hay empleados registrados.</p>
+            <p className="py-4 text-sm text-muted-foreground">{t("admin.legal.acceptances.empty")}</p>
           )}
         </div>
       </Card>
@@ -460,19 +504,19 @@ export default function AdminLegalPanel() {
       <Card className="p-6">
         <h3 className="mb-2 flex items-center gap-2 text-lg font-semibold text-foreground">
           <Shield className="h-5 w-5" />
-          Documentos legales SaaS aceptados
+          {t("admin.legal.saasAcceptances.title")}
         </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Términos, privacidad SaaS y DPA aceptados por la empresa cliente (versión y hash registrados).
+          {t("admin.legal.saasAcceptances.description")}
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
-                <th className="py-2 pr-4">Documento</th>
-                <th className="py-2 pr-4">Versión</th>
-                <th className="py-2 pr-4">Fecha</th>
-                <th className="py-2">Hash</th>
+                <th className="py-2 pr-4">{t("admin.legal.saasAcceptances.columns.document")}</th>
+                <th className="py-2 pr-4">{t("admin.legal.saasAcceptances.columns.version")}</th>
+                <th className="py-2 pr-4">{t("admin.legal.saasAcceptances.columns.date")}</th>
+                <th className="py-2">{t("admin.legal.saasAcceptances.columns.hash")}</th>
               </tr>
             </thead>
             <tbody>
@@ -490,38 +534,41 @@ export default function AdminLegalPanel() {
           </table>
           {!companyAcceptancesQuery.data?.length && (
             <p className="py-4 text-sm text-muted-foreground">
-              Sin aceptaciones registradas. Complete el onboarding legal.
+              {t("admin.legal.saasAcceptances.empty")}
             </p>
           )}
         </div>
       </Card>
 
       <Card className="p-6">
-        <h3 className="mb-2 text-lg font-semibold text-foreground">Resumen mensual (tiempo parcial)</h3>
+        <h3 className="mb-2 text-lg font-semibold text-foreground">
+          {t("admin.legal.monthlyReport.title")}
+        </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Genera un CSV con las horas netas del mes elegido (descontando pausas), incidencias y diferencia
-          frente a las horas contratadas del empleado.
+          {t("admin.legal.monthlyReport.description")}
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div className="space-y-1 min-w-[180px]">
-            <Label htmlFor="monthly-employee">Empleado</Label>
+            <Label htmlFor="monthly-employee">{t("admin.legal.fields.employee")}</Label>
             <select
               id="monthly-employee"
               value={monthlyEmployeeId}
               onChange={(e) => setMonthlyEmployeeId(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              <option value="">Seleccione empleado…</option>
+              <option value="">{t("admin.legal.placeholders.selectEmployee")}</option>
               {(employeesQuery.data ?? []).map((emp) => (
                 <option key={emp.id} value={String(emp.id)}>
                   {emp.name}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">Trabajador del que se exportan las horas.</p>
+            <p className="text-xs text-muted-foreground">
+              {t("admin.legal.monthlyReport.employeeHint")}
+            </p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="monthly-year">Año</Label>
+            <Label htmlFor="monthly-year">{t("admin.legal.fields.year")}</Label>
             <Input
               id="monthly-year"
               type="number"
@@ -531,10 +578,10 @@ export default function AdminLegalPanel() {
               onChange={(e) => setMonthlyYear(e.target.value)}
               className="w-28"
             />
-            <p className="text-xs text-muted-foreground">Año natural (ej. 2026).</p>
+            <p className="text-xs text-muted-foreground">{t("admin.legal.monthlyReport.yearHint")}</p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="monthly-month">Mes</Label>
+            <Label htmlFor="monthly-month">{t("admin.legal.fields.month")}</Label>
             <Input
               id="monthly-month"
               type="number"
@@ -544,61 +591,68 @@ export default function AdminLegalPanel() {
               onChange={(e) => setMonthlyMonth(e.target.value)}
               className="w-20"
             />
-            <p className="text-xs text-muted-foreground">1 = enero, 7 = julio, 12 = diciembre.</p>
+            <p className="text-xs text-muted-foreground">{t("admin.legal.monthlyReport.monthHint")}</p>
           </div>
           <Button onClick={() => void handleMonthlyExport()} disabled={complianceBusy}>
-            Exportar CSV mensual
+            {t("admin.legal.actions.exportMonthlyCsv")}
           </Button>
         </div>
       </Card>
 
       <Card className="p-6">
-        <h3 className="mb-2 text-lg font-semibold text-foreground">Paquete Inspección de Trabajo</h3>
+        <h3 className="mb-2 text-lg font-semibold text-foreground">
+          {t("admin.legal.inspectionPackage.title")}
+        </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Descarga manifest JSON + CSV con checksum para un periodo concreto. Requiere razón social, CIF y email
-          de privacidad guardados arriba.
+          {t("admin.legal.inspectionPackage.description")}
         </p>
         {!legalExportReady.valid ? (
           <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Faltan datos legales: {legalExportReady.missing.join(", ")}. Complételos en «Datos legales de la
-            empresa» y pulse Guardar antes de descargar.
+            {t("admin.legal.inspectionPackage.missingData", {
+              missing: translatedMissing.join(", "),
+            })}
           </p>
         ) : null}
         <div className="flex flex-wrap items-end gap-4">
           <div className="space-y-1">
-            <Label htmlFor="inspection-from">Desde</Label>
+            <Label htmlFor="inspection-from">{t("admin.legal.fields.from")}</Label>
             <Input
               id="inspection-from"
               type="date"
               value={inspectionFrom}
               onChange={(e) => setInspectionFrom(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">Primer día del periodo a incluir.</p>
+            <p className="text-xs text-muted-foreground">
+              {t("admin.legal.inspectionPackage.fromHint")}
+            </p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="inspection-to">Hasta</Label>
+            <Label htmlFor="inspection-to">{t("admin.legal.fields.to")}</Label>
             <Input
               id="inspection-to"
               type="date"
               value={inspectionTo}
               onChange={(e) => setInspectionTo(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">Último día del periodo (inclusive).</p>
+            <p className="text-xs text-muted-foreground">
+              {t("admin.legal.inspectionPackage.toHint")}
+            </p>
           </div>
           <Button
             onClick={() => void handleInspectionExport()}
             disabled={complianceBusy || !legalExportReady.valid}
           >
-            Descargar paquete
+            {t("admin.legal.actions.downloadPackage")}
           </Button>
         </div>
       </Card>
 
       <Card className="p-6">
-        <h3 className="mb-2 text-lg font-semibold text-foreground">Solicitudes RGPD de empleados</h3>
+        <h3 className="mb-2 text-lg font-semibold text-foreground">
+          {t("admin.legal.gdprRequests.title")}
+        </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Canal interno de ejercicio de derechos. La supresión puede no ser procedente por obligación
-          legal de conservar registros horarios.
+          {t("admin.legal.gdprRequests.description")}
         </p>
         <div className="space-y-2">
           {(gdprQuery.data ?? []).slice(0, 20).map((req) => (
@@ -613,7 +667,7 @@ export default function AdminLegalPanel() {
             </div>
           ))}
           {!gdprQuery.data?.length && (
-            <p className="text-sm text-muted-foreground">No hay solicitudes registradas.</p>
+            <p className="text-sm text-muted-foreground">{t("admin.legal.gdprRequests.empty")}</p>
           )}
         </div>
       </Card>

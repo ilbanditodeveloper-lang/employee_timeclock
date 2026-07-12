@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import RestaurantMap from "@/components/RestaurantMap";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
+import { useLocale } from "@/contexts/LocaleContext";
 
 type LocationRow = {
   id: number;
@@ -29,6 +30,7 @@ export default function SuperAdminCompanyLocationsPanel({
   companyName,
   locationCount,
 }: Props) {
+  const { t } = useLocale();
   const locationsQuery = trpc.publicApi.superAdminListCompanyLocations.useQuery({
     ...emptyCreds,
     companyId,
@@ -80,16 +82,16 @@ export default function SuperAdminCompanyLocationsPanel({
         longitude,
         radiusMeters,
       });
-      toast.success("Sede actualizada");
+      toast.success(t("superadmin.locations.toasts.updated"));
       await refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo guardar");
+      toast.error(error instanceof Error ? error.message : t("superadmin.locations.toasts.saveFailed"));
     }
   };
 
   const addLocation = async () => {
     if (!name.trim()) {
-      toast.error("Indica un nombre para la sede");
+      toast.error(t("superadmin.locations.toasts.nameRequired"));
       return;
     }
     try {
@@ -102,29 +104,32 @@ export default function SuperAdminCompanyLocationsPanel({
         longitude,
         radiusMeters,
       });
-      toast.success("Nueva sede creada");
+      toast.success(t("superadmin.locations.toasts.created"));
       setShowForm(false);
       await refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo crear la sede");
+      toast.error(error instanceof Error ? error.message : t("superadmin.locations.toasts.createFailed"));
     }
   };
 
   const removeLocation = async (locationId: number) => {
-    if (!window.confirm("¿Eliminar esta sede?")) return;
+    if (!window.confirm(t("superadmin.locations.confirmDelete"))) return;
     try {
       await deleteLocation.mutateAsync({
         ...emptyCreds,
         companyId,
         locationId,
       });
-      toast.success("Sede eliminada");
+      toast.success(t("superadmin.locations.toasts.deleted"));
       if (activeId === locationId) setActiveId(undefined);
       await refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo eliminar");
+      toast.error(error instanceof Error ? error.message : t("superadmin.locations.toasts.deleteFailed"));
     }
   };
+
+  const descriptionKey =
+    locationCount === 1 ? "superadmin.locations.description" : "superadmin.locations.descriptionPlural";
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -132,16 +137,13 @@ export default function SuperAdminCompanyLocationsPanel({
         <div>
           <h4 className="font-semibold text-sm flex items-center gap-2">
             <MapPin className="size-4" />
-            Sedes / locales — {companyName}
+            {t("superadmin.locations.title", { companyName })}
           </h4>
-          <p className="text-xs text-muted-foreground mt-1">
-            {locationCount} sede{locationCount === 1 ? "" : "s"} registrada(s). Gestión multi-sede solo
-            desde superadmin.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{t(descriptionKey, { count: locationCount })}</p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
           <Plus className="size-4 mr-1" />
-          Nueva sede
+          {t("superadmin.locations.newLocation")}
         </Button>
       </div>
 
@@ -156,7 +158,7 @@ export default function SuperAdminCompanyLocationsPanel({
               onClick={() => setActiveId(loc.id)}
             >
               {loc.name}
-              {loc.isPrimary ? " (principal)" : ""}
+              {loc.isPrimary ? t("superadmin.locations.primary") : ""}
             </Button>
           ))}
         </div>
@@ -164,13 +166,13 @@ export default function SuperAdminCompanyLocationsPanel({
 
       {showForm ? (
         <div className="rounded-lg border border-dashed p-3 space-y-3">
-          <p className="text-sm font-medium">Nueva sede</p>
+          <p className="text-sm font-medium">{t("superadmin.locations.newLocation")}</p>
           <div>
-            <Label>Nombre</Label>
+            <Label>{t("superadmin.locations.name")}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
           <Button type="button" size="sm" onClick={() => void addLocation()} disabled={createLocation.isPending}>
-            Crear sede
+            {t("superadmin.locations.create")}
           </Button>
         </div>
       ) : null}
@@ -179,15 +181,15 @@ export default function SuperAdminCompanyLocationsPanel({
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>Nombre del local</Label>
+              <Label>{t("superadmin.locations.locationName")}</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label>Dirección</Label>
+              <Label>{t("superadmin.locations.address")}</Label>
               <Input value={address} onChange={(e) => setAddress(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label>Radio GPS (m)</Label>
+              <Label>{t("superadmin.locations.gpsRadius")}</Label>
               <Input
                 type="number"
                 min={0}
@@ -195,9 +197,7 @@ export default function SuperAdminCompanyLocationsPanel({
                 onChange={(e) => setRadiusMeters(Number(e.target.value))}
                 className="mt-1"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                0 = sin validación GPS. Recomendado 50–150 m si hay geovalla.
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">{t("superadmin.locations.gpsHint")}</p>
             </div>
           </div>
 
@@ -214,7 +214,7 @@ export default function SuperAdminCompanyLocationsPanel({
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={() => void saveActive()} disabled={updateLocation.isPending}>
-              Guardar sede
+              {t("superadmin.locations.save")}
             </Button>
             {locations.length > 1 && !activeLocation.isPrimary ? (
               <Button
@@ -225,15 +225,13 @@ export default function SuperAdminCompanyLocationsPanel({
                 disabled={deleteLocation.isPending}
               >
                 <Trash2 className="size-4 mr-1" />
-                Eliminar sede
+                {t("superadmin.locations.delete")}
               </Button>
             ) : null}
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Esta empresa aún no tiene sede. El admin la configurará en Ajustes o créala aquí.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("superadmin.locations.empty")}</p>
       )}
     </div>
   );

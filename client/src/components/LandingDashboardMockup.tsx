@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   CalendarDays,
   Clock,
@@ -12,18 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS: { label: string; icon: LucideIcon; active?: boolean }[] = [
-  { label: "Dashboard", icon: LayoutDashboard, active: true },
-  { label: "Empleados", icon: Users },
-  { label: "Horas", icon: Clock },
-  { label: "Turnos", icon: UserCog },
-  { label: "Vacaciones", icon: CalendarDays },
-  { label: "Incidencias", icon: Shield },
-  { label: "Auditoría", icon: FileText },
-  { label: "Legal / RGPD", icon: Scale },
-  { label: "Ajustes", icon: Settings },
-];
+import { useLocale } from "@/contexts/LocaleContext";
 
 type Props = {
   compact?: boolean;
@@ -34,6 +24,23 @@ type Props = {
  * Mockup estático del panel admin real — solo para la landing (no afecta la app).
  */
 export default function LandingDashboardMockup({ compact = false, className }: Props) {
+  const { t } = useLocale();
+
+  const navItems = useMemo(
+    (): { label: string; icon: LucideIcon; active?: boolean }[] => [
+      { label: t("nav.admin.dashboard"), icon: LayoutDashboard, active: true },
+      { label: t("nav.admin.employees"), icon: Users },
+      { label: t("nav.admin.hours"), icon: Clock },
+      { label: t("nav.admin.shifts"), icon: UserCog },
+      { label: t("nav.admin.vacations"), icon: CalendarDays },
+      { label: t("nav.admin.incidents"), icon: Shield },
+      { label: t("nav.admin.audit"), icon: FileText },
+      { label: t("nav.admin.legal"), icon: Scale },
+      { label: t("nav.admin.settings"), icon: Settings },
+    ],
+    [t]
+  );
+
   return (
     <div
       className={cn(
@@ -57,14 +64,14 @@ export default function LandingDashboardMockup({ compact = false, className }: P
               {!compact ? (
                 <div className="min-w-0 hidden sm:block">
                   <p className="truncate text-xs font-bold uppercase tracking-wide">TimeClock</p>
-                  <p className="truncate text-[10px] text-slate-300">Fichaje de empleados</p>
+                  <p className="truncate text-[10px] text-slate-300">{t("landing.brandTagline")}</p>
                 </div>
               ) : null}
             </div>
           </div>
 
           <nav className="space-y-0.5 p-1.5 sm:p-2">
-            {NAV_ITEMS.slice(0, compact ? 4 : NAV_ITEMS.length).map((item) => {
+            {navItems.slice(0, compact ? 4 : navItems.length).map((item) => {
               const Icon = item.icon;
               return (
                 <div
@@ -91,45 +98,43 @@ export default function LandingDashboardMockup({ compact = false, className }: P
           {!compact ? (
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-bold text-slate-900">Dashboard</p>
-                <p className="text-[10px] text-slate-500">
-                  Seguimiento en vivo · Cafetería Sol · 01/07/2026
-                </p>
+                <p className="text-sm font-bold text-slate-900">{t("admin.dashboard.title")}</p>
+                <p className="text-[10px] text-slate-500">{t("landing.mockup.liveSubtitle")}</p>
               </div>
               <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600">
-                Actualizar
+                {t("common.refresh")}
               </span>
             </div>
           ) : (
-            <p className="mb-2 text-[10px] font-bold text-slate-900">Dashboard · En vivo</p>
+            <p className="mb-2 text-[10px] font-bold text-slate-900">{t("admin.dashboard.mockup.live")}</p>
           )}
 
           <div className="grid grid-cols-1 gap-2">
             <MockKpiCard
               compact={compact}
               tone="emerald"
-              title="Trabajando"
+              title={t("admin.dashboard.mockup.working")}
               count={3}
               items={compact ? undefined : ["Ana · 08:02", "Carlos · 08:15", "María · 09:00"]}
             />
             <MockKpiCard
               compact={compact}
               tone="amber"
-              title="En pausa"
+              title={t("admin.dashboard.mockup.onBreak")}
               count={1}
               items={compact ? undefined : ["Pedro · 11:30"]}
             />
             <MockKpiCard
               compact={compact}
               tone="teal"
-              title="Vacaciones"
+              title={t("landing.mockup.vacation")}
               count={1}
               items={compact ? undefined : ["Laura"]}
             />
             <MockKpiCard
               compact={compact}
               tone="muted"
-              title="Sin fichar"
+              title={t("admin.dashboard.mockup.notClockedIn")}
               count={2}
               chips={compact ? undefined : ["Juan", "Sofía"]}
             />
@@ -148,48 +153,43 @@ function MockKpiCard({
   items,
   chips,
 }: {
-  compact: boolean;
+  compact?: boolean;
   tone: "emerald" | "amber" | "teal" | "muted";
   title: string;
   count: number;
   items?: string[];
   chips?: string[];
 }) {
-  const tones = {
-    emerald: "border-emerald-200 bg-emerald-50/80 text-emerald-800",
-    amber: "border-amber-200 bg-amber-50/80 text-amber-800",
-    teal: "border-teal-200 bg-teal-50/80 text-teal-800",
-    muted: "border-slate-200 bg-slate-50 text-slate-800",
+  const toneClasses = {
+    emerald: "border-emerald-200 bg-emerald-50/80",
+    amber: "border-amber-200 bg-amber-50/80",
+    teal: "border-teal-200 bg-teal-50/80",
+    muted: "border-slate-200 bg-slate-50/80",
   };
 
   return (
-    <div className={cn("rounded-xl border p-2.5", tones[tone], compact ? "min-h-[56px]" : "min-h-0")}>
-      <div className="mb-1.5 flex items-center justify-between gap-1">
-        <p className={cn("font-semibold", compact ? "text-[9px]" : "text-xs")}>{title}</p>
-        <span className="rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-slate-700">
+    <div className={cn("rounded-lg border p-2", toneClasses[tone])}>
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-[10px] font-semibold text-slate-800">{title}</p>
+        <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
           {count}
         </span>
       </div>
       {!compact && items ? (
-        <ul className="space-y-1">
-          {items.map((line) => (
-            <li
-              key={line}
-              className="rounded border border-white/60 bg-white/70 px-2 py-1 text-[10px] text-slate-700"
-            >
-              {line}
-            </li>
+        <ul className="mt-1 space-y-0.5 text-[9px] text-slate-600">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
           ))}
         </ul>
       ) : null}
       {!compact && chips ? (
-        <div className="flex flex-wrap gap-1">
-          {chips.map((name) => (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {chips.map((chip) => (
             <span
-              key={name}
-              className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-700"
+              key={chip}
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] text-slate-600"
             >
-              {name}
+              {chip}
             </span>
           ))}
         </div>

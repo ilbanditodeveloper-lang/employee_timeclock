@@ -2,6 +2,7 @@ import type {
   EmployeePrivacyNoticeDocument as NoticeDoc,
 } from "@shared/employeePrivacyNotice";
 import { cn } from "@/lib/utils";
+import { useLocale } from "@/contexts/LocaleContext";
 
 type Props = {
   document: NoticeDoc;
@@ -18,6 +19,7 @@ export default function EmployeePrivacyNoticeDocument({
   showSignatureBlock = false,
   employeeName,
 }: Props) {
+  const { t } = useLocale();
   return (
     <article
       className={cn(
@@ -29,9 +31,13 @@ export default function EmployeePrivacyNoticeDocument({
       <header className="space-y-1 border-b border-slate-200 pb-4">
         <h1 className="text-lg font-bold text-slate-900">{document.title}</h1>
         <p className="text-base font-medium text-slate-700">{document.subtitle}</p>
-        <p className="text-xs text-slate-500">Versión del documento: {document.version}</p>
+        <p className="text-xs text-slate-500">
+          {t("legal.employeeNotice.documentVersion", { version: document.version })}
+        </p>
         {employeeName && (
-          <p className="text-sm font-medium text-slate-700">Trabajador/a: {employeeName}</p>
+          <p className="text-sm font-medium text-slate-700">
+            {t("legal.employeeNotice.employeeLabel", { name: employeeName })}
+          </p>
         )}
       </header>
 

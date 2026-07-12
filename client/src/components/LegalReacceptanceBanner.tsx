@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { adminApiInput } from "@/lib/adminContext";
+import { useLocale } from "@/contexts/LocaleContext";
 
 const DOC_LINKS: Record<string, string> = {
   terms_of_use: "/legal/terms",
@@ -22,17 +23,18 @@ const DOC_LINKS: Record<string, string> = {
 };
 
 export default function LegalReacceptanceBanner() {
+  const { t } = useLocale();
   const [acknowledged, setAcknowledged] = useState(false);
   const input = adminApiInput();
   const missingQuery = trpc.publicApi.getMissingCompanyLegalAcceptances.useQuery(input);
   const trpcUtils = trpc.useUtils();
   const acceptMutation = trpc.publicApi.acceptCompanyLegalDocuments.useMutation({
     onSuccess: async () => {
-      toast.success("Documentos legales aceptados");
+      toast.success(t("legal.reacceptance.success"));
       setAcknowledged(false);
       await trpcUtils.publicApi.getMissingCompanyLegalAcceptances.invalidate();
     },
-    onError: (error) => toast.error(error.message || "No se pudo registrar la aceptación"),
+    onError: (error) => toast.error(error.message || t("legal.reacceptance.failed")),
   });
 
   const missing = missingQuery.data ?? [];
@@ -48,22 +50,21 @@ export default function LegalReacceptanceBanner() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Scale className="size-5 text-amber-600" />
-            Actualización de documentos legales
+            {t("legal.reacceptance.title")}
           </DialogTitle>
-          <DialogDescription>
-            Hemos actualizado los textos de la plataforma. Debes revisarlos y aceptarlos para seguir usando el panel de
-            administración.
-          </DialogDescription>
+          <DialogDescription>{t("legal.reacceptance.description")}</DialogDescription>
         </DialogHeader>
 
         <ul className="space-y-2 text-sm">
           {missing.map((doc) => (
             <li key={`${doc.code}-${doc.version}`} className="rounded-md border border-border bg-muted/50 px-3 py-2">
               <p className="font-medium text-foreground">{doc.title}</p>
-              <p className="text-xs text-muted-foreground">Versión {doc.version}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("legal.common.versionLabel", { version: doc.version })}
+              </p>
               {DOC_LINKS[doc.code] ? (
                 <Link href={DOC_LINKS[doc.code]} className="text-xs text-primary underline" target="_blank">
-                  Leer documento
+                  {t("legal.common.readDocument")}
                 </Link>
               ) : null}
             </li>
@@ -77,8 +78,7 @@ export default function LegalReacceptanceBanner() {
             onCheckedChange={(v) => setAcknowledged(v === true)}
           />
           <label htmlFor="legal-reaccept" className="text-sm text-muted-foreground leading-relaxed">
-            He leído los documentos anteriores en nombre de mi empresa y acepto la versión vigente. Entiendo que debo
-            revisarlos con un asesor antes de uso oficial masivo.
+            {t("legal.reacceptance.acknowledgeLabel")}
           </label>
         </div>
 
@@ -88,7 +88,7 @@ export default function LegalReacceptanceBanner() {
             disabled={!acknowledged || acceptMutation.isPending}
             onClick={() => acceptMutation.mutate({ ...input, legalAcknowledged: true })}
           >
-            {acceptMutation.isPending ? "Guardando…" : "Aceptar y continuar"}
+            {acceptMutation.isPending ? t("legal.reacceptance.saving") : t("legal.reacceptance.accept")}
           </Button>
         </DialogFooter>
       </DialogContent>

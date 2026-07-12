@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { trpc } from "@/lib/trpc";
 import { adminApiInput } from "@/lib/adminContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -13,23 +14,17 @@ type AdminNotificationsBellProps = {
   onOpenIncidents?: () => void;
 };
 
-const INCIDENT_TYPE_LABELS: Record<string, string> = {
-  late_arrival: "Llegada tarde",
-  early_exit: "Salida anticipada",
-  absence: "Ausencia",
-  other: "Otra incidencia",
-};
-
-const TIME_OFF_KIND_LABELS: Record<string, string> = {
-  vacation: "Vacaciones",
-  day_off: "Día libre",
-};
-
-function formatShortDate(value: string | Date | null | undefined): string {
+function formatShortDate(
+  value: string | Date | null | undefined,
+  locale: "es" | "en"
+): string {
   if (!value) return "—";
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+  return date.toLocaleDateString(locale === "en" ? "en-US" : "es-ES", {
+    day: "2-digit",
+    month: "short",
+  });
 }
 
 export default function AdminNotificationsBell({
@@ -37,6 +32,7 @@ export default function AdminNotificationsBell({
   onOpenTimeOff,
   onOpenIncidents,
 }: AdminNotificationsBellProps) {
+  const { t, locale } = useLocale();
   const trpcUtils = trpc.useUtils();
   const query = trpc.publicApi.getAdminNotificationCenter.useQuery(adminApiInput(), {
     enabled,
@@ -46,8 +42,8 @@ export default function AdminNotificationsBell({
     onSuccess: (_data, variables) => {
       toast.success(
         variables.decision === "approved"
-          ? "Solicitud aprobada"
-          : "Solicitud denegada"
+          ? t("notifications.timeOffApproved")
+          : t("notifications.timeOffDenied")
       );
       void query.refetch();
       void trpcUtils.publicApi.listTimeOffRequests.invalidate();
@@ -55,35 +51,46 @@ export default function AdminNotificationsBell({
       void trpcUtils.publicApi.getTodayWorkforceStatus.invalidate();
     },
     onError: (error) => {
-      toast.error(error.message || "No se pudo actualizar la solicitud");
+      toast.error(error.message || t("notifications.timeOffUpdateFailed"));
     },
   });
   const decideIncident = trpc.publicApi.decideIncident.useMutation({
     onSuccess: (_data, variables) => {
       toast.success(
-        variables.decision === "approved" ? "Incidencia aprobada" : "Incidencia rechazada"
+        variables.decision === "approved"
+          ? t("notifications.incidentApproved")
+          : t("notifications.incidentRejected")
       );
       void query.refetch();
       void trpcUtils.publicApi.listIncidents.invalidate();
     },
     onError: (error) => {
-      toast.error(error.message || "No se pudo actualizar la incidencia");
+      toast.error(error.message || t("notifications.incidentUpdateFailed"));
     },
   });
   const total = query.data?.totalCount ?? 0;
   const decidingTimeOffId = decideTimeOff.isPending ? decideTimeOff.variables?.requestId : null;
   const decidingIncidentId = decideIncident.isPending ? decideIncident.variables?.incidentId : null;
 
+  const timeOffKindLabel = (kind: string) => {
+    const label = t(`notifications.timeOffKinds.${kind}`);
+    return label === `notifications.timeOffKinds.${kind}` ? kind : label;
+  };
+
+  const incidentTypeLabel = (type: string) => {
+    const label = t(`notifications.incidentTypes.${type}`);
+    return label === `notifications.incidentTypes.${type}` ? type : label;
+  };
+
+  const ariaLabel =
+    total > 0
+      ? t("notifications.ariaLabelPending", { count: total })
+      : t("notifications.ariaLabel");
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="relative"
-          aria-label={`Notificaciones${total > 0 ? `, ${total} pendientes` : ""}`}
-        >
+        <Button type="button" variant="outline" size="icon" className="relative" aria-label={ariaLabel}>
           <Bell className="size-4" />
           {total > 0 ? (
             <span
@@ -99,24 +106,22 @@ export default function AdminNotificationsBell({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
         <div className="border-b px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">Notificaciones</p>
-          <p className="text-xs text-muted-foreground">
-            Vacaciones, incidencias y solicitudes RGPD pendientes
-          </p>
+          <p className="text-sm font-semibold text-foreground">{t("notifications.title")}</p>
+          <p className="text-xs text-muted-foreground">{t("notifications.subtitle")}</p>
         </div>
         <div className="max-h-96 overflow-y-auto p-2">
           {query.isLoading ? (
-            <p className="px-2 py-4 text-sm text-muted-foreground">Cargando…</p>
+            <p className="px-2 py-4 text-sm text-muted-foreground">{t("notifications.loading")}</p>
           ) : total === 0 ? (
-            <p className="px-2 py-4 text-sm text-muted-foreground">No hay pendientes.</p>
+            <p className="px-2 py-4 text-sm text-muted-foreground">{t("notifications.empty")}</p>
           ) : (
             <div className="space-y-3">
               {(query.data?.gdprPending ?? 0) > 0 ? (
                 <section className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
                   <p className="text-sm font-medium text-violet-900">
-                    {query.data?.gdprPending} solicitud(es) RGPD pendiente(s)
+                    {t("notifications.gdprPending", { count: query.data?.gdprPending ?? 0 })}
                   </p>
-                  <p className="text-xs text-violet-800">Revíselas en Legal / RGPD</p>
+                  <p className="text-xs text-violet-800">{t("notifications.gdprReview")}</p>
                 </section>
               ) : null}
 
@@ -126,7 +131,7 @@ export default function AdminNotificationsBell({
                     <div className="flex items-center gap-2">
                       <Palmtree className="size-3.5 text-teal-600" />
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Vacaciones / ausencias
+                        {t("notifications.timeOffSection")}
                       </p>
                     </div>
                     {onOpenTimeOff ? (
@@ -135,7 +140,7 @@ export default function AdminNotificationsBell({
                         className="text-xs font-medium text-blue-700 hover:underline"
                         onClick={onOpenTimeOff}
                       >
-                        Ver todas
+                        {t("notifications.viewAll")}
                       </button>
                     ) : null}
                   </div>
@@ -147,10 +152,9 @@ export default function AdminNotificationsBell({
                       >
                         <p className="text-sm font-medium text-foreground">{item.employeeName}</p>
                         <p className="text-xs text-muted-foreground">
-                          {TIME_OFF_KIND_LABELS[item.kind] ?? item.kind} ·{" "}
-                          {formatShortDate(item.startDate)}
+                          {timeOffKindLabel(item.kind)} · {formatShortDate(item.startDate, locale)}
                           {item.endDate !== item.startDate
-                            ? ` – ${formatShortDate(item.endDate)}`
+                            ? ` – ${formatShortDate(item.endDate, locale)}`
                             : ""}
                         </p>
                         <div className="mt-2 flex gap-2">
@@ -167,7 +171,7 @@ export default function AdminNotificationsBell({
                               })
                             }
                           >
-                            Aprobar
+                            {t("notifications.approve")}
                           </Button>
                           <Button
                             type="button"
@@ -183,7 +187,7 @@ export default function AdminNotificationsBell({
                               })
                             }
                           >
-                            Denegar
+                            {t("notifications.deny")}
                           </Button>
                         </div>
                       </li>
@@ -198,7 +202,7 @@ export default function AdminNotificationsBell({
                     <div className="flex items-center gap-2">
                       <AlertCircle className="size-3.5 text-amber-600" />
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Incidencias
+                        {t("notifications.incidentsSection")}
                       </p>
                     </div>
                     {onOpenIncidents ? (
@@ -207,7 +211,7 @@ export default function AdminNotificationsBell({
                         className="text-xs font-medium text-blue-700 hover:underline"
                         onClick={onOpenIncidents}
                       >
-                        Ver todas
+                        {t("notifications.viewAll")}
                       </button>
                     ) : null}
                   </div>
@@ -220,11 +224,11 @@ export default function AdminNotificationsBell({
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-medium text-foreground">{item.employeeName}</p>
                           <Badge variant="outline" className="shrink-0 text-[10px]">
-                            Pendiente
+                            {t("notifications.pending")}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {INCIDENT_TYPE_LABELS[item.type] ?? item.type}
+                          {incidentTypeLabel(item.type)}
                           {item.reason ? ` · ${item.reason}` : ""}
                         </p>
                         <div className="mt-2 flex gap-2">
@@ -241,7 +245,7 @@ export default function AdminNotificationsBell({
                               })
                             }
                           >
-                            Aprobar
+                            {t("notifications.approve")}
                           </Button>
                           <Button
                             type="button"
@@ -257,7 +261,7 @@ export default function AdminNotificationsBell({
                               })
                             }
                           >
-                            Rechazar
+                            {t("notifications.reject")}
                           </Button>
                         </div>
                       </li>

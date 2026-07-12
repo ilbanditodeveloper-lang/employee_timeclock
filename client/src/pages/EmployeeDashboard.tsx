@@ -100,20 +100,17 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function getGeolocationErrorMessage(error: unknown): string {
+function getGeolocationErrorMessage(
+  error: unknown,
+  geo: (key: string) => string
+): string {
   if (error && typeof error === "object" && "code" in error) {
     const code = Number((error as { code?: number }).code);
-    if (code === 1) {
-      return "Permite el acceso a ubicación en el navegador para fichar (Ajustes → Permisos).";
-    }
-    if (code === 2) {
-      return "No se pudo obtener tu ubicación. Comprueba que el GPS está activo.";
-    }
-    if (code === 3) {
-      return "La ubicación tardó demasiado. Inténtalo de nuevo al aire libre o cerca de una ventana.";
-    }
+    if (code === 1) return geo("employee.clock.geolocation.permissionDenied");
+    if (code === 2) return geo("employee.clock.geolocation.unavailable");
+    if (code === 3) return geo("employee.clock.geolocation.timeout");
   }
-  return getErrorMessage(error, "No se pudo obtener tu ubicación");
+  return getErrorMessage(error, geo("employee.clock.geolocation.fallback"));
 }
 
 function isNetworkFetchError(error: unknown): boolean {
@@ -243,7 +240,7 @@ export default function EmployeeDashboard() {
     if (!employeeSession || !vapidKeyQuery.isSuccess) return;
     if (!vapidKeyQuery.data?.publicKey && !notificationWarningShown.current) {
       notificationWarningShown.current = true;
-      toast.error("Notificaciones no configuradas. Contacta con el administrador.");
+      toast.error(t("employee.clock.toasts.notificationsNotConfigured"));
     }
   }, [employeeSession, vapidKeyQuery.isSuccess, vapidKeyQuery.data]);
 
@@ -351,14 +348,14 @@ export default function EmployeeDashboard() {
   }, [locationEnabled]);
 
   const buildClockPayload = async () => {
-    if (!employeeSession?.employeeId) throw new Error("Sesión no válida");
+    if (!employeeSession?.employeeId) throw new Error(t("employee.clock.toasts.invalidSession"));
     const base = employeeQueryInput(employeeSession.employeeId);
     if (!locationEnabled) return base;
     try {
       const coords = await getCurrentLocationOnce();
       return { ...base, latitude: coords.lat, longitude: coords.lng };
     } catch (error) {
-      throw new Error(getGeolocationErrorMessage(error));
+      throw new Error(getGeolocationErrorMessage(error, t));
     }
   };
 
@@ -366,9 +363,7 @@ export default function EmployeeDashboard() {
     if (loading) return;
     setLoading(true);
     try {
-      if (locationEnabled && !window.confirm(
-        "Tu empresa requiere ubicación puntual solo al fichar. ¿Continuar?"
-      )) {
+      if (locationEnabled && !window.confirm(t("employee.clock.geolocation.confirmContinue"))) {
         return;
       }
       const payload = await buildClockPayload();
@@ -376,14 +371,12 @@ export default function EmployeeDashboard() {
       await clockInMutation.mutateAsync(payload);
       setIsClockedIn(true);
       employeeTimeclocks.refetch().catch(() => {});
-      toast.success('¡Entrada registrada!');
+      toast.success(t("employee.clock.toasts.clockInSuccess"));
     } catch (error) {
-      const message = getErrorMessage(error, 'Error al registrar entrada');
-      if (message.includes('Se requiere ubicación')) {
+      const message = getErrorMessage(error, t("employee.clock.toasts.clockInFailed"));
+      if (message.includes('Se requiere ubicación') || message.toLowerCase().includes('location')) {
         await trpcUtils.publicApi.getSession.invalidate();
-        toast.error(
-          'Tu empresa requiere ubicación para fichar. Permite el GPS en el navegador y vuelve a pulsar Entrada.'
-        );
+        toast.error(t("employee.clock.toasts.locationRequired"));
         return;
       }
       if (!isNetworkFetchError(error)) {
@@ -397,12 +390,12 @@ export default function EmployeeDashboard() {
             await clockInMutation.mutateAsync(payload);
             setIsClockedIn(true);
             employeeTimeclocks.refetch().catch(() => {});
-            toast.success('¡Entrada registrada!');
+            toast.success(t("employee.clock.toasts.clockInSuccess"));
             done = true;
             break;
           } catch (retryError) {
             if (!isNetworkFetchError(retryError)) {
-              toast.error(getErrorMessage(retryError, 'Error al registrar entrada'));
+              toast.error(getErrorMessage(retryError, t("employee.clock.toasts.clockInFailed")));
               done = true;
               break;
             }
@@ -413,9 +406,9 @@ export default function EmployeeDashboard() {
           const openRecord = (refreshed.data || []).some((entry) => entry.entryTime && !entry.exitTime);
           if (openRecord) {
             setIsClockedIn(true);
-            toast.success('¡Entrada registrada! (la conexión estaba inestable)');
+            toast.success(t("employee.clock.toasts.clockInSuccessUnstable"));
           } else {
-            toast.error('Error de conexión. Espera unos segundos y vuelve a pulsar Entrada.');
+            toast.error(t("employee.clock.toasts.clockInConnectionError"));
           }
         }
       }
@@ -433,10 +426,10 @@ export default function EmployeeDashboard() {
       setIsClockedIn(false);
       setIsPaused(false);
       refreshClockState();
-      toast.success('¡Salida registrada!');
+      toast.success(t("employee.clock.toasts.clockOutSuccess"));
     } catch (error) {
       if (!isNetworkFetchError(error)) {
-        toast.error(getErrorMessage(error, 'Error al registrar salida'));
+        toast.error(getErrorMessage(error, t("employee.clock.toasts.clockOutFailed")));
       } else {
         let done = false;
         for (const delayMs of [500, 1500]) {
@@ -446,12 +439,12 @@ export default function EmployeeDashboard() {
             await clockOutMutation.mutateAsync(payload);
             setIsClockedIn(false);
             employeeTimeclocks.refetch().catch(() => {});
-            toast.success('¡Salida registrada!');
+            toast.success(t("employee.clock.toasts.clockOutSuccess"));
             done = true;
             break;
           } catch (retryError) {
             if (!isNetworkFetchError(retryError)) {
-              toast.error(getErrorMessage(retryError, 'Error al registrar salida'));
+              toast.error(getErrorMessage(retryError, t("employee.clock.toasts.clockOutFailed")));
               done = true;
               break;
             }
@@ -462,9 +455,9 @@ export default function EmployeeDashboard() {
           const openRecord = (refreshed.data || []).some((entry) => entry.entryTime && !entry.exitTime);
           if (!openRecord) {
             setIsClockedIn(false);
-            toast.success('¡Salida registrada! (la conexión estaba inestable)');
+            toast.success(t("employee.clock.toasts.clockOutSuccessUnstable"));
           } else {
-            toast.error('Error de conexión. Espera unos segundos y vuelve a pulsar Salida.');
+            toast.error(t("employee.clock.toasts.clockOutConnectionError"));
           }
         }
       }
@@ -486,15 +479,15 @@ export default function EmployeeDashboard() {
       if (isPaused) {
         await resumeClockMutation.mutateAsync(input);
         setIsPaused(false);
-        toast.success('Jornada reanudada');
+        toast.success(t("employee.clock.toasts.resumeSuccess"));
       } else {
         await pauseClockMutation.mutateAsync(input);
         setIsPaused(true);
-        toast.success('Pausa iniciada');
+        toast.success(t("employee.clock.toasts.pauseSuccess"));
       }
       refreshClockState();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'No se pudo actualizar la pausa'));
+      toast.error(getErrorMessage(error, t("employee.clock.toasts.pauseFailed")));
     } finally {
       setLoading(false);
     }

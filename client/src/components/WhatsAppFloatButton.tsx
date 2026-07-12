@@ -1,5 +1,6 @@
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocale } from "@/contexts/LocaleContext";
 
 type Props = {
   href: string;
@@ -7,17 +8,15 @@ type Props = {
   ariaLabel?: string;
 };
 
-export default function WhatsAppFloatButton({
-  href,
-  className,
-  ariaLabel = "Contactar por WhatsApp",
-}: Props) {
+export default function WhatsAppFloatButton({ href, className, ariaLabel }: Props) {
+  const { t } = useLocale();
+
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t("whatsapp.contactAria")}
       className={cn(
         "fixed bottom-5 right-5 z-50 flex size-14 items-center justify-center rounded-full",
         "bg-[#25D366] text-white shadow-lg shadow-emerald-900/25",
