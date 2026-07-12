@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Headphones, MessageCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useLocale } from "@/contexts/LocaleContext";
 import { buildAdminSupportWhatsAppHref } from "@shared/landingConfig";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export default function AdminSupportPanel({ companyName }: Props) {
+  const { t } = useLocale();
   const landingQuery = trpc.publicApi.getLandingPageConfig.useQuery();
   const whatsappHref = useMemo(
     () =>
@@ -26,12 +28,9 @@ export default function AdminSupportPanel({ companyName }: Props) {
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Headphones className="size-5 text-emerald-700" />
-            Soporte TimeClock
+            {t("admin.support.title")}
           </h3>
-          <p className="text-sm text-muted-foreground max-w-xl">
-            ¿Dudas con la configuración, facturación o el uso del panel? Escríbenos por WhatsApp y
-            te ayudamos.
-          </p>
+          <p className="text-sm text-muted-foreground max-w-xl">{t("admin.support.description")}</p>
         </div>
         {whatsappHref ? (
           <a href={whatsappHref} target="_blank" rel="noreferrer" className="shrink-0">
@@ -40,13 +39,11 @@ export default function AdminSupportPanel({ companyName }: Props) {
               className="w-full sm:w-auto bg-[#25D366] hover:bg-[#20bd5a] text-white gap-2"
             >
               <MessageCircle className="size-4" />
-              Escribir por WhatsApp
+              {t("admin.support.whatsappCta")}
             </Button>
           </a>
         ) : (
-          <p className="text-sm text-muted-foreground italic">
-            El contacto por WhatsApp no está configurado todavía en la plataforma.
-          </p>
+          <p className="text-sm text-muted-foreground italic">{t("admin.support.notConfigured")}</p>
         )}
       </div>
     </Card>

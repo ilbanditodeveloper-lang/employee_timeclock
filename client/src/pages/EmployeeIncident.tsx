@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 
 export default function EmployeeIncident() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const [incidentType, setIncidentType] = useState("delay");
   const [incidentDate, setIncidentDate] = useState("");
@@ -31,11 +32,11 @@ export default function EmployeeIncident() {
     event.preventDefault();
 
     if (!description.trim()) {
-      toast.error("Completa la descripción");
+      toast.error(t("employee.incident.toasts.descriptionRequired"));
       return;
     }
     if (!employeeSession) {
-      toast.error("Inicia sesión para reportar una incidencia");
+      toast.error(t("employee.incident.toasts.signInRequired"));
       setLocation("/employee-login");
       return;
     }
@@ -53,7 +54,7 @@ export default function EmployeeIncident() {
       if (incidentType === "delay" && employeeSession.locationEnabled) {
         const clockInDate = now;
         if (!navigator.geolocation) {
-          toast.error("Geolocalización no disponible en tu navegador");
+          toast.error(t("employee.incident.toasts.geoUnavailable"));
         } else {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject);
@@ -70,16 +71,16 @@ export default function EmployeeIncident() {
 
       toast.success(
         incidentType === "delay"
-          ? "Incidencia registrada y entrada fichada"
-          : "Incidencia registrada correctamente"
+          ? t("employee.incident.toasts.delayWithClockIn")
+          : t("employee.incident.toasts.success")
       );
       setIncidentType("delay");
       setIncidentDate("");
       setIncidentTime("");
       setDescription("");
       setLocation("/employee");
-    } catch (error) {
-      toast.error("No se pudo enviar la incidencia");
+    } catch {
+      toast.error(t("employee.incident.toasts.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -91,30 +92,30 @@ export default function EmployeeIncident() {
 
   return (
     <EmployeeShellLayout
-      pageTitle="Reportar incidencia"
-      pageSubtitle="Retrasos y ausencias"
+      pageTitle={t("employee.incident.pageTitle")}
+      pageSubtitle={t("employee.incident.pageSubtitle")}
       contentClassName="container mx-auto max-w-2xl px-4 py-8 pb-28 md:pb-8"
     >
         <Card className="app-shell-card mx-auto max-w-2xl border-0 p-6 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Tipo de incidencia
+                {t("employee.incident.type")}
               </label>
               <select
                 value={incidentType}
                 onChange={(event) => setIncidentType(event.target.value)}
                 className="input-elegant"
               >
-                <option value="delay">Retraso</option>
-                <option value="absence">No voy a trabajar</option>
+                <option value="delay">{t("employee.incident.types.delay")}</option>
+                <option value="absence">{t("employee.incident.types.absence")}</option>
               </select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Fecha
+                  {t("employee.incident.date")}
                 </label>
                 <input
                   type="date"
@@ -125,7 +126,7 @@ export default function EmployeeIncident() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Hora
+                  {t("employee.incident.time")}
                 </label>
                 <input
                   type="time"
@@ -138,13 +139,13 @@ export default function EmployeeIncident() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Descripción
+                {t("employee.incident.description")}
               </label>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 className="input-elegant min-h-[120px]"
-                placeholder="Describe brevemente lo ocurrido"
+                placeholder={t("employee.incident.descriptionPlaceholder")}
               />
             </div>
 
@@ -153,7 +154,7 @@ export default function EmployeeIncident() {
               className="w-full bg-blue-700 hover:bg-blue-800"
               disabled={submitting}
             >
-              {submitting ? "Enviando..." : "Enviar incidencia"}
+              {submitting ? t("employee.incident.submitting") : t("employee.incident.submit")}
             </Button>
           </form>
         </Card>

@@ -4,24 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Palmtree, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
-import { employeeQueryInput, emptyCreds } from "@/lib/authApi";
+import { useLocale } from "@/contexts/LocaleContext";
+import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { resolveAppTimeZone, todayYmdInTimeZone, APP_TIMEZONE } from "@shared/timezone";
-
-const kindLabels: Record<string, string> = {
-  vacation: "Vacaciones",
-  day_off: "Día libre",
-};
-
-const statusLabels: Record<string, string> = {
-  pending: "Pendiente",
-  approved: "Aprobada",
-  rejected: "Denegada",
-};
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error) {
@@ -31,12 +21,12 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-
 function ymdRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return aStart <= bEnd && bStart <= aEnd;
 }
 
 export default function EmployeeTimeOff() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const { employeeSession } = useAuthContext();
   const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
@@ -47,6 +37,23 @@ export default function EmployeeTimeOff() {
   const [endDate, setEndDate] = useState(() => todayYmdInTimeZone(APP_TIMEZONE));
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const kindLabels = useMemo(
+    () => ({
+      vacation: t("employee.timeOff.kinds.vacation"),
+      day_off: t("employee.timeOff.kinds.day_off"),
+    }),
+    [t]
+  );
+
+  const statusLabels = useMemo(
+    () => ({
+      pending: t("employee.timeOff.statuses.pending"),
+      approved: t("employee.timeOff.statuses.approved"),
+      rejected: t("employee.timeOff.statuses.rejected"),
+    }),
+    [t]
+  );
 
   const enabled = Boolean(employeeSession?.employeeId);
 
@@ -81,23 +88,21 @@ export default function EmployeeTimeOff() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!employeeSession) {
-      toast.error("Inicia sesión");
+      toast.error(t("common.signInRequired"));
       setLocation("/employee-login");
       return;
     }
     if (!comment.trim()) {
-      toast.error("Debes escribir un comentario (motivo o detalles)");
+      toast.error(t("employee.timeOff.toasts.commentRequired"));
       return;
     }
     if (rangeInvalid) {
       if (rangeBlocks.order) {
-        toast.error("La fecha fin debe ser igual o posterior a la de inicio.");
+        toast.error(t("employee.timeOff.toasts.endAfterStart"));
       } else if (rangeBlocks.past) {
-        toast.error("No puedes elegir fechas anteriores a hoy.");
+        toast.error(t("employee.timeOff.toasts.noPast"));
       } else if (rangeBlocks.overlap) {
-        toast.error(
-          "Esas fechas coinciden con otra solicitud pendiente o aprobada. Elige otros días."
-        );
+        toast.error(t("employee.timeOff.toasts.overlap"));
       }
       return;
     }
@@ -110,14 +115,14 @@ export default function EmployeeTimeOff() {
         endDate,
         comment: comment.trim(),
       });
-      toast.success("Solicitud enviada. El administrador la revisará.");
+      toast.success(t("employee.timeOff.toasts.submitted"));
       setComment("");
       const next = todayYmd();
       setStartDate(next);
       setEndDate(next);
       await listQuery.refetch();
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo enviar la solicitud"));
+      toast.error(getErrorMessage(err, t("employee.timeOff.toasts.submitFailed")));
     } finally {
       setSubmitting(false);
     }
@@ -127,8 +132,8 @@ export default function EmployeeTimeOff() {
     if (!employeeSession) return;
     const msg =
       status === "approved"
-        ? "¿Anular esta solicitud ya aprobada? Los días dejarán de figurar como libres y no podrás deshacerlo."
-        : "¿Borrar esta solicitud pendiente? No podrás deshacerlo.";
+        ? t("employee.timeOff.confirm.cancelApproved")
+        : t("employee.timeOff.confirm.deletePending");
     const ok = window.confirm(msg);
     if (!ok) return;
     try {
@@ -136,10 +141,14 @@ export default function EmployeeTimeOff() {
         ...employeeQueryInput(employeeSession!.employeeId),
         requestId,
       });
-      toast.success(status === "approved" ? "Solicitud aprobada anulada" : "Solicitud eliminada");
+      toast.success(
+        status === "approved"
+          ? t("employee.timeOff.toasts.approvedCancelled")
+          : t("employee.timeOff.toasts.deleted")
+      );
       await listQuery.refetch();
     } catch (err) {
-      toast.error(getErrorMessage(err, "No se pudo borrar la solicitud"));
+      toast.error(getErrorMessage(err, t("employee.timeOff.toasts.deleteFailed")));
     }
   };
 
@@ -149,27 +158,27 @@ export default function EmployeeTimeOff() {
 
   return (
     <EmployeeShellLayout
-      pageTitle="Vacaciones"
-      pageSubtitle="Solicitudes de vacaciones y días libres"
+      pageTitle={t("employee.timeOff.pageTitle")}
+      pageSubtitle={t("employee.timeOff.pageSubtitle")}
       contentClassName="container mx-auto max-w-2xl space-y-8 py-8 pb-28 md:pb-8"
     >
         <Card className="app-shell-card border-0 p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Nueva solicitud</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-4">{t("employee.timeOff.newRequest")}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label className="text-foreground">Tipo</Label>
+              <Label className="text-foreground">{t("employee.timeOff.type")}</Label>
               <select
                 value={kind}
                 onChange={(ev) => setKind(ev.target.value as "vacation" | "day_off")}
                 className="input-elegant mt-2 w-full"
               >
-                <option value="vacation">Vacaciones</option>
-                <option value="day_off">Día(s) libre(s)</option>
+                <option value="vacation">{t("employee.timeOff.kinds.vacation")}</option>
+                <option value="day_off">{t("employee.timeOff.kinds.day_off")}</option>
               </select>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label className="text-foreground">Desde</Label>
+                <Label className="text-foreground">{t("employee.timeOff.from")}</Label>
                 <input
                   type="date"
                   value={startDate}
@@ -189,7 +198,7 @@ export default function EmployeeTimeOff() {
                 />
               </div>
               <div>
-                <Label className="text-foreground">Hasta (incluido)</Label>
+                <Label className="text-foreground">{t("employee.timeOff.to")}</Label>
                 <input
                   type="date"
                   value={endDate}
@@ -205,45 +214,38 @@ export default function EmployeeTimeOff() {
                 />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Solo fechas desde hoy (calendario España). No puedes repetir días que ya tienes en una
-              solicitud pendiente o aprobada.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("employee.timeOff.dateHint")}</p>
             {rangeBlocks.order ? (
-              <p className="text-sm text-destructive">
-                La fecha de fin no puede ser anterior a la de inicio.
-              </p>
+              <p className="text-sm text-destructive">{t("employee.timeOff.endBeforeStart")}</p>
             ) : null}
             {rangeBlocks.past && !rangeBlocks.order ? (
-              <p className="text-sm text-destructive">No uses fechas anteriores a hoy.</p>
+              <p className="text-sm text-destructive">{t("employee.timeOff.noPastDates")}</p>
             ) : null}
             {rangeBlocks.overlap && !rangeBlocks.order && !rangeBlocks.past ? (
-              <p className="text-sm text-destructive">
-                Este rango coincide con otra solicitud pendiente o aprobada. Elige otras fechas.
-              </p>
+              <p className="text-sm text-destructive">{t("employee.timeOff.overlap")}</p>
             ) : null}
             <div>
-              <Label className="text-foreground">Comentario (obligatorio)</Label>
+              <Label className="text-foreground">{t("employee.timeOff.comment")}</Label>
               <Textarea
                 value={comment}
                 onChange={(ev) => setComment(ev.target.value)}
-                placeholder="Motivo, notas para el administrador…"
+                placeholder={t("employee.timeOff.commentPlaceholder")}
                 className="mt-2 min-h-[100px]"
                 required
               />
             </div>
             <Button type="submit" className="w-full btn-primary" disabled={submitting || rangeInvalid}>
-              {submitting ? "Enviando…" : "Enviar solicitud"}
+              {submitting ? t("employee.timeOff.submitting") : t("employee.timeOff.submit")}
             </Button>
           </form>
         </Card>
 
         <Card className="app-shell-card border-0 p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Mis solicitudes</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-4">{t("employee.timeOff.myRequests")}</h2>
           {listQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
+            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
           ) : (listQuery.data || []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aún no hay solicitudes.</p>
+            <p className="text-sm text-muted-foreground">{t("employee.timeOff.noRequests")}</p>
           ) : (
             <ul className="space-y-3">
               {(listQuery.data || []).map((row) => (
@@ -253,7 +255,7 @@ export default function EmployeeTimeOff() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-medium text-foreground">
-                      {kindLabels[row.kind] ?? row.kind}
+                      {kindLabels[row.kind as keyof typeof kindLabels] ?? row.kind}
                     </span>
                     <div className="flex items-center gap-2">
                       <span
@@ -265,7 +267,7 @@ export default function EmployeeTimeOff() {
                               : "text-amber-600 dark:text-amber-400"
                         }
                       >
-                        {statusLabels[row.status] ?? row.status}
+                        {statusLabels[row.status as keyof typeof statusLabels] ?? row.status}
                       </span>
                       {row.status === "pending" || row.status === "approved" ? (
                         <Button
@@ -277,8 +279,8 @@ export default function EmployeeTimeOff() {
                           onClick={() => handleDeleteRequest(row.id, row.status)}
                           title={
                             row.status === "approved"
-                              ? "Anular solicitud aprobada"
-                              : "Borrar solicitud pendiente"
+                              ? t("employee.timeOff.cancelApprovedTitle")
+                              : t("employee.timeOff.deletePendingTitle")
                           }
                         >
                           <Trash2 className="w-4 h-4" />

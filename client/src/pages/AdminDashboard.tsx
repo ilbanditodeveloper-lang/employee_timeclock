@@ -1379,10 +1379,9 @@ export default function AdminDashboard() {
                   ) : null}
 
                   <div>
-                    <h3 className="mb-2 font-semibold text-foreground">Empleados registrados</h3>
+                    <h3 className="mb-2 font-semibold text-foreground">{t('admin.employees.registered')}</h3>
                     <p className="mb-4 text-xs text-muted-foreground">
-                      Desactivar un empleado impide su acceso, pero conserva fichajes e historial (mínimo
-                      4 años). Puede seguir exportando sus registros.
+                      {t('admin.employees.registeredHint')}
                     </p>
                     <div className="space-y-2">
                       {listEmployees.data?.length ? (
@@ -1395,13 +1394,13 @@ export default function AdminDashboard() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-medium text-foreground">{employee.name}</p>
                                 {employee.isActive === false ? (
-                                  <Badge variant="secondary">Inactivo</Badge>
+                                  <Badge variant="secondary">{t('common.inactive')}</Badge>
                                 ) : (
-                                  <Badge variant="outline">Activo</Badge>
+                                  <Badge variant="outline">{t('common.active')}</Badge>
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground">
-                                Email: {employee.email || "—"} · Usuario: {employee.username}
+                                {t('admin.employees.form.email')}: {employee.email || "—"} · {t('admin.employees.form.username')}: {employee.username}
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -1410,14 +1409,14 @@ export default function AdminDashboard() {
                                 size="sm"
                                 onClick={() => handleEditEmployee(employee.id)}
                               >
-                                Editar
+                                {t('common.edit')}
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleExportEmployeeData(employee.id, employee.name)}
                               >
-                                Exportar JSON
+                                {t('admin.employees.exportJson')}
                               </Button>
                               {employee.isActive !== false && (
                                 <Button
@@ -1426,14 +1425,14 @@ export default function AdminDashboard() {
                                   onClick={() => handleDeactivateEmployee(employee)}
                                   disabled={deactivateEmployee.isPending}
                                 >
-                                  Desactivar
+                                  {t('admin.employees.deactivate')}
                                 </Button>
                               )}
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-sm text-muted-foreground">No hay empleados registrados.</p>
+                        <p className="text-sm text-muted-foreground">{t('admin.employees.none')}</p>
                       )}
                     </div>
                   </div>
@@ -1449,10 +1448,10 @@ export default function AdminDashboard() {
                       className="gap-2"
                     >
                       <ArrowLeft className="size-4" />
-                      Volver a la lista
+                      {t('admin.employees.form.backToList')}
                     </Button>
                     <h2 className="text-2xl font-bold text-foreground">
-                      {editingEmployeeId ? "Editar empleado" : "Crear empleado"}
+                      {editingEmployeeId ? t('admin.employees.form.editTitle') : t('admin.employees.form.createTitle')}
                     </h2>
                   </div>
 

@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { downloadLaborReportCsv, downloadOfficialLaborReportPdf } from "@/lib/laborReportExport";
@@ -13,10 +14,12 @@ import { calendarMonthRange } from "@shared/laborReport";
 import { LEGAL_DISCLAIMER } from "@shared/legalCompliance";
 
 export default function EmployeeLegal() {
+  const { t, locale } = useLocale();
   const { employeeSession } = useAuthContext();
   const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
   const employeeId = employeeSession?.employeeId ?? 0;
   const enabled = Boolean(employeeId);
+  const numberLocale = locale === "en" ? "en-US" : "es-ES";
 
   const portalQuery = trpc.publicApi.getEmployeeLegalPortal.useQuery(
     employeeQueryInput(employeeId),
@@ -30,6 +33,19 @@ export default function EmployeeLegal() {
   >("access");
   const [message, setMessage] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
+
+  const gdprTypeLabels = useMemo(
+    () => ({
+      access: t("employee.legal.gdprTypes.access"),
+      rectification: t("employee.legal.gdprTypes.rectification"),
+      erasure: t("employee.legal.gdprTypes.erasure"),
+      restriction: t("employee.legal.gdprTypes.restriction"),
+      objection: t("employee.legal.gdprTypes.objection"),
+      portability: t("employee.legal.gdprTypes.portability"),
+      other: t("employee.legal.gdprTypes.other"),
+    }),
+    [t]
+  );
 
   const currentMonth = useMemo(() => {
     const now = new Date();
@@ -53,9 +69,9 @@ export default function EmployeeLegal() {
       });
       if (format === "csv") downloadLaborReportCsv(bundle);
       else downloadOfficialLaborReportPdf(bundle);
-      toast.success("Descarga iniciada");
+      toast.success(t("employee.legal.toasts.downloadStarted"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo exportar");
+      toast.error(error instanceof Error ? error.message : t("employee.legal.toasts.exportFailed"));
     } finally {
       setExportBusy(false);
     }
@@ -63,7 +79,7 @@ export default function EmployeeLegal() {
 
   const handleGdprSubmit = async () => {
     if (!employeeId || message.trim().length < 10) {
-      toast.error("Escribe un mensaje de al menos 10 caracteres");
+      toast.error(t("employee.legal.toasts.messageTooShort"));
       return;
     }
     try {
@@ -72,10 +88,10 @@ export default function EmployeeLegal() {
         requestType,
         message: message.trim(),
       });
-      toast.success("Solicitud registrada. La empresa la revisará.");
+      toast.success(t("employee.legal.toasts.requestSubmitted"));
       setMessage("");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo enviar la solicitud");
+      toast.error(error instanceof Error ? error.message : t("employee.legal.toasts.requestFailed"));
     }
   };
 
@@ -85,37 +101,33 @@ export default function EmployeeLegal() {
 
   return (
     <EmployeeShellLayout
-      pageTitle="Información legal y privacidad"
-      pageSubtitle="Aviso informativo, descargas y derechos RGPD"
+      pageTitle={t("employee.legal.pageTitle")}
+      pageSubtitle={t("employee.legal.pageSubtitle")}
       contentClassName="container mx-auto max-w-2xl space-y-6 py-8 pb-28 md:pb-8"
     >
       <Card className="app-shell-card border-0 p-5 shadow-sm">
-        <h2 className="text-lg font-semibold mb-2">Aviso al trabajador</h2>
+        <h2 className="text-lg font-semibold mb-2">{t("employee.legal.workerNotice")}</h2>
         <p className="text-sm text-muted-foreground mb-3">{LEGAL_DISCLAIMER}</p>
         {latestAcceptance ? (
           <p className="text-sm">
-            Versión aceptada: <strong>{latestAcceptance.documentVersion}</strong> ·{" "}
-            {new Date(latestAcceptance.acceptedAt).toLocaleString("es-ES")}
+            {t("employee.legal.acceptedVersion")}{" "}
+            <strong>{latestAcceptance.documentVersion}</strong> ·{" "}
+            {new Date(latestAcceptance.acceptedAt).toLocaleString(numberLocale)}
           </p>
         ) : (
-          <p className="text-sm text-amber-700">Aún no consta acuse de lectura en el sistema.</p>
+          <p className="text-sm text-amber-700">{t("employee.legal.noAck")}</p>
         )}
         <Button asChild variant="outline" size="sm" className="mt-3">
-          <Link href="/legal/employee-notice">Leer aviso informativo vigente</Link>
+          <Link href="/legal/employee-notice">{t("employee.legal.readNotice")}</Link>
         </Button>
         {portalQuery.data?.locationEnabled ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Geolocalización activa en su empresa: solo se registra ubicación aproximada al fichar. No hay
-            seguimiento continuo.
-          </p>
+          <p className="mt-3 text-xs text-muted-foreground">{t("employee.legal.geoActive")}</p>
         ) : null}
       </Card>
 
       <Card className="app-shell-card border-0 p-5 shadow-sm">
-        <h2 className="text-lg font-semibold mb-2">Descargar mis registros de jornada</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Exportación orientativa para su consulta. Incluye pausas y horas netas cuando existan registros.
-        </p>
+        <h2 className="text-lg font-semibold mb-2">{t("employee.legal.downloadTitle")}</h2>
+        <p className="text-sm text-muted-foreground mb-4">{t("employee.legal.downloadDescription")}</p>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -126,7 +138,7 @@ export default function EmployeeLegal() {
               void downloadRange(from, to, "pdf");
             }}
           >
-            Mes actual (PDF)
+            {t("employee.legal.currentMonthPdf")}
           </Button>
           <Button
             variant="outline"
@@ -137,13 +149,13 @@ export default function EmployeeLegal() {
               void downloadRange(from, to, "csv");
             }}
           >
-            Mes anterior (CSV)
+            {t("employee.legal.prevMonthCsv")}
           </Button>
         </div>
       </Card>
 
       <Card className="app-shell-card border-0 p-5 shadow-sm">
-        <h2 className="text-lg font-semibold mb-2">Ejercicio de derechos RGPD</h2>
+        <h2 className="text-lg font-semibold mb-2">{t("employee.legal.gdprTitle")}</h2>
         <p className="text-sm text-muted-foreground mb-2">
           {portalQuery.data?.gdprErasureNotice}
         </p>
@@ -153,22 +165,20 @@ export default function EmployeeLegal() {
             value={requestType}
             onChange={(e) => setRequestType(e.target.value as typeof requestType)}
           >
-            <option value="access">Acceso</option>
-            <option value="rectification">Rectificación</option>
-            <option value="erasure">Supresión</option>
-            <option value="restriction">Limitación</option>
-            <option value="objection">Oposición</option>
-            <option value="portability">Portabilidad</option>
-            <option value="other">Otro</option>
+            {(Object.keys(gdprTypeLabels) as Array<keyof typeof gdprTypeLabels>).map((key) => (
+              <option key={key} value={key}>
+                {gdprTypeLabels[key]}
+              </option>
+            ))}
           </select>
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
-            placeholder="Describe tu solicitud..."
+            placeholder={t("employee.legal.gdprMessagePlaceholder")}
           />
           <Button onClick={() => void handleGdprSubmit()} disabled={submitGdpr.isPending}>
-            {submitGdpr.isPending ? "Enviando…" : "Enviar solicitud"}
+            {submitGdpr.isPending ? t("employee.legal.gdprSubmitting") : t("employee.legal.gdprSubmit")}
           </Button>
         </div>
       </Card>

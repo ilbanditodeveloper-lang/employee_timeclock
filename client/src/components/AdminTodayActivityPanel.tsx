@@ -3,25 +3,29 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { adminApiInput } from "@/lib/adminContext";
+import { useLocale } from "@/contexts/LocaleContext";
 
-const ACTION_LABELS: Record<string, string> = {
-  correct: "Corrección de fichaje",
-  void: "Anulación de fichaje",
-  void_bulk: "Anulación masiva",
-  update_schedule: "Cambio de horario",
-};
-
-function formatTime(value: string | Date): string {
+function formatTime(value: string | Date, locale: string): string {
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString(locale === "en" ? "en-US" : "es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function AdminTodayActivityPanel() {
+  const { t, locale } = useLocale();
   const query = trpc.publicApi.getAdminTodayActivity.useQuery(adminApiInput(), {
     refetchInterval: 60_000,
   });
   const items = query.data?.items ?? [];
+
+  const actionLabel = (action: string) => {
+    const key = `admin.todayActivity.actions.${action}` as const;
+    const translated = t(key);
+    return translated === key ? action : translated;
+  };
 
   return (
     <Card className="app-shell-card border-0 p-6 shadow-sm">
@@ -29,10 +33,10 @@ export default function AdminTodayActivityPanel() {
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <ClipboardList className="size-5" />
-            Actividad de hoy
+            {t("admin.todayActivity.title")}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cierres manuales, correcciones y cambios de horario
+            {t("admin.todayActivity.subtitle")}
             {query.data?.date
               ? ` · ${query.data.date.split("-").reverse().join("/")}`
               : ""}
@@ -42,11 +46,9 @@ export default function AdminTodayActivityPanel() {
       </div>
 
       {query.isLoading ? (
-        <p className="text-sm text-muted-foreground">Cargando actividad…</p>
+        <p className="text-sm text-muted-foreground">{t("admin.todayActivity.loading")}</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Hoy no hay correcciones de fichajes ni cambios de horario registrados.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("admin.todayActivity.empty")}</p>
       ) : (
         <ul className="space-y-3">
           {items.map((item) => (
@@ -55,24 +57,27 @@ export default function AdminTodayActivityPanel() {
               className="rounded-lg border border-border/80 bg-muted/20 px-4 py-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground">
-                  {ACTION_LABELS[item.action] ?? item.action}
-                </p>
+                <p className="text-sm font-semibold text-foreground">{actionLabel(item.action)}</p>
                 <span className="text-xs text-muted-foreground">
-                  {formatTime(item.performedAt)}
+                  {formatTime(item.performedAt, locale)}
                 </span>
               </div>
               <p className="mt-1 text-sm text-foreground">
-                {item.affectedEmployeeName ?? "Empleado"}
+                {item.affectedEmployeeName ?? t("admin.todayActivity.employeeFallback")}
                 {item.performedByName ? (
-                  <span className="text-muted-foreground"> · por {item.performedByName}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {t("admin.todayActivity.performedBy", { name: item.performedByName })}
+                  </span>
                 ) : null}
               </p>
               {item.summary ? (
                 <p className="mt-1 text-xs text-muted-foreground">{item.summary}</p>
               ) : null}
               {item.reason ? (
-                <p className="mt-1 text-xs text-muted-foreground">Motivo: {item.reason}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("admin.todayActivity.reason")} {item.reason}
+                </p>
               ) : null}
             </li>
           ))}

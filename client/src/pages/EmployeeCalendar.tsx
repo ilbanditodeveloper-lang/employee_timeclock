@@ -1,23 +1,26 @@
 import { useMemo, useState, type ComponentProps } from "react";
-import { useLocation } from "wouter";
 import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addDays, format } from "date-fns";
+import { enUS, es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext, useRequireEmployeeAuth } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { formatTimeInTimeZone, resolveAppTimeZone, todayYmdInTimeZone } from "@shared/timezone";
 import { cn } from "@/lib/utils";
 
 export default function EmployeeCalendar() {
-  const [, setLocation] = useLocation();
+  const { t, locale } = useLocale();
   const { employeeSession } = useAuthContext();
   const { isAuthLoading, isEmployeeAuthenticated } = useRequireEmployeeAuth();
   const appTimeZone = resolveAppTimeZone(employeeSession?.timezone);
+  const dateFnsLocale = locale === "en" ? enUS : es;
+  const numberLocale = locale === "en" ? "en-US" : "es-ES";
   const [selectionMode, setSelectionMode] = useState<"single" | "range">("single");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
@@ -117,8 +120,8 @@ export default function EmployeeCalendar() {
 
   return (
     <EmployeeShellLayout
-      pageTitle="Calendario"
-      pageSubtitle="Consulta de horas y fichajes"
+      pageTitle={t("employee.calendar.pageTitle")}
+      pageSubtitle={t("employee.calendar.pageSubtitle")}
       contentClassName="container mx-auto max-w-4xl py-8 pb-28 md:pb-8"
     >
         <Card className="app-shell-card mx-auto max-w-3xl border-0 p-6 shadow-sm">
@@ -138,11 +141,11 @@ export default function EmployeeCalendar() {
                 <div className="flex-1 text-center text-sm font-medium text-foreground">
                   {selectionMode === "range"
                     ? selectedRange?.from && selectedRange?.to
-                      ? `${format(selectedRange.from, "d MMM yyyy")} - ${format(selectedRange.to, "d MMM yyyy")}`
-                      : "Selecciona un rango"
+                      ? `${format(selectedRange.from, "d MMM yyyy", { locale: dateFnsLocale })} - ${format(selectedRange.to, "d MMM yyyy", { locale: dateFnsLocale })}`
+                      : t("employee.calendar.selectRange")
                     : selectedDate
-                    ? format(selectedDate, "eeee, d MMMM yyyy")
-                    : "Selecciona un día"}
+                    ? format(selectedDate, "eeee, d MMMM yyyy", { locale: dateFnsLocale })
+                    : t("employee.calendar.selectDay")}
                 </div>
                 <Button
                   type="button"
@@ -165,7 +168,7 @@ export default function EmployeeCalendar() {
                       : "bg-transparent text-foreground hover:bg-muted"
                   }`}
                 >
-                  Un día
+                  {t("employee.calendar.singleDay")}
                 </button>
                 <button
                   type="button"
@@ -176,7 +179,7 @@ export default function EmployeeCalendar() {
                       : "bg-transparent text-foreground hover:bg-muted"
                   }`}
                 >
-                  Rango de días
+                  {t("employee.calendar.dayRange")}
                 </button>
               </div>
               {selectionMode === "range" ? (
@@ -199,39 +202,41 @@ export default function EmployeeCalendar() {
                   className="inline-block size-3 rounded-sm border border-emerald-400 bg-emerald-100 dark:border-emerald-600 dark:bg-emerald-900/45"
                   aria-hidden
                 />
-                Día con fichaje registrado
+                {t("employee.calendar.workedDayLegend")}
               </p>
             </div>
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">
-                {selectionMode === "range" ? "Detalle del rango" : "Detalle del día"}
+                {selectionMode === "range" ? t("employee.calendar.rangeDetail") : t("employee.calendar.dayDetail")}
               </h2>
               <div className="p-4 rounded-lg border border-border bg-muted">
                 <p className="text-sm text-muted-foreground">
                   {selectionMode === "range"
                     ? selectedRange?.from && selectedRange?.to
-                      ? `${selectedRange.from.toLocaleDateString("es-ES", {
+                      ? `${selectedRange.from.toLocaleDateString(numberLocale, {
                           day: "numeric",
                           month: "long",
-                        })} - ${selectedRange.to.toLocaleDateString("es-ES", {
+                        })} - ${selectedRange.to.toLocaleDateString(numberLocale, {
                           day: "numeric",
                           month: "long",
                           year: "numeric",
                         })}`
-                      : "Selecciona un rango para ver el detalle."
+                      : t("employee.calendar.selectRangeHint")
                     : selectedDate
-                    ? selectedDate.toLocaleDateString("es-ES", {
+                    ? selectedDate.toLocaleDateString(numberLocale, {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
                         day: "numeric",
                       })
-                    : "Selecciona un día para ver el detalle."}
+                    : t("employee.calendar.selectDayHint")}
                 </p>
                 <p className="mt-3 text-sm text-foreground">
-                  Horas registradas: {totalHours.toFixed(2)}h
+                  {t("employee.calendar.hoursRegistered", { hours: totalHours.toFixed(2) })}
                 </p>
-                <p className="text-sm text-foreground">Incidencias: 0</p>
+                <p className="text-sm text-foreground">
+                  {t("employee.calendar.incidents", { count: "0" })}
+                </p>
               </div>
               <div className="space-y-2">
                 {filteredTimeclocks.length ? (
@@ -239,36 +244,36 @@ export default function EmployeeCalendar() {
                     <div key={entry.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
                       <div>
                         <p className="text-sm text-foreground">
-                          Entrada:{" "}
+                          {t("employee.calendar.clockIn")}{" "}
                           {entry.entryTime
                             ? formatTimeInTimeZone(new Date(entry.entryTime), appTimeZone)
-                            : "Sin entrada"}
+                            : t("employee.calendar.noEntry")}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Salida:{" "}
+                          {t("employee.calendar.clockOut")}{" "}
                           {entry.exitTime
                             ? formatTimeInTimeZone(new Date(entry.exitTime), appTimeZone)
-                            : "Pendiente"}
+                            : t("employee.calendar.pending")}
                         </p>
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {entry.entryTime
-                          ? new Date(entry.entryTime).toLocaleDateString("es-ES", { timeZone: appTimeZone })
+                          ? new Date(entry.entryTime).toLocaleDateString(numberLocale, { timeZone: appTimeZone })
                           : ""}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No hay fichajes en este rango.</p>
+                  <p className="text-sm text-muted-foreground">{t("employee.calendar.noEntries")}</p>
                 )}
               </div>
               <div className="border border-border rounded-lg p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-foreground">
-                  Calculadora de sueldo
+                  {t("employee.calendar.salaryCalculator")}
                 </h3>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Horas trabajadas
+                    {t("employee.calculator.hoursWorked")}
                   </label>
                   <input
                     type="number"
@@ -277,12 +282,12 @@ export default function EmployeeCalendar() {
                     value={hoursWorked}
                     onChange={(event) => setHoursWorked(event.target.value)}
                     className="input-elegant"
-                    placeholder="Ej. 160"
+                    placeholder={t("employee.calculator.hoursPlaceholder")}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Sueldo por hora
+                    {t("employee.calendar.hourlyWage")}
                   </label>
                   <input
                     type="number"
@@ -291,13 +296,13 @@ export default function EmployeeCalendar() {
                     value={hourlyRate}
                     onChange={(event) => setHourlyRate(event.target.value)}
                     className="input-elegant"
-                    placeholder="Ej. 12.50"
+                    placeholder={t("employee.calculator.ratePlaceholder")}
                   />
                 </div>
                 <div className="p-3 rounded-lg border border-border bg-muted">
-                  <p className="text-sm text-muted-foreground">Total estimado</p>
+                  <p className="text-sm text-muted-foreground">{t("employee.calendar.estimatedTotal")}</p>
                   <p className="text-lg font-semibold text-foreground">
-                    {salaryTotal.toLocaleString("es-ES", {
+                    {salaryTotal.toLocaleString(numberLocale, {
                       style: "currency",
                       currency: "EUR",
                     })}

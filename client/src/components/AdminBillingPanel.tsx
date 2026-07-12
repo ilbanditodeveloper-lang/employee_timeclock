@@ -5,6 +5,7 @@ import { CreditCard, ExternalLink } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useLocale } from "@/contexts/LocaleContext";
 import { adminApiInput } from "@/lib/adminContext";
 import { SUBSCRIPTION_PLAN_LABELS } from "@shared/subscriptionPlans";
 import type { CheckoutPlan } from "@shared/stripeConfig";
@@ -28,6 +29,7 @@ export default function AdminBillingPanel({
   trialDaysRemaining,
   showBillingBanner,
 }: Props) {
+  const { t } = useLocale();
   const [promotionCode, setPromotionCode] = useState("");
   const landingQuery = trpc.publicApi.getLandingPageConfig.useQuery();
   const upgradePlans = useMemo(() => {
@@ -54,7 +56,9 @@ export default function AdminBillingPanel({
       });
       window.location.href = url;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo iniciar el pago");
+      toast.error(
+        error instanceof Error ? error.message : t("admin.billing.toasts.checkoutFailed")
+      );
     }
   };
 
@@ -63,7 +67,9 @@ export default function AdminBillingPanel({
       const { url } = await portal.mutateAsync(adminApiInput());
       window.location.href = url;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo abrir el portal de facturación");
+      toast.error(
+        error instanceof Error ? error.message : t("admin.billing.toasts.portalFailed")
+      );
     }
   };
 
@@ -72,12 +78,17 @@ export default function AdminBillingPanel({
       <Card className="p-6 border-dashed">
         <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
           <CreditCard className="size-4" />
-          Facturación
+          {t("admin.billing.title")}
         </h3>
         <p className="text-sm text-muted-foreground">
-          Stripe no está configurado en el servidor. El superadmin puede gestionar planes manualmente.
-          Plan actual: <strong>{planLabel || SUBSCRIPTION_PLAN_LABELS[plan as keyof typeof SUBSCRIPTION_PLAN_LABELS] || plan}</strong>
-          {trialDaysRemaining != null ? ` · ${trialDaysRemaining} días de prueba restantes` : null}
+          {t("admin.billing.stripeDisabled")}{" "}
+          {t("admin.billing.currentPlan")}{" "}
+          <strong>
+            {planLabel || SUBSCRIPTION_PLAN_LABELS[plan as keyof typeof SUBSCRIPTION_PLAN_LABELS] || plan}
+          </strong>
+          {trialDaysRemaining != null
+            ? ` · ${t("admin.billing.trialDaysRemaining", { days: String(trialDaysRemaining) })}`
+            : null}
         </p>
       </Card>
     );
@@ -88,24 +99,26 @@ export default function AdminBillingPanel({
       <div>
         <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
           <CreditCard className="size-4" />
-          Suscripción y facturación
+          {t("admin.billing.subscriptionTitle")}
         </h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Plan actual: <strong>{planLabel}</strong>
-          {billingStatus ? ` · Estado Stripe: ${billingStatus}` : null}
-          {trialDaysRemaining != null ? ` · Prueba: ${trialDaysRemaining} días` : null}
+          {t("admin.billing.currentPlan")} <strong>{planLabel}</strong>
+          {billingStatus ? ` · ${t("admin.billing.stripeStatus")} ${billingStatus}` : null}
+          {trialDaysRemaining != null
+            ? ` · ${t("admin.billing.trialLabel")} ${t("admin.billing.trialDays", { days: String(trialDaysRemaining) })}`
+            : null}
         </p>
       </div>
 
       {showBillingBanner ? (
         <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">
-          Tu suscripción requiere atención. Actualiza el método de pago para seguir usando TimeClock.
+          {t("admin.billing.attentionBanner")}
         </div>
       ) : null}
 
       <div className="max-w-sm space-y-2">
         <label className="text-sm font-medium text-foreground" htmlFor="billing-promo">
-          Código promocional (opcional)
+          {t("admin.billing.promoCode")}
         </label>
         <Input
           id="billing-promo"
@@ -115,9 +128,7 @@ export default function AdminBillingPanel({
           className="uppercase"
           autoComplete="off"
         />
-        <p className="text-xs text-muted-foreground">
-          Se aplica al contratar un plan. También puedes añadirlo en la pantalla de pago de Stripe.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("admin.billing.promoHint")}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -130,7 +141,10 @@ export default function AdminBillingPanel({
             disabled={checkout.isPending}
             onClick={() => void startCheckout(p.id)}
           >
-            {plan === p.id ? `Plan ${p.label}` : `Contratar ${p.label}`} ({p.price})
+            {plan === p.id
+              ? t("admin.billing.currentPlanButton", { label: p.label })
+              : t("admin.billing.upgradeButton", { label: p.label })}{" "}
+            ({p.price})
           </Button>
         ))}
         <Button
@@ -141,7 +155,7 @@ export default function AdminBillingPanel({
           onClick={() => void openPortal()}
         >
           <ExternalLink className="size-4 mr-1" />
-          Portal de facturación
+          {t("admin.billing.billingPortal")}
         </Button>
       </div>
     </Card>
