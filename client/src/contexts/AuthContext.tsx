@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useIdleSessionTimeout } from "@/hooks/useIdleSessionTimeout";
 
 export type EmployeeScheduleDay = {
   entry1: string;
@@ -142,6 +143,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/** Mounted inside AuthProvider — closes session after 1h without user activity. */
+export function IdleSessionWatcher() {
+  useIdleSessionTimeout();
+  return null;
 }
 
 export function useAuthContext() {

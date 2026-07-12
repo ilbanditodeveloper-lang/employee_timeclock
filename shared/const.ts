@@ -4,6 +4,9 @@ export const COOKIE_NAME = "app_session_id";
 export const SESSION_MAX_AGE_DAYS = 7;
 export const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 
+/** Close session after this period without user activity (admin, employee, superadmin). */
+export const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+
 /** @deprecated Use SESSION_MAX_AGE_MS for session cookies. */
 export const ONE_YEAR_MS = SESSION_MAX_AGE_MS;
 

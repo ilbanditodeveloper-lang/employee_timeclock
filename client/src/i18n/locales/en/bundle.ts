@@ -211,6 +211,9 @@ export const en = {
   },
 
   auth: {
+    session: {
+      idleLogout: "Session closed due to inactivity (1 hour).",
+    },
     home: {
       backToHome: "Back to home",
       title: "TimeClock",

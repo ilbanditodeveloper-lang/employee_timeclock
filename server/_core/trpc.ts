@@ -5,6 +5,14 @@ import type { TrpcContext } from "./context";
 import { demoRequestStorage } from "../demo/mode";
 import { sanitizeErrorMessage } from "./errors";
 import { ENV } from "./env";
+import {
+  clearSessionCookie,
+  isSessionIdleExpired,
+  SESSION_HEARTBEAT_PATHS,
+  setSessionCookie,
+  sessionToJwtPayload,
+  touchSession,
+} from "./session";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -28,13 +36,31 @@ const demoMiddleware = t.middleware(async ({ ctx, next }) => {
   return next({ ctx });
 });
 
+const sessionIdleMiddleware = t.middleware(async ({ ctx, next, path }) => {
+  if (!ctx.session) return next({ ctx });
+
+  const lastActivity = ctx.session.lastActivity ?? Date.now();
+  if (isSessionIdleExpired(lastActivity)) {
+    clearSessionCookie(ctx.res, ctx.req);
+    return next({ ctx: { ...ctx, session: null } });
+  }
+
+  if (!SESSION_HEARTBEAT_PATHS.has(path)) {
+    const touched = touchSession(ctx.session);
+    await setSessionCookie(ctx.res, ctx.req, sessionToJwtPayload(touched));
+    return next({ ctx: { ...ctx, session: touched } });
+  }
+
+  return next({ ctx });
+});
+
 /** Legacy OAuth/Manus routers — blocked in Fase 3 (use publicApi instead). */
 const deprecatedMiddleware = t.middleware(() => {
   throw new TRPCError({ code: "NOT_FOUND", message: "Endpoint no disponible" });
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure.use(demoMiddleware);
+export const publicProcedure = t.procedure.use(demoMiddleware).use(sessionIdleMiddleware);
 export const deprecatedProcedure = publicProcedure.use(deprecatedMiddleware);
 
 const requireUser = t.middleware(async opts => {

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LocaleProvider, useLocale } from "./contexts/LocaleContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, IdleSessionWatcher } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LandingPage from "./pages/LandingPage";
 import Home from "./pages/Home";
@@ -117,6 +117,7 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <LocaleProvider>
           <AuthProvider>
+            <IdleSessionWatcher />
             <TooltipProvider>
               <Toaster />
               <Router />

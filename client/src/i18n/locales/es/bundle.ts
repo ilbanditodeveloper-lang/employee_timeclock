@@ -212,6 +212,9 @@ export const es = {
   },
 
   auth: {
+    session: {
+      idleLogout: "Sesión cerrada por inactividad (1 hora).",
+    },
     home: {
       backToHome: "Volver al inicio",
       title: "TimeClock",
