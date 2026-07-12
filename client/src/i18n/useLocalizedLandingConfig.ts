@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
 import {
-  DEFAULT_LANDING_PAGE_CONFIG,
+  localizeAudienceForEn,
+  localizePricingPacksForEn,
+} from "@/i18n/landingEnOverrides";
+import {
   type LandingFaq,
   type LandingPageConfig,
 } from "@shared/landingConfig";
@@ -58,6 +61,8 @@ export function useLocalizedLandingConfig(apiConfig: LandingPageConfig): Landing
         ],
       },
       faqs: EN_FAQS,
+      pricingPacks: localizePricingPacksForEn(apiConfig.pricingPacks),
+      audienceImages: localizeAudienceForEn(apiConfig.audienceImages),
     };
   }, [apiConfig, locale, t]);
 }

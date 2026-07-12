@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useLocale } from "@/contexts/LocaleContext";
+import { localizePricingPacksForEn } from "@/i18n/landingEnOverrides";
 import { CHECKOUT_PLANS, isCheckoutPlan, type CheckoutPlan } from "@shared/stripeConfig";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,7 @@ type SuccessData = {
 };
 
 export default function RegisterBusiness() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const countryOptions = useMemo(
     () => [{ code: "ES" as const, label: t("access.register.fields.countrySpain") }],
     [t]
@@ -53,7 +54,9 @@ export default function RegisterBusiness() {
   const [selectedPlan, setSelectedPlan] = useState<CheckoutPlan>("pro");
 
   const checkoutPlans = useMemo(() => {
-    const packs = landingQuery.data?.pricingPacks ?? [];
+    const rawPacks = landingQuery.data?.pricingPacks ?? [];
+    const packs =
+      locale === "en" ? localizePricingPacksForEn(rawPacks) : rawPacks;
     return CHECKOUT_PLANS.map((id) => {
       const pack = packs.find((p) => p.id === id);
       return {
@@ -64,7 +67,7 @@ export default function RegisterBusiness() {
         highlighted: pack?.highlighted ?? false,
       };
     });
-  }, [landingQuery.data?.pricingPacks]);
+  }, [landingQuery.data?.pricingPacks, locale]);
 
   const trialDays = landingQuery.data?.trialDays ?? 14;
   const trialHeadline =
