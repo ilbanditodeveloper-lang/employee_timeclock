@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu, X, type LucideIcon } from "lucide-react";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useLocale } from "@/contexts/LocaleContext";
 
 export type AppShellNavItem = {
   id: string;
@@ -38,6 +40,7 @@ export default function AppShellLayout({
   onLogout,
   children,
 }: AppShellLayoutProps) {
+  const { t } = useLocale();
   const [mobileOpen, setMobileOpen] = useState(false);
   const activeItem = navItems.find((item) => item.id === activeNavId);
 
@@ -64,7 +67,7 @@ export default function AppShellLayout({
               {(userName ?? "U").charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{userName ?? "Usuario"}</p>
+              <p className="truncate text-sm font-semibold text-white">{userName ?? t("common.user")}</p>
               {userEmail ? (
                 <p className="truncate text-xs text-slate-400">{userEmail}</p>
               ) : null}
@@ -108,7 +111,7 @@ export default function AppShellLayout({
             className="w-full justify-start gap-2 text-slate-300 hover:bg-white/10 hover:text-white"
           >
             <LogOut className="size-4" />
-            Cerrar sesión
+            {t("common.logout")}
           </Button>
         </div>
       ) : null}
@@ -124,7 +127,7 @@ export default function AppShellLayout({
           <button
             type="button"
             className="absolute inset-0 bg-slate-900/50"
-            aria-label="Cerrar menú"
+            aria-label={t("common.closeMenu")}
             onClick={() => setMobileOpen(false)}
           />
           <aside className="app-shell-sidebar relative z-10 h-full w-72 shadow-2xl">{sidebar}</aside>
@@ -141,7 +144,7 @@ export default function AppShellLayout({
                 size="icon"
                 className="lg:hidden"
                 onClick={() => setMobileOpen((open) => !open)}
-                aria-label="Abrir menú"
+                aria-label={t("common.openMenu")}
               >
                 {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
               </Button>
@@ -156,9 +159,10 @@ export default function AppShellLayout({
                 ) : null}
               </div>
             </div>
-            {headerActions ? (
-              <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              <LanguageSwitcher compact />
+              {headerActions}
+            </div>
           </div>
         </header>
 

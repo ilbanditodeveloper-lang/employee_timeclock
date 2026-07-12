@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { LocaleProvider, useLocale } from "./contexts/LocaleContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LandingPage from "./pages/LandingPage";
@@ -59,6 +60,7 @@ function Router() {
 }
 
 function UpdateAppButton() {
+  const { t } = useLocale();
   const [showUpdateButton, setShowUpdateButton] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -103,7 +105,7 @@ function UpdateAppButton() {
     <div className="fixed bottom-4 right-4 z-50">
       <Button onClick={handleRefreshApp} className="shadow-lg" disabled={isRefreshing}>
         <RefreshCw className="w-4 h-4 mr-2" />
-        {isRefreshing ? "Actualizando..." : "Actualizar app"}
+        {isRefreshing ? t("common.updating") : t("common.updateApp")}
       </Button>
     </div>
   );
@@ -113,14 +115,16 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-            <UpdateAppButton />
-            <PwaInstallPrompt />
-          </TooltipProvider>
-        </AuthProvider>
+        <LocaleProvider>
+          <AuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+              <UpdateAppButton />
+              <PwaInstallPrompt />
+            </TooltipProvider>
+          </AuthProvider>
+        </LocaleProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

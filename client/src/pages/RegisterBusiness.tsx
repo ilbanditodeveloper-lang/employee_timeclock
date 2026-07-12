@@ -8,6 +8,7 @@ import AccessPageShell from "@/components/AccessPageShell";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { CHECKOUT_PLANS, isCheckoutPlan, type CheckoutPlan } from "@shared/stripeConfig";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ const TIMEZONE_OPTIONS = [
 ];
 
 export default function RegisterBusiness() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const { setAdminSession, setEmployeeSession } = useAuthContext();
   const configQuery = trpc.publicApi.getAppConfig.useQuery();
@@ -62,7 +64,8 @@ export default function RegisterBusiness() {
 
   const trialDays = landingQuery.data?.trialDays ?? 14;
   const trialHeadline =
-    landingQuery.data?.trialHeadline ?? `${trialDays} días de prueba gratis`;
+    landingQuery.data?.trialHeadline ??
+    t("auth.register.trialHeadlineFallback", { days: String(trialDays) });
 
   useEffect(() => {
     if (planFromUrl) {
@@ -91,9 +94,9 @@ export default function RegisterBusiness() {
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} copiado`);
+      toast.success(`${label} ${t("common.copied")}`);
     } catch {
-      toast.error("No se pudo copiar");
+      toast.error(t("common.copyFailed"));
     }
   };
 
@@ -102,7 +105,7 @@ export default function RegisterBusiness() {
     setFieldError(null);
 
     if (!acceptedTerms) {
-      setFieldError("Debes aceptar los Términos de uso y la Política de privacidad");
+      setFieldError(t("auth.register.termsRequired"));
       return;
     }
 
@@ -124,9 +127,7 @@ export default function RegisterBusiness() {
       await trpcUtils.publicApi.getSession.invalidate();
       const sessionResult = await trpcUtils.publicApi.getSession.fetch();
       if (sessionResult.session?.type !== "admin") {
-        throw new Error(
-          "Cuenta creada, pero no se pudo iniciar sesión automáticamente. Entra con tu email y contraseña."
-        );
+        throw new Error(t("auth.register.autoLoginFailed"));
       }
       setAdminSession({
         companySlug: result.companySlug,
@@ -144,9 +145,9 @@ export default function RegisterBusiness() {
           return;
         } catch (error) {
           const message =
-            error instanceof Error ? error.message : "No se pudo iniciar el pago";
+            error instanceof Error ? error.message : t("auth.register.checkoutFailed");
           toast.error(message);
-          toast.message("Cuenta creada. Puedes contratar el plan desde Ajustes → Facturación.");
+          toast.message(t("auth.register.checkoutFallback"));
         }
       }
 
@@ -158,7 +159,7 @@ export default function RegisterBusiness() {
         scopedLogin: result.scopedLogin,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo registrar el negocio";
+      const message = error instanceof Error ? error.message : t("auth.register.registerFailed");
       setFieldError(message);
       toast.error(message);
     }
@@ -169,17 +170,15 @@ export default function RegisterBusiness() {
       <AccessPageShell
         backHref="/acceso"
         icon={CheckCircle2}
-        title="¡Negocio creado!"
-        subtitle={`${success.companyName} ya está listo`}
-        badge="Guarda tus datos"
+        title={t("auth.register.successTitle")}
+        subtitle={t("auth.register.successSubtitle", { companyName: success.companyName })}
+        badge={t("auth.register.successBadge")}
       >
-        <p className="text-center text-sm text-slate-600">
-          Guarda estos datos de acceso para entrar al panel.
-        </p>
+        <p className="text-center text-sm text-slate-600">{t("auth.register.successIntro")}</p>
 
         <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm">
               <div>
-                <p className="text-muted-foreground mb-1">Email de acceso (recomendado)</p>
+                <p className="text-muted-foreground mb-1">{t("auth.register.recommendedEmail")}</p>
                 <div className="flex items-center justify-between gap-2">
                   <code className="font-mono text-foreground break-all">{success.adminEmail}</code>
                   <Button
@@ -193,7 +192,7 @@ export default function RegisterBusiness() {
                 </div>
               </div>
               <div>
-                <p className="text-muted-foreground mb-1">Usuario alternativo</p>
+                <p className="text-muted-foreground mb-1">{t("auth.register.alternateUsername")}</p>
                 <div className="flex items-center justify-between gap-2">
                   <code className="font-mono text-foreground break-all">{success.adminUsername}</code>
                   <Button
@@ -209,10 +208,7 @@ export default function RegisterBusiness() {
             </div>
 
             <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-900 dark:text-amber-200">
-                <strong>Importante:</strong> para entrar usa tu <strong>email</strong> y la contraseña que
-                elegiste. No necesitas recordar el slug de la empresa.
-              </p>
+              <p className="text-sm text-amber-900 dark:text-amber-200">{t("auth.register.importantNote")}</p>
             </div>
 
         <div className="flex flex-col gap-3">
@@ -223,14 +219,14 @@ export default function RegisterBusiness() {
               await trpcUtils.publicApi.getSession.invalidate();
               const sessionResult = await trpcUtils.publicApi.getSession.fetch();
               if (sessionResult.session?.type !== "admin") {
-                toast.error("Inicia sesión con tu email y contraseña para continuar.");
+                toast.error(t("auth.register.sessionRequired"));
                 setLocation("/admin-login");
                 return;
               }
               setLocation("/admin/onboarding");
             }}
           >
-            Configurar mi negocio
+            {t("auth.register.configureBusiness")}
           </Button>
           <Button
             type="button"
@@ -240,14 +236,14 @@ export default function RegisterBusiness() {
               await trpcUtils.publicApi.getSession.invalidate();
               const sessionResult = await trpcUtils.publicApi.getSession.fetch();
               if (sessionResult.session?.type !== "admin") {
-                toast.error("Inicia sesión con tu email y contraseña para continuar.");
+                toast.error(t("auth.register.sessionRequired"));
                 setLocation("/admin-login");
                 return;
               }
               setLocation("/admin");
             }}
           >
-            Ir al panel
+            {t("auth.register.goToPanel")}
           </Button>
         </div>
       </AccessPageShell>
@@ -258,27 +254,26 @@ export default function RegisterBusiness() {
     <AccessPageShell
       backHref="/acceso"
       icon={Building2}
-      title="Registrar mi negocio"
-      subtitle="Crea tu empresa y accede al panel de administración"
-      badge="Registro"
+      title={t("auth.register.title")}
+      subtitle={t("auth.register.subtitle")}
+      badge={t("auth.register.badge")}
       maxWidthClass="max-w-lg"
     >
       {!registrationAvailable ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm text-amber-950">
-            El registro requiere base de datos configurada (<code>DATABASE_URL</code>). El modo demo no
-            permite crear negocios reales.
+            {t("auth.register.unavailable")}
           </p>
         </div>
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Nombre del negocio *</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.businessName")}</label>
           <Input
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
-            placeholder="Mi Cafetería"
+            placeholder={t("auth.register.fields.businessNamePlaceholder")}
             required
             minLength={2}
             className="border-blue-100 bg-blue-50/40"
@@ -286,11 +281,11 @@ export default function RegisterBusiness() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Nombre del responsable *</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.adminName")}</label>
           <Input
             value={adminName}
             onChange={(e) => setAdminName(e.target.value)}
-            placeholder="Juan Pérez"
+            placeholder={t("auth.register.fields.adminNamePlaceholder")}
             required
             minLength={2}
             className="border-blue-100 bg-blue-50/40"
@@ -298,24 +293,24 @@ export default function RegisterBusiness() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Email del admin *</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.adminEmail")}</label>
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="juan@empresa.com"
+            placeholder={t("auth.register.fields.adminEmailPlaceholder")}
             required
             className="border-blue-100 bg-blue-50/40"
           />
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Contraseña *</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.password")}</label>
           <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mínimo 8 caracteres"
+            placeholder={t("auth.register.fields.passwordPlaceholder")}
             required
             minLength={8}
             className="border-blue-100 bg-blue-50/40"
@@ -323,12 +318,12 @@ export default function RegisterBusiness() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Confirmar contraseña *</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.confirmPassword")}</label>
           <Input
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repite la contraseña"
+            placeholder={t("auth.register.fields.confirmPasswordPlaceholder")}
             required
             minLength={8}
             className="border-blue-100 bg-blue-50/40"
@@ -337,7 +332,7 @@ export default function RegisterBusiness() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-900">País *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.country")}</label>
             <select
               value={country}
               onChange={(e) => setCountry(e.target.value)}
@@ -351,7 +346,7 @@ export default function RegisterBusiness() {
             </select>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-900">Zona horaria *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.timezone")}</label>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
@@ -367,28 +362,28 @@ export default function RegisterBusiness() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Teléfono (opcional)</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.phone")}</label>
           <Input
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="+34 600 000 000"
+            placeholder={t("auth.register.fields.phonePlaceholder")}
             className="border-blue-100 bg-blue-50/40"
           />
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Dirección del negocio (opcional)</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.address")}</label>
           <Input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="Calle Mayor 1, Madrid"
+            placeholder={t("auth.register.fields.addressPlaceholder")}
             className="border-blue-100 bg-blue-50/40"
           />
         </div>
 
         <div>
-          <p className="mb-2 block text-sm font-medium text-slate-900">Plan de suscripción *</p>
+          <p className="mb-2 block text-sm font-medium text-slate-900">{t("auth.register.fields.plan")} *</p>
           <p className="mb-3 text-xs text-slate-600">
             {trialHeadline}. Elige el plan que quieres contratar después de la prueba.
           </p>
@@ -441,13 +436,13 @@ export default function RegisterBusiness() {
             onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
           />
           <label htmlFor="terms" className="text-sm leading-relaxed text-slate-600">
-            He leído y acepto los{" "}
+            {t("auth.register.fields.termsPrefix")}{" "}
             <Link href="/legal/terms" className="underline hover:text-blue-800">
-              Términos de uso
+              {t("auth.register.fields.termsLink")}
             </Link>{" "}
-            y la{" "}
+            {t("auth.register.fields.and")}{" "}
             <Link href="/legal/privacy" className="underline hover:text-blue-800">
-              Política de privacidad
+              {t("auth.register.fields.privacyLink")}
             </Link>
             .
           </label>
@@ -462,7 +457,7 @@ export default function RegisterBusiness() {
         {planFromUrl && configQuery.data?.stripe?.enabled ? (
           <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-2">
             <label className="block text-sm font-medium text-slate-900" htmlFor="promo-code">
-              Código promocional (opcional)
+              {t("auth.register.fields.promotionCode")}
             </label>
             <Input
               id="promo-code"
@@ -483,7 +478,7 @@ export default function RegisterBusiness() {
           disabled={registerBusiness.isPending || !registrationAvailable}
           className="h-11 w-full bg-blue-700 hover:bg-blue-800"
         >
-          {registerBusiness.isPending ? "Creando negocio..." : "Registrar negocio"}
+          {registerBusiness.isPending ? t("auth.register.submitting") : t("auth.register.submit")}
         </Button>
       </form>
     </AccessPageShell>

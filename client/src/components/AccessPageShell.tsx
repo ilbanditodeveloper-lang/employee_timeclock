@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useLocale } from "@/contexts/LocaleContext";
 
 type AccessPageShellProps = {
   backHref?: string;
@@ -25,6 +27,9 @@ export default function AccessPageShell({
   footer,
   maxWidthClass = "max-w-md",
 }: AccessPageShellProps) {
+  const { t } = useLocale();
+  const resolvedBackLabel = backLabel ?? t("common.back");
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50/60 to-blue-100/50 px-4 py-8 sm:py-12">
       <div
@@ -33,13 +38,16 @@ export default function AccessPageShell({
       />
 
       <div className={`relative mx-auto w-full ${maxWidthClass}`}>
-        <Link
-          href={backHref}
-          className="mb-6 inline-flex items-center gap-2 text-sm text-slate-600 transition-colors hover:text-blue-800"
-        >
-          <ArrowLeft className="size-4" />
-          {backLabel}
-        </Link>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-2 text-sm text-slate-600 transition-colors hover:text-blue-800"
+          >
+            <ArrowLeft className="size-4" />
+            {resolvedBackLabel}
+          </Link>
+          <LanguageSwitcher compact />
+        </div>
 
         <div className="relative">
           <div

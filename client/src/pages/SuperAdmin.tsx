@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,27 +30,6 @@ import SuperAdminCompaniesPanel from "@/components/SuperAdminCompaniesPanel";
 
 type SuperAdminTab = "dashboard" | "companies" | "landing";
 
-const SUPERADMIN_NAV: AppShellNavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "companies", label: "Empresas", icon: Building2 },
-  { id: "landing", label: "Web / Landing", icon: Globe },
-];
-
-const SUPERADMIN_PAGE_TITLES: Record<SuperAdminTab, { title: string; subtitle: string }> = {
-  dashboard: {
-    title: "Dashboard",
-    subtitle: "Resumen de la plataforma TimeClock",
-  },
-  companies: {
-    title: "Empresas",
-    subtitle: "CRM de clientes, contacto y suscripciones",
-  },
-  landing: {
-    title: "Web / Landing",
-    subtitle: "Contenido público de la página principal",
-  },
-};
-
 function packFeaturesToText(features: string[]) {
   return features.join("\n");
 }
@@ -62,6 +42,7 @@ function textToFeatures(text: string) {
 }
 
 export default function SuperAdmin() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const { isAuthLoading, isSuperAdminAuthenticated } = useAuthContext();
   const [username, setUsername] = useState("");
@@ -80,6 +61,34 @@ export default function SuperAdmin() {
   });
   const saveLanding = trpc.publicApi.superAdminUpdateLandingSettings.useMutation();
   const logoutMutation = trpc.publicApi.logoutSession.useMutation();
+
+  const superAdminNav = useMemo<AppShellNavItem[]>(
+    () => [
+      { id: "dashboard", label: t("nav.superadmin.dashboard"), icon: LayoutDashboard },
+      { id: "companies", label: t("nav.superadmin.companies"), icon: Building2 },
+      { id: "landing", label: t("nav.superadmin.landing"), icon: Globe },
+    ],
+    [t]
+  );
+
+  const pageTitles = useMemo(
+    () => ({
+      dashboard: {
+        title: t("superadmin.pages.dashboard.title"),
+        subtitle: t("superadmin.pages.dashboard.subtitle"),
+      },
+      companies: {
+        title: t("superadmin.pages.companies.title"),
+        subtitle: t("superadmin.pages.companies.subtitle"),
+      },
+      landing: {
+        title: t("superadmin.pages.landing.title"),
+        subtitle: t("superadmin.pages.landing.subtitle"),
+      },
+    }),
+    [t]
+  );
+  const pageMeta = pageTitles[activeTab];
 
   const companies = listCompanies.data ?? [];
   const stats = useMemo(() => {
@@ -116,14 +125,14 @@ export default function SuperAdmin() {
       await trpcUtils.publicApi.getSession.invalidate();
       const sessionResult = await trpcUtils.publicApi.getSession.fetch();
       if (sessionResult.session?.type !== "superadmin") {
-        throw new Error("No se pudo establecer la sesión");
+        throw new Error(t("superadmin.login.sessionError"));
       }
       setIsAuthed(true);
-      toast.success("Acceso superadmin correcto");
+      toast.success(t("superadmin.login.success"));
       void listCompanies.refetch();
       void landingQuery.refetch();
     } catch {
-      toast.error("Credenciales de superadmin inválidas");
+      toast.error(t("superadmin.login.invalidCredentials"));
     }
   };
 
@@ -230,12 +239,10 @@ export default function SuperAdmin() {
     setLocation("/acceso");
   };
 
-  const pageMeta = SUPERADMIN_PAGE_TITLES[activeTab];
-
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f4f7f6]">
-        <p className="text-muted-foreground">Cargando…</p>
+        <p className="text-muted-foreground">{t("common.loading")}</p>
       </div>
     );
   }
@@ -245,16 +252,16 @@ export default function SuperAdmin() {
       {!isAuthed ? (
         <AccessPageShell
           backHref="/acceso"
-          backLabel="Volver al acceso"
+          backLabel={t("superadmin.login.backLabel")}
           icon={Shield}
-          title="Superadmin"
-          subtitle="Control comercial multiempresa"
-          badge="Plataforma"
+          title={t("superadmin.login.title")}
+          subtitle={t("superadmin.login.subtitle")}
+          badge={t("superadmin.login.badge")}
         >
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <Label htmlFor="sa-user" className="mb-2 block text-sm font-medium text-slate-900">
-                Usuario
+                {t("superadmin.login.username")}
               </Label>
               <Input
                 id="sa-user"
@@ -267,7 +274,7 @@ export default function SuperAdmin() {
             </div>
             <div>
               <Label htmlFor="sa-pass" className="mb-2 block text-sm font-medium text-slate-900">
-                Contraseña
+                {t("superadmin.login.password")}
               </Label>
               <Input
                 id="sa-pass"
@@ -283,32 +290,32 @@ export default function SuperAdmin() {
               className="h-11 w-full bg-blue-700 text-base hover:bg-blue-800"
               disabled={loginMutation.isPending}
             >
-              {loginMutation.isPending ? "Validando..." : "Entrar"}
+              {loginMutation.isPending ? t("superadmin.login.submitting") : t("superadmin.login.submit")}
             </Button>
           </form>
 
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm text-amber-950">
-              <strong>Acceso restringido:</strong> solo personal autorizado de la plataforma TimeClock.
+              <strong>{t("superadmin.login.restrictedTitle")}</strong> {t("superadmin.login.restrictedBody")}
             </p>
           </div>
         </AccessPageShell>
       ) : (
         <AppShellLayout
-          brandLabel="Superadmin"
+          brandLabel={t("superadmin.shell.brandLabel")}
           brandIcon={<Shield className="size-5" />}
           pageTitle={pageMeta.title}
           pageSubtitle={pageMeta.subtitle}
-          userName="Superadmin"
-          userEmail="Control de plataforma"
-          navItems={SUPERADMIN_NAV}
+          userName={t("superadmin.shell.brandLabel")}
+          userEmail={t("superadmin.shell.userEmail")}
+          navItems={superAdminNav}
           activeNavId={activeTab}
           onNavChange={(id) => setActiveTab(id as SuperAdminTab)}
           onLogout={() => void handleLogout()}
           headerActions={
             <Button type="button" variant="outline" size="sm" onClick={() => setLocation("/")}>
               <ExternalLink className="mr-2 size-4" />
-              Ver web
+              {t("superadmin.shell.viewWeb")}
             </Button>
           }
         >
@@ -316,25 +323,25 @@ export default function SuperAdmin() {
             <div className="w-full space-y-6">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <AppShellKpiCard
-                  label="Empresas totales"
+                  label={t("superadmin.dashboard.totalCompanies")}
                   value={stats.total}
                   icon={<Building2 className="size-5" />}
                   accent="blue"
                 />
                 <AppShellKpiCard
-                  label="Empresas activas"
+                  label={t("superadmin.dashboard.activeCompanies")}
                   value={stats.active}
                   icon={<UserCheck className="size-5" />}
                   accent="emerald"
                 />
                 <AppShellKpiCard
-                  label="Empleados en plataforma"
+                  label={t("superadmin.dashboard.platformEmployees")}
                   value={stats.employees}
                   icon={<Users className="size-5" />}
                   accent="amber"
                 />
                 <AppShellKpiCard
-                  label="En periodo de prueba"
+                  label={t("superadmin.dashboard.onTrial")}
                   value={stats.onTrial}
                   icon={<Clock className="size-5" />}
                   accent="rose"

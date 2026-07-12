@@ -1,4 +1,7 @@
+import { useMemo } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { Clock, Users, AlertCircle, Sparkles, ArrowLeft } from "lucide-react";
@@ -7,30 +10,34 @@ import { toast } from "sonner";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 
-const featureItems = [
-  {
-    icon: Clock,
-    title: "Fichaje inteligente",
-    text: "Validación por ubicación (opcional por empresa)",
-  },
-  {
-    icon: Users,
-    title: "Gestión completa",
-    text: "Panel de administrador avanzado",
-  },
-  {
-    icon: AlertCircle,
-    title: "Incidencias",
-    text: "Registro de retrasos y eventos",
-  },
-];
-
 export default function Home() {
+  const { t } = useLocale();
   const { adminSession, employeeSession, isAuthLoading, setAdminSession, setEmployeeSession } =
     useAuthContext();
   const [, setLocation] = useLocation();
   const configQuery = trpc.publicApi.getAppConfig.useQuery();
   const enterDemo = trpc.publicApi.enterDemo.useMutation();
+
+  const featureItems = useMemo(
+    () => [
+      {
+        icon: Clock,
+        title: t("auth.home.features.smartClock.title"),
+        text: t("auth.home.features.smartClock.text"),
+      },
+      {
+        icon: Users,
+        title: t("auth.home.features.fullManagement.title"),
+        text: t("auth.home.features.fullManagement.text"),
+      },
+      {
+        icon: AlertCircle,
+        title: t("auth.home.features.incidents.title"),
+        text: t("auth.home.features.incidents.text"),
+      },
+    ],
+    [t]
+  );
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -60,9 +67,9 @@ export default function Home() {
         setAdminSession(null);
         setLocation("/employee");
       }
-      toast.success("Modo demo activado");
+      toast.success(t("auth.home.demo.activated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo entrar en demo");
+      toast.error(e instanceof Error ? e.message : t("auth.home.demo.failed"));
     }
   };
 
@@ -71,7 +78,7 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50/50 to-blue-100/40">
         <div className="text-center">
           <div className="mx-auto mb-4 size-12 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700" />
-          <p className="text-slate-600">Cargando...</p>
+          <p className="text-slate-600">{t("common.loading")}</p>
         </div>
       </div>
     );
@@ -80,7 +87,7 @@ export default function Home() {
   if (adminSession || employeeSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50/50 to-blue-100/40">
-        <p className="text-slate-500">Redirigiendo...</p>
+        <p className="text-slate-500">{t("common.redirecting")}</p>
       </div>
     );
   }
@@ -95,13 +102,16 @@ export default function Home() {
       />
 
       <div className="relative mx-auto w-full max-w-md">
-        <Link
-          href="/"
-          className="mb-6 inline-flex items-center gap-2 text-sm text-slate-600 transition-colors hover:text-blue-800"
-        >
-          <ArrowLeft className="size-4" />
-          Volver al inicio
-        </Link>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm text-slate-600 transition-colors hover:text-blue-800"
+          >
+            <ArrowLeft className="size-4" />
+            {t("auth.home.backToHome")}
+          </Link>
+          <LanguageSwitcher compact />
+        </div>
 
         <div className="relative">
           <div
@@ -115,9 +125,9 @@ export default function Home() {
                 <Clock className="size-8 text-white" />
               </div>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">TimeClock</h1>
-              <p className="mt-2 text-blue-100/90">Sistema de fichaje de empleados</p>
+              <p className="mt-2 text-blue-100/90">{t("auth.home.subtitle")}</p>
               <p className="mt-4 inline-block rounded-full bg-blue-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100">
-                Acceso seguro
+                {t("auth.home.secureAccess")}
               </p>
             </div>
 
@@ -146,11 +156,9 @@ export default function Home() {
               <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
                 <div className="flex items-center gap-2 font-semibold text-violet-900">
                   <Sparkles className="size-4" />
-                  Modo demo (sin Supabase)
+                  {t("auth.home.demo.title")}
                 </div>
-                <p className="text-sm text-violet-800">
-                  Prueba la app con datos de ejemplo. Los cambios no se guardan en base de datos.
-                </p>
+                <p className="text-sm text-violet-800">{t("auth.home.demo.description")}</p>
                 <div className="grid gap-2">
                   <Button
                     type="button"
@@ -158,7 +166,7 @@ export default function Home() {
                     disabled={enterDemo.isPending}
                     onClick={() => handleDemo("employee")}
                   >
-                    Demo empleado (Ana García)
+                    {t("auth.home.demo.employeeButton")}
                   </Button>
                   <Button
                     type="button"
@@ -167,7 +175,7 @@ export default function Home() {
                     disabled={enterDemo.isPending}
                     onClick={() => handleDemo("admin")}
                   >
-                    Demo administrador
+                    {t("auth.home.demo.adminButton")}
                   </Button>
                 </div>
               </div>
@@ -178,7 +186,7 @@ export default function Home() {
                 onClick={() => setLocation("/employee-login")}
                 className="h-11 w-full bg-blue-700 text-base hover:bg-blue-800"
               >
-                Acceso empleado
+                {t("auth.home.employeeAccess")}
               </Button>
               <Button
                 onClick={() => setLocation("/admin-login")}
@@ -188,32 +196,32 @@ export default function Home() {
                   "hover:bg-blue-50"
                 )}
               >
-                Acceso administrador
+                {t("auth.home.adminAccess")}
               </Button>
             </div>
 
             <div className="border-t border-blue-100 pt-5 text-center">
-              <p className="text-sm text-slate-600">¿Tienes un negocio?</p>
+              <p className="text-sm text-slate-600">{t("auth.home.hasBusiness")}</p>
               <Button
                 onClick={() => setLocation("/register-business")}
                 variant="ghost"
                 className="mt-2 w-full text-base text-blue-800 hover:bg-blue-50 hover:text-blue-900"
               >
-                Registrar mi negocio
+                {t("auth.home.registerBusiness")}
               </Button>
             </div>
 
             <div className="space-y-2 border-t border-blue-100 pt-5 text-center text-xs text-slate-500">
-              <p>© {new Date().getFullYear()} TimeClock. Todos los derechos reservados.</p>
+              <p>{t("auth.home.copyright", { year: String(new Date().getFullYear()) })}</p>
               <p className="flex justify-center gap-3">
                 <Link href="/legal/privacy" className="hover:text-blue-800 hover:underline">
-                  Privacidad
+                  {t("auth.home.privacy")}
                 </Link>
                 <Link href="/legal/terms" className="hover:text-blue-800 hover:underline">
-                  Términos
+                  {t("auth.home.terms")}
                 </Link>
                 <Link href="/legal/dpa" className="hover:text-blue-800 hover:underline">
-                  DPA
+                  {t("auth.home.dpa")}
                 </Link>
               </p>
             </div>

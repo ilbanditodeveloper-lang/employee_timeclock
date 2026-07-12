@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
 import { AppShellKpiCard, AppShellPanel } from "@/components/AppShellLayout";
+import { useLocale } from "@/contexts/LocaleContext";
 import { cn } from "@/lib/utils";
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_PLAN_LABELS } from "@shared/subscriptionPlans";
 import type { SubscriptionPlan } from "@shared/subscriptionPlans";
@@ -95,6 +96,7 @@ export default function SuperAdminCompaniesPanel({
 }: {
   planLabels?: Record<SubscriptionPlan, string>;
 } = {}) {
+  const { t } = useLocale();
   const planLabels = planLabelsProp ?? SUBSCRIPTION_PLAN_LABELS;
   const listCompanies = trpc.publicApi.superAdminListCompanies.useQuery(emptyCreds);
   const setStatus = trpc.publicApi.superAdminSetCompanyStatus.useMutation();
@@ -418,7 +420,7 @@ export default function SuperAdminCompaniesPanel({
         ) : (
           <Button type="button" onClick={() => setShowCreateCompany(true)}>
             <Plus className="mr-2 size-4" />
-            Crear empresa
+            {t("superadmin.companies.addCompany")}
           </Button>
         )}
       </AppShellPanel>
@@ -431,7 +433,7 @@ export default function SuperAdminCompaniesPanel({
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar nombre, email, teléfono, slug..."
+              placeholder={t("superadmin.companies.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"

@@ -6,9 +6,11 @@ import { Lock } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import AccessPageShell from "@/components/AccessPageShell";
 
 export default function AdminLogin() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +38,7 @@ export default function AdminLogin() {
       await trpcUtils.publicApi.getSession.invalidate();
       const sessionResult = await trpcUtils.publicApi.getSession.fetch();
       if (sessionResult.session?.type !== "admin") {
-        throw new Error("No se pudo establecer la sesión. Prueba de nuevo.");
+        throw new Error(t("auth.adminLogin.sessionError"));
       }
       setAdminSession({
         companySlug: result.companySlug,
@@ -44,10 +46,10 @@ export default function AdminLogin() {
       });
       setEmployeeSession(null);
 
-      toast.success('¡Bienvenido Administrador!');
+      toast.success(t("auth.adminLogin.welcome"));
       setLocation('/admin');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al iniciar sesión');
+      toast.error(error instanceof Error ? error.message : t("auth.adminLogin.loginError"));
     } finally {
       setLoading(false);
     }
@@ -61,16 +63,18 @@ export default function AdminLogin() {
     <AccessPageShell
       backHref="/acceso"
       icon={Lock}
-      title="Acceso administrador"
-      subtitle="Panel de gestión"
-      badge="Admin"
+      title={t("auth.adminLogin.title")}
+      subtitle={t("auth.adminLogin.subtitle")}
+      badge={t("auth.adminLogin.badge")}
     >
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Email o usuario</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">
+            {t("auth.adminLogin.emailOrUsername")}
+          </label>
           <Input
             type="text"
-            placeholder="email@empresa.com o tu.usuario"
+            placeholder={t("auth.adminLogin.emailPlaceholder")}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -79,10 +83,12 @@ export default function AdminLogin() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Contraseña</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">
+            {t("auth.adminLogin.password")}
+          </label>
           <Input
             type="password"
-            placeholder="••••••••"
+            placeholder={t("auth.adminLogin.passwordPlaceholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -95,18 +101,15 @@ export default function AdminLogin() {
           disabled={loading}
           className="h-11 w-full bg-blue-700 text-base hover:bg-blue-800"
         >
-          {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          {loading ? t("auth.adminLogin.submitting") : t("auth.adminLogin.submit")}
         </Button>
       </form>
 
       <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
         <p className="text-sm text-amber-950">
-          <strong>Acceso restringido:</strong> Solo administradores autorizados.
+          <strong>{t("auth.adminLogin.restrictedTitle")}</strong> {t("auth.adminLogin.restrictedBody")}
         </p>
-        <p className="text-xs text-amber-900">
-          Entra con tu <strong>email</strong> y contraseña (recomendado). También puedes usar tu nombre de
-          usuario.
-        </p>
+        <p className="text-xs text-amber-900">{t("auth.adminLogin.hint")}</p>
       </div>
     </AccessPageShell>
   );

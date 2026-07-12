@@ -6,6 +6,7 @@ import { Clock, Calendar, AlertCircle, CalendarDays, Palmtree, Pause, Play } fro
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext, useRequireEmployeeAuth } from '@/contexts/AuthContext';
+import { useLocale } from '@/contexts/LocaleContext';
 import { employeeQueryInput } from '@/lib/authApi';
 import EmployeePrivacyNotice from '@/pages/EmployeePrivacyNotice';
 import {
@@ -127,6 +128,7 @@ function wait(ms: number) {
 }
 
 export default function EmployeeDashboard() {
+  const { t } = useLocale();
   const clockInMutation = trpc.publicApi.clockIn.useMutation();
   const clockOutMutation = trpc.publicApi.clockOut.useMutation();
   const pauseClockMutation = trpc.publicApi.pauseClock.useMutation();
@@ -521,7 +523,10 @@ export default function EmployeeDashboard() {
   const canClockOut = isClockedIn && !loading;
 
   return (
-    <EmployeeShellLayout pageTitle="Fichaje" pageSubtitle="Entrada, salida y pausas">
+    <EmployeeShellLayout
+      pageTitle={t('employee.clock.pageTitle')}
+      pageSubtitle={t('employee.clock.pageSubtitle')}
+    >
         {/* Time Display */}
         <div className="mb-8 text-center">
           <div className="text-5xl font-bold text-foreground mb-2">
@@ -530,37 +535,44 @@ export default function EmployeeDashboard() {
           <div className="text-lg text-muted-foreground">
             {formatDateInTimeZone(currentTime, appTimeZone)}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Horario de Madrid ({APP_TIMEZONE})</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t('employee.clock.timezoneLabel', { timezone: APP_TIMEZONE })}
+          </p>
         </div>
 
         {/* Location Status */}
         <Card className="app-shell-card mb-8 border border-blue-100 p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-foreground mb-2">Estado de Ubicación</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-2">{t('employee.clock.location.title')}</h2>
               <p className={`text-sm ${locationEnabled ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
                 {locationEnabled
-                  ? 'Se validará tu ubicación al pulsar Entrada o Salida'
-                  : 'Fichaje sin geolocalización (configuración de tu empresa)'}
+                  ? t('employee.clock.location.willValidate')
+                  : t('employee.clock.location.disabled')}
               </p>
               {flexibleClockIn && !isClockedIn && (
                 <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-2">
-                  Fichaje libre: no tienes horario asignado para hoy
+                  {t('employee.clock.location.flexible')}
                 </p>
               )}
               {isTooEarly && clockWindowEnforced && scheduledEntryLabel && !isClockedIn && (
                 <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
-                  Fichaje disponible desde {EARLY_CLOCK_MINUTES} min antes de las {scheduledEntryLabel}
+                  {t('employee.clock.location.tooEarly', {
+                    minutes: String(EARLY_CLOCK_MINUTES),
+                    time: scheduledEntryLabel,
+                  })}
                 </p>
               )}
               {isLate && clockWindowEnforced && !isClockedIn && (
                 <p className="text-sm text-red-600 dark:text-red-400 mt-2">
-                  Fichaje bloqueado: superaste los {employeeSession?.lateGraceMinutes ?? 5} min de gracia
+                  {t('employee.clock.location.lateBlocked', {
+                    grace: String(employeeSession?.lateGraceMinutes ?? 5),
+                  })}
                 </p>
               )}
               {isClockedIn && isPaused && (
                 <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
-                  En pausa — pulsa Reanudar para seguir fichando
+                  {t('employee.clock.location.onPause')}
                 </p>
               )}
             </div>
@@ -580,12 +592,21 @@ export default function EmployeeDashboard() {
             className="h-24 bg-blue-700 text-lg font-semibold text-white hover:bg-blue-800 flex flex-col items-center justify-center gap-2 disabled:opacity-50"
           >
             <Clock className="w-6 h-6" />
-            {isTooEarly ? "Aún no puedes fichar" : isLate ? "Entrada bloqueada" : "Entrada"}
+            {isTooEarly
+              ? t('employee.clock.actions.tooEarly')
+              : isLate
+                ? t('employee.clock.actions.blocked')
+                : t('employee.clock.actions.clockIn')}
             {isTooEarly && scheduledEntryLabel && (
-              <span className="text-xs font-normal">Desde {EARLY_CLOCK_MINUTES} min antes de {scheduledEntryLabel}</span>
+              <span className="text-xs font-normal">
+                {t('employee.clock.actions.tooEarlyHint', {
+                  minutes: String(EARLY_CLOCK_MINUTES),
+                  time: scheduledEntryLabel,
+                })}
+              </span>
             )}
             {isLate && (
-              <span className="text-xs font-normal">Retraso &gt; gracia permitida</span>
+              <span className="text-xs font-normal">{t('employee.clock.actions.lateHint')}</span>
             )}
           </Button>
 
@@ -596,7 +617,7 @@ export default function EmployeeDashboard() {
             className="h-24 border-2 border-blue-200 text-lg font-semibold text-blue-900 hover:bg-blue-50 flex flex-col items-center justify-center gap-2"
           >
             {isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
-            {isPaused ? "Reanudar" : "Pausa"}
+            {isPaused ? t('employee.clock.actions.resume') : t('employee.clock.actions.pause')}
           </Button>
 
           <Button
@@ -605,7 +626,7 @@ export default function EmployeeDashboard() {
             className="h-24 border-2 border-slate-300 bg-white text-lg font-semibold text-slate-800 hover:bg-slate-50 flex flex-col items-center justify-center gap-2 disabled:opacity-50"
           >
             <Clock className="w-6 h-6" />
-            Salida
+            {t('employee.clock.actions.clockOut')}
           </Button>
         </div>
 
@@ -616,7 +637,7 @@ export default function EmployeeDashboard() {
           className="mb-8 h-16 w-full border-2 border-blue-200 text-lg font-semibold text-blue-900 hover:bg-blue-50 flex items-center justify-center gap-2"
         >
           <AlertCircle className="w-5 h-5" />
-          Reportar Incidencia
+          {t('employee.clock.actions.reportIncident')}
         </Button>
 
         {/* Quick Links */}
@@ -630,8 +651,8 @@ export default function EmployeeDashboard() {
                 <Palmtree className="size-6 text-blue-700" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">Vacaciones / días libres</h3>
-                <p className="text-sm text-muted-foreground">Solicitar con antelación</p>
+                <h3 className="font-semibold text-foreground">{t('employee.clock.quickLinks.timeOff.title')}</h3>
+                <p className="text-sm text-muted-foreground">{t('employee.clock.quickLinks.timeOff.subtitle')}</p>
               </div>
             </div>
           </Card>
@@ -644,8 +665,8 @@ export default function EmployeeDashboard() {
                 <Calendar className="size-6 text-blue-700" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">Calendario y Calculadora</h3>
-                <p className="text-sm text-muted-foreground">Ver mis horas</p>
+                <h3 className="font-semibold text-foreground">{t('employee.clock.quickLinks.calendar.title')}</h3>
+                <p className="text-sm text-muted-foreground">{t('employee.clock.quickLinks.calendar.subtitle')}</p>
               </div>
             </div>
           </Card>
@@ -658,8 +679,8 @@ export default function EmployeeDashboard() {
                 <CalendarDays className="size-6 text-blue-700" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">Horario</h3>
-                <p className="text-sm text-muted-foreground">Ver mis turnos</p>
+                <h3 className="font-semibold text-foreground">{t('employee.clock.quickLinks.schedule.title')}</h3>
+                <p className="text-sm text-muted-foreground">{t('employee.clock.quickLinks.schedule.subtitle')}</p>
               </div>
             </div>
           </Card>
@@ -668,7 +689,8 @@ export default function EmployeeDashboard() {
         {/* Status Info */}
         <div className="mt-8 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <p className="text-sm text-blue-900">
-            <strong>Estado actual:</strong> {isClockedIn ? 'Fichado (entrada registrada)' : 'No fichado'}
+            <strong>{t('employee.clock.status.label')}</strong>{' '}
+            {isClockedIn ? t('employee.clock.status.clockedIn') : t('employee.clock.status.notClockedIn')}
           </p>
         </div>
     </EmployeeShellLayout>

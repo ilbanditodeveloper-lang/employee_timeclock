@@ -6,9 +6,11 @@ import { Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useLocale } from '@/contexts/LocaleContext';
 import AccessPageShell from '@/components/AccessPageShell';
 
 export default function EmployeeLogin() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
@@ -35,7 +37,7 @@ export default function EmployeeLogin() {
       await trpcUtils.publicApi.getSession.invalidate();
       const sessionResult = await trpcUtils.publicApi.getSession.fetch();
       if (sessionResult.session?.type !== "employee") {
-        throw new Error("No se pudo establecer la sesión. Prueba de nuevo.");
+        throw new Error(t("auth.employeeLogin.sessionError"));
       }
       setEmployeeSession({
         username,
@@ -50,10 +52,10 @@ export default function EmployeeLogin() {
       });
       setAdminSession(null);
 
-      toast.success('¡Bienvenido!');
+      toast.success(t("auth.employeeLogin.welcome"));
       setLocation('/employee');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al iniciar sesión');
+      toast.error(error instanceof Error ? error.message : t("auth.employeeLogin.loginError"));
     } finally {
       setLoading(false);
     }
@@ -67,16 +69,18 @@ export default function EmployeeLogin() {
     <AccessPageShell
       backHref="/acceso"
       icon={Clock}
-      title="Acceso empleado"
-      subtitle="Inicia sesión para fichar"
-      badge="Empleado"
+      title={t("auth.employeeLogin.title")}
+      subtitle={t("auth.employeeLogin.subtitle")}
+      badge={t("auth.employeeLogin.badge")}
     >
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Email o usuario</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">
+            {t("auth.employeeLogin.emailOrUsername")}
+          </label>
           <Input
             type="text"
-            placeholder="email@empresa.com"
+            placeholder={t("auth.employeeLogin.emailPlaceholder")}
             value={loginId}
             onChange={(e) => setLoginId(e.target.value)}
             required
@@ -85,10 +89,12 @@ export default function EmployeeLogin() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-900">Contraseña</label>
+          <label className="mb-2 block text-sm font-medium text-slate-900">
+            {t("auth.employeeLogin.password")}
+          </label>
           <Input
             type="password"
-            placeholder="••••••••"
+            placeholder={t("auth.employeeLogin.passwordPlaceholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -101,15 +107,12 @@ export default function EmployeeLogin() {
           disabled={loading}
           className="h-11 w-full bg-blue-700 text-base hover:bg-blue-800"
         >
-          {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          {loading ? t("auth.employeeLogin.submitting") : t("auth.employeeLogin.submit")}
         </Button>
       </form>
 
       <div className="rounded-xl border border-blue-100 bg-blue-50/80 p-4">
-        <p className="text-sm text-blue-900">
-          Usa el <strong>email</strong> que te dio tu administrador (recomendado) o tu nombre de usuario,
-          más la contraseña.
-        </p>
+        <p className="text-sm text-blue-900">{t("auth.employeeLogin.hint")}</p>
       </div>
     </AccessPageShell>
   );

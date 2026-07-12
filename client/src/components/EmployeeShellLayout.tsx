@@ -2,7 +2,9 @@ import { type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Clock, LogOut } from "lucide-react";
 import EmployeeBottomMenu from "@/components/EmployeeBottomMenu";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
 import { trpc } from "@/lib/trpc";
 
 type EmployeeShellLayoutProps = {
@@ -20,6 +22,7 @@ export default function EmployeeShellLayout({
   contentClassName = "container mx-auto max-w-4xl px-4 py-8 pb-28 md:pb-8",
   showBottomMenu = true,
 }: EmployeeShellLayoutProps) {
+  const { t } = useLocale();
   const { clearAllSessions, setEmployeeSession } = useAuthContext();
   const trpcUtils = trpc.useUtils();
   const logoutSession = trpc.publicApi.logoutSession.useMutation();
@@ -52,7 +55,9 @@ export default function EmployeeShellLayout({
               ) : null}
             </div>
           </div>
-          <Button
+          <div className="flex shrink-0 items-center gap-2">
+            <LanguageSwitcher compact />
+            <Button
             type="button"
             variant="ghost"
             size="sm"
@@ -60,8 +65,9 @@ export default function EmployeeShellLayout({
             className="shrink-0 gap-2 text-slate-600 hover:text-slate-900"
           >
             <LogOut className="size-4" />
-            <span className="hidden sm:inline">Cerrar sesión</span>
+            <span className="hidden sm:inline">{t("common.logout")}</span>
           </Button>
+          </div>
         </div>
       </header>
 

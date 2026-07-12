@@ -8,7 +8,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useLocale } from "@/contexts/LocaleContext";
+import { useLocalizedLandingConfig } from "@/i18n/useLocalizedLandingConfig";
 import { trpc } from "@/lib/trpc";
 import { isCheckoutPlan } from "@shared/stripeConfig";
 import {
@@ -42,60 +45,8 @@ import { LandingHeroBackground } from "@/components/LandingHeroBackground";
 import LandingDashboardMockup from "@/components/LandingDashboardMockup";
 import WhatsAppFloatButton from "@/components/WhatsAppFloatButton";
 
-const REGISTER_NOW_LABEL = "Registra tu negocio ahora";
 const PRICING_SECTION_ID = "precios";
 const CONTACT_SECTION_ID = "contacto";
-
-const features = [
-  {
-    icon: Smartphone,
-    title: "Fichaje digital",
-    text: "Tus empleados fichan desde el móvil, tablet o PC con un solo clic.",
-  },
-  {
-    icon: LayoutDashboard,
-    title: "Panel de administrador",
-    text: "Dashboard con seguimiento en vivo: quién trabaja, está de pausa o sin fichar.",
-  },
-  {
-    icon: Clock,
-    title: "Control de horas",
-    text: "Visualiza horas por día, semana o mes con calendario y correcciones.",
-  },
-  {
-    icon: CalendarDays,
-    title: "Vacaciones y ausencias",
-    text: "Solicitudes, aprobaciones e incidencias en un solo lugar.",
-  },
-  {
-    icon: FileDown,
-    title: "Informes descargables",
-    text: "Exporta registros laborales en PDF, Excel o CSV para nóminas.",
-  },
-  {
-    icon: Shield,
-    title: "Datos seguros",
-    text: "Cumplimiento RGPD, auditoría y control de acceso por empresa.",
-  },
-];
-
-const steps = [
-  {
-    icon: Building2,
-    title: "Configuramos tu empresa",
-    text: "Registra tu negocio, ubicación GPS y empleados en minutos.",
-  },
-  {
-    icon: Smartphone,
-    title: "Tus empleados fichan",
-    text: "Entrada y salida desde el móvil, con validación de ubicación opcional.",
-  },
-  {
-    icon: BarChart3,
-    title: "Tú controlas todo",
-    text: "Dashboard, horas, vacaciones e informes desde el panel admin.",
-  },
-];
 
 function useLandingConfig(): LandingPageConfig {
   const query = trpc.publicApi.getLandingPageConfig.useQuery();
@@ -103,12 +54,18 @@ function useLandingConfig(): LandingPageConfig {
 }
 
 function PhoneMockup() {
-  const navItems = [
-    { label: "Inicio", icon: House, active: true },
-    { label: "Vacaciones", icon: Palmtree },
-    { label: "Calendario", icon: Calendar },
-    { label: "Horario", icon: CalendarDays },
-  ] as const;
+  const { t } = useLocale();
+
+  const navItems = useMemo(
+    () =>
+      [
+        { label: t("landing.phoneMockup.nav.home"), icon: House, active: true },
+        { label: t("landing.phoneMockup.nav.timeOff"), icon: Palmtree },
+        { label: t("landing.phoneMockup.nav.calendar"), icon: Calendar },
+        { label: t("landing.phoneMockup.nav.schedule"), icon: CalendarDays },
+      ] as const,
+    [t]
+  );
 
   return (
     <div className="relative mx-auto w-[220px] rounded-[2rem] border-[6px] border-slate-800 bg-slate-900 p-2 shadow-2xl">
@@ -119,8 +76,8 @@ function PhoneMockup() {
               <Clock className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-bold text-slate-900">TimeClock</p>
-              <p className="text-[8px] text-slate-500">Entrada, salida y pausas</p>
+              <p className="text-[11px] font-bold text-slate-900">{t("landing.phoneMockup.appName")}</p>
+              <p className="text-[8px] text-slate-500">{t("landing.phoneMockup.subtitle")}</p>
             </div>
           </div>
         </div>
@@ -129,30 +86,31 @@ function PhoneMockup() {
           <div className="mb-3 text-center">
             <p className="text-[26px] font-bold leading-none text-slate-900">09:02</p>
             <p className="mt-1 text-[9px] text-slate-500">martes, 30 jun</p>
-            <p className="text-[8px] text-slate-400">Horario de Madrid</p>
+            <p className="text-[8px] text-slate-400">{t("landing.phoneMockup.timezone")}</p>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-blue-700 py-2.5 text-white">
               <Clock className="size-3.5" />
-              <span className="text-[10px] font-semibold">Entrada</span>
+              <span className="text-[10px] font-semibold">{t("landing.phoneMockup.clockIn")}</span>
             </div>
             <div className="flex flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-blue-200 bg-white py-2.5 text-blue-900">
               <Pause className="size-3.5" />
-              <span className="text-[10px] font-semibold">Pausa</span>
+              <span className="text-[10px] font-semibold">{t("landing.phoneMockup.pause")}</span>
             </div>
             <div className="flex flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-slate-200 bg-white py-2.5 text-slate-800">
               <Clock className="size-3.5" />
-              <span className="text-[10px] font-semibold">Salida</span>
+              <span className="text-[10px] font-semibold">{t("landing.phoneMockup.clockOut")}</span>
             </div>
             <div className="flex items-center justify-center gap-1 rounded-xl border-2 border-blue-200 bg-white py-2 text-blue-900">
               <AlertCircle className="size-3.5 shrink-0" />
-              <span className="text-[9px] font-semibold">Reportar Incidencia</span>
+              <span className="text-[9px] font-semibold">{t("landing.phoneMockup.reportIncident")}</span>
             </div>
           </div>
 
           <div className="mt-auto rounded-lg bg-blue-50 px-2 py-1.5 text-center text-[8px] text-slate-600">
-            Estado actual: <span className="font-semibold text-slate-800">No fichado</span>
+            {t("landing.phoneMockup.statusLabel")}{" "}
+            <span className="font-semibold text-slate-800">{t("landing.phoneMockup.notClockedIn")}</span>
           </div>
         </div>
 
@@ -183,10 +141,88 @@ function PhoneMockup() {
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { adminSession, employeeSession, isAuthLoading } = useAuthContext();
-  const config = useLandingConfig();
+  const { t, locale } = useLocale();
+  const apiConfig = useLandingConfig();
+  const config = useLocalizedLandingConfig(apiConfig);
   const appConfig = trpc.publicApi.getAppConfig.useQuery();
   const stripeEnabled = appConfig.data?.stripe?.enabled ?? false;
   const { hero } = config;
+
+  const features = useMemo(
+    () => [
+      {
+        id: "digitalClock",
+        icon: Smartphone,
+        title: t("landing.features.items.digitalClock.title"),
+        text: t("landing.features.items.digitalClock.text"),
+      },
+      {
+        id: "adminPanel",
+        icon: LayoutDashboard,
+        title: t("landing.features.items.adminPanel.title"),
+        text: t("landing.features.items.adminPanel.text"),
+      },
+      {
+        id: "hoursControl",
+        icon: Clock,
+        title: t("landing.features.items.hoursControl.title"),
+        text: t("landing.features.items.hoursControl.text"),
+      },
+      {
+        id: "timeOff",
+        icon: CalendarDays,
+        title: t("landing.features.items.timeOff.title"),
+        text: t("landing.features.items.timeOff.text"),
+      },
+      {
+        id: "reports",
+        icon: FileDown,
+        title: t("landing.features.items.reports.title"),
+        text: t("landing.features.items.reports.text"),
+      },
+      {
+        id: "security",
+        icon: Shield,
+        title: t("landing.features.items.security.title"),
+        text: t("landing.features.items.security.text"),
+      },
+    ],
+    [t, locale]
+  );
+
+  const steps = useMemo(
+    () => [
+      {
+        id: "setup",
+        icon: Building2,
+        title: t("landing.steps.items.setup.title"),
+        text: t("landing.steps.items.setup.text"),
+      },
+      {
+        id: "clock",
+        icon: Smartphone,
+        title: t("landing.steps.items.clock.title"),
+        text: t("landing.steps.items.clock.text"),
+      },
+      {
+        id: "control",
+        icon: BarChart3,
+        title: t("landing.steps.items.control.title"),
+        text: t("landing.steps.items.control.text"),
+      },
+    ],
+    [t, locale]
+  );
+
+  const dashboardBullets = useMemo(
+    () => [
+      t("landing.dashboardPreview.bullets.liveTracking"),
+      t("landing.dashboardPreview.bullets.timeOffCalendar"),
+      t("landing.dashboardPreview.bullets.payrollReports"),
+      t("landing.dashboardPreview.bullets.optionalGeolocation"),
+    ],
+    [t, locale]
+  );
 
   const pricingCtaHref = (packId: string) =>
     isCheckoutPlan(packId) ? `/register-business?plan=${packId}` : "/register-business";
@@ -205,7 +241,7 @@ export default function LandingPage() {
   if (isAuthLoading || adminSession || employeeSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <p className="text-slate-500">Cargando...</p>
+        <p className="text-slate-500">{t("common.loading")}</p>
       </div>
     );
   }
@@ -221,28 +257,39 @@ export default function LandingPage() {
             </div>
             <div className="leading-tight">
               <p className="font-bold text-blue-900">TimeClock</p>
-              <p className="text-[10px] uppercase tracking-wide text-slate-500">Fichaje de empleados</p>
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                {t("landing.brandTagline")}
+              </p>
             </div>
           </a>
           <nav className="hidden items-center gap-6 text-sm text-slate-600 md:flex">
-            <a href="#funciones" className="hover:text-blue-800">Funciones</a>
-            <a href="#para-quien" className="hover:text-blue-800">Para quién es</a>
-            <a href="#precios" className="hover:text-blue-800">Precios</a>
-            <a href="#faq" className="hover:text-blue-800">FAQ</a>
+            <a href="#funciones" className="hover:text-blue-800">
+              {t("landing.nav.features")}
+            </a>
+            <a href="#para-quien" className="hover:text-blue-800">
+              {t("landing.nav.audience")}
+            </a>
+            <a href="#precios" className="hover:text-blue-800">
+              {t("landing.nav.pricing")}
+            </a>
+            <a href="#faq" className="hover:text-blue-800">
+              {t("landing.nav.faq")}
+            </a>
             {supportWhatsAppHref ? (
               <a href={`#${CONTACT_SECTION_ID}`} className="hover:text-blue-800">
-                Contacto
+                {t("landing.nav.contact")}
               </a>
             ) : null}
           </nav>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <LanguageSwitcher compact />
             <Link href="/acceso">
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-slate-700 px-2 sm:px-3 text-xs sm:text-sm"
               >
-                Acceder
+                {t("landing.nav.signIn")}
               </Button>
             </Link>
             <a href={`#${PRICING_SECTION_ID}`}>
@@ -251,8 +298,8 @@ export default function LandingPage() {
                 className="bg-blue-700 hover:bg-blue-800 text-white gap-1.5 px-2 sm:px-3"
               >
                 <Building2 className="size-4 shrink-0" />
-                <span className="hidden md:inline">{REGISTER_NOW_LABEL}</span>
-                <span className="md:hidden text-xs">Registrar</span>
+                <span className="hidden md:inline">{t("landing.nav.registerFull")}</span>
+                <span className="md:hidden text-xs">{t("landing.nav.register")}</span>
               </Button>
             </a>
           </div>
@@ -276,7 +323,7 @@ export default function LandingPage() {
               <a href={`#${PRICING_SECTION_ID}`}>
                 <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
                   <Building2 className="size-5" />
-                  {REGISTER_NOW_LABEL}
+                  {t("landing.nav.registerFull")}
                 </Button>
               </a>
               <a href="#funciones">
@@ -315,15 +362,15 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
-              Todo lo que necesitas en un solo sistema
+              {t("landing.features.title")}
             </h2>
             <p className="mt-3 text-slate-600 max-w-2xl mx-auto">
-              Fichaje, control horario, vacaciones e informes laborales pensados para pymes españolas.
+              {t("landing.features.subtitle")}
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map(({ icon: Icon, title, text }) => (
-              <Card key={title} className="p-6 border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            {features.map(({ id, icon: Icon, title, text }) => (
+              <Card key={id} className="p-6 border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                 <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-blue-100 text-blue-800">
                   <Icon className="size-6" />
                 </div>
@@ -338,17 +385,21 @@ export default function LandingPage() {
       {/* How it works */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
-          <h2 className="text-3xl font-bold text-center text-slate-900 mb-12">Empezar es muy fácil</h2>
+          <h2 className="text-3xl font-bold text-center text-slate-900 mb-12">
+            {t("landing.steps.title")}
+          </h2>
           <div className="grid gap-8 md:grid-cols-3">
-            {steps.map(({ icon: Icon, title, text }, i) => (
-              <div key={title} className="relative text-center">
+            {steps.map(({ id, icon: Icon, title, text }, i) => (
+              <div key={id} className="relative text-center">
                 {i < steps.length - 1 ? (
                   <ArrowRight className="absolute right-0 top-8 hidden md:block size-6 text-blue-300 -mr-4 translate-x-1/2" />
                 ) : null}
                 <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-blue-800 text-white">
                   <Icon className="size-8" />
                 </div>
-                <p className="text-xs font-semibold text-blue-700 mb-1">Paso {i + 1}</p>
+                <p className="text-xs font-semibold text-blue-700 mb-1">
+                  {t("landing.steps.stepLabel", { number: String(i + 1) })}
+                </p>
                 <h3 className="font-semibold text-lg mb-2">{title}</h3>
                 <p className="text-sm text-slate-600">{text}</p>
               </div>
@@ -361,7 +412,7 @@ export default function LandingPage() {
       <section id="para-quien" className="py-20 bg-slate-50">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <h2 className="text-3xl font-bold text-center text-slate-900 mb-12">
-            Ideal para todo tipo de negocios
+            {t("landing.audience.title")}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {config.audienceImages.map((item) => (
@@ -390,19 +441,13 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-6xl gap-12 px-4 lg:grid-cols-2 lg:items-center lg:px-8">
           <div>
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              Un panel claro y fácil de usar
+              {t("landing.dashboardPreview.title")}
             </h2>
             <p className="text-slate-600 mb-6 leading-relaxed">
-              Dashboard con seguimiento en vivo, gestión de empleados, horas trabajadas, turnos,
-              vacaciones e informes descargables. Todo desde el navegador, sin instalar nada.
+              {t("landing.dashboardPreview.description")}
             </p>
             <ul className="space-y-3 mb-8">
-              {[
-                "Seguimiento en tiempo real del equipo",
-                "Calendario de vacaciones con nombres",
-                "Informes PDF y Excel para nóminas",
-                "Geolocalización opcional al fichar",
-              ].map((item) => (
+              {dashboardBullets.map((item) => (
                 <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
                   <Check className="size-5 shrink-0 text-blue-600 mt-0.5" />
                   {item}
@@ -412,7 +457,7 @@ export default function LandingPage() {
             <Link href="/acceso">
               <Button className="bg-blue-700 hover:bg-blue-800 gap-2">
                 <Play className="size-4" />
-                Probar la app
+                {t("landing.dashboardPreview.cta")}
               </Button>
             </Link>
           </div>
@@ -426,12 +471,12 @@ export default function LandingPage() {
       <section id={PRICING_SECTION_ID} className="py-20 bg-slate-50">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">Planes y precios</h2>
+            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+              {t("landing.pricing.title")}
+            </h2>
             <p className="mt-3 text-slate-600">{config.trialHeadline}</p>
             {stripeEnabled ? (
-              <p className="mt-2 text-sm text-slate-500">
-                ¿Tienes un código de descuento? Podrás aplicarlo en la pantalla de pago seguro.
-              </p>
+              <p className="mt-2 text-sm text-slate-500">{t("landing.pricing.discountHint")}</p>
             ) : null}
           </div>
 
@@ -448,7 +493,7 @@ export default function LandingPage() {
               >
                 {pack.highlighted ? (
                   <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-2">
-                    Más popular
+                    {t("landing.pricing.mostPopular")}
                   </p>
                 ) : null}
                 <h3 className="text-xl font-bold text-slate-900">{pack.name}</h3>
@@ -483,7 +528,7 @@ export default function LandingPage() {
 
           <div id="faq" className="max-w-3xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">
-              Preguntas frecuentes
+              {t("landing.faq.title")}
             </h2>
             <Accordion type="single" collapsible className="w-full">
               {config.faqs.map((faq, i) => (
@@ -505,15 +550,13 @@ export default function LandingPage() {
       {supportWhatsAppHref ? (
         <section id={CONTACT_SECTION_ID} className="py-20 bg-white">
           <div className="mx-auto max-w-3xl px-4 text-center lg:px-8">
-            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">¿Tienes dudas?</h2>
+            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+              {t("landing.contact.title")}
+            </h2>
             <p className="mt-4 text-slate-600 leading-relaxed">
-              Si quieres aclarar algo antes de registrarte o necesitas ayuda para elegir plan,
-              escríbenos por WhatsApp. Te respondemos lo antes posible.
+              {t("landing.contact.description")}
             </p>
-            <p className="mt-2 text-sm text-slate-500">
-              Para contratar, usa los packs de la sección de precios — el WhatsApp es solo para
-              soporte y consultas.
-            </p>
+            <p className="mt-2 text-sm text-slate-500">{t("landing.contact.note")}</p>
             <a
               href={supportWhatsAppHref}
               target="_blank"
@@ -525,7 +568,7 @@ export default function LandingPage() {
                 className="bg-[#25D366] hover:bg-[#20bd5a] text-white gap-2 shadow-md"
               >
                 <MessageCircle className="size-5" />
-                Escribir por WhatsApp
+                {t("landing.contact.whatsappCta")}
               </Button>
             </a>
           </div>
@@ -542,7 +585,7 @@ export default function LandingPage() {
             <a href={`#${PRICING_SECTION_ID}`}>
               <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50 gap-2">
                 <Building2 className="size-5" />
-                {REGISTER_NOW_LABEL}
+                {t("landing.registerCta.registerNow")}
               </Button>
             </a>
             <Link href="/register-business">
@@ -569,42 +612,65 @@ export default function LandingPage() {
                 </div>
                 <span className="font-bold text-blue-900">TimeClock</span>
               </div>
-              <p className="text-sm text-slate-600">
-                Software de fichaje y control horario para equipos en España. Simple, legal y
-                accesible desde cualquier dispositivo.
-              </p>
+              <p className="text-sm text-slate-600">{t("landing.footer.description")}</p>
             </div>
             <div className="flex flex-wrap gap-8 text-sm">
               <div>
-                <p className="font-semibold text-slate-900 mb-2">Producto</p>
+                <p className="font-semibold text-slate-900 mb-2">{t("landing.footer.product")}</p>
                 <ul className="space-y-1 text-slate-600">
-                  <li><a href="#funciones" className="hover:text-blue-800">Funciones</a></li>
-                  <li><a href="#precios" className="hover:text-blue-800">Precios</a></li>
-                  <li><Link href="/acceso" className="hover:text-blue-800">Acceder</Link></li>
+                  <li>
+                    <a href="#funciones" className="hover:text-blue-800">
+                      {t("landing.nav.features")}
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#precios" className="hover:text-blue-800">
+                      {t("landing.nav.pricing")}
+                    </a>
+                  </li>
+                  <li>
+                    <Link href="/acceso" className="hover:text-blue-800">
+                      {t("landing.nav.signIn")}
+                    </Link>
+                  </li>
                   {supportWhatsAppHref ? (
                     <li>
                       <a href={`#${CONTACT_SECTION_ID}`} className="hover:text-blue-800">
-                        Contacto
+                        {t("landing.nav.contact")}
                       </a>
                     </li>
                   ) : null}
                 </ul>
               </div>
               <div>
-                <p className="font-semibold text-slate-900 mb-2">Legal</p>
+                <p className="font-semibold text-slate-900 mb-2">{t("landing.footer.legal")}</p>
                 <ul className="space-y-1 text-slate-600">
-                  <li><Link href="/legal/privacy" className="hover:text-blue-800">Privacidad</Link></li>
-                  <li><Link href="/legal/terms" className="hover:text-blue-800">Términos</Link></li>
-                  <li><Link href="/legal/dpa" className="hover:text-blue-800">DPA</Link></li>
+                  <li>
+                    <Link href="/legal/privacy" className="hover:text-blue-800">
+                      {t("landing.footer.privacy")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/legal/terms" className="hover:text-blue-800">
+                      {t("landing.footer.terms")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/legal/dpa" className="hover:text-blue-800">
+                      {t("landing.footer.dpa")}
+                    </Link>
+                  </li>
                 </ul>
               </div>
             </div>
           </div>
           <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-6 text-xs text-slate-500">
-            <p>© {new Date().getFullYear()} TimeClock. Todos los derechos reservados.</p>
+            <p>
+              {t("landing.footer.copyright", { year: String(new Date().getFullYear()) })}
+            </p>
             <div className="flex items-center gap-3">
               <MapPin className="size-3.5" />
-              <span>España · Zona horaria Europe/Madrid</span>
+              <span>{t("landing.footer.location")}</span>
             </div>
           </div>
         </div>

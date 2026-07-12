@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import RestaurantMap, { geocodeAddressString } from '@/components/RestaurantMap';
 import { trpc } from '@/lib/trpc';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useLocale } from '@/contexts/LocaleContext';
 import { adminApiInput, getStoredActiveLocationId, syncStoredActiveLocationId } from '@/lib/adminContext';
 import { Calendar as UiCalendar, CalendarDayButton } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -71,19 +72,22 @@ const scheduleDays = [
   { key: 'sunday', label: 'Domingo' },
 ] as const;
 
-const ADMIN_NAV: AppShellNavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'employees', label: 'Empleados', icon: Users },
-  { id: 'hours', label: 'Horas', icon: Calendar },
-  { id: 'shifts', label: 'Turnos', icon: Clock3 },
-  { id: 'timeoff', label: 'Vacaciones', icon: Palmtree },
-  { id: 'incidents', label: 'Incidencias', icon: AlertCircle },
-  { id: 'audit', label: 'Auditoría', icon: ClipboardList },
-  { id: 'legal', label: 'Legal / RGPD', icon: Scale },
-  { id: 'settings', label: 'Ajustes', icon: Settings },
-];
-
 export default function AdminDashboard() {
+  const { t } = useLocale();
+  const adminNav = useMemo<AppShellNavItem[]>(
+    () => [
+      { id: 'dashboard', label: t('nav.admin.dashboard'), icon: LayoutDashboard },
+      { id: 'employees', label: t('nav.admin.employees'), icon: Users },
+      { id: 'hours', label: t('nav.admin.hours'), icon: Calendar },
+      { id: 'shifts', label: t('nav.admin.shifts'), icon: Clock3 },
+      { id: 'timeoff', label: t('nav.admin.vacations'), icon: Palmtree },
+      { id: 'incidents', label: t('nav.admin.incidents'), icon: AlertCircle },
+      { id: 'audit', label: t('nav.admin.audit'), icon: ClipboardList },
+      { id: 'legal', label: t('nav.admin.legal'), icon: Scale },
+      { id: 'settings', label: t('nav.admin.settings'), icon: Settings },
+    ],
+    [t]
+  );
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [timeOffCalMonth, setTimeOffCalMonth] = useState(() => new Date());
@@ -1118,7 +1122,7 @@ export default function AdminDashboard() {
       window.history.replaceState({}, '', '/admin');
     }
   }, []);
-  const activeNav = ADMIN_NAV.find((item) => item.id === activeTab);
+  const activeNav = adminNav.find((item) => item.id === activeTab);
 
   if (isAuthLoading || !isAdminAuthenticated) {
     return null;
@@ -1126,13 +1130,13 @@ export default function AdminDashboard() {
 
   return (
     <AppShellLayout
-      brandLabel={adminSession?.displayName ?? adminSession?.companySlug ?? 'Mi negocio'}
+      brandLabel={adminSession?.displayName ?? adminSession?.companySlug ?? t('admin.shell.businessFallback')}
       brandIcon={<LayoutDashboard className="size-5" />}
-      pageTitle={activeNav?.label ?? 'Panel de administración'}
-      pageSubtitle="Gestión de equipo y control horario"
-      userName={adminSession?.displayName ?? 'Administrador'}
+      pageTitle={activeNav?.label ?? t('admin.shell.pageTitleFallback')}
+      pageSubtitle={t('admin.shell.pageSubtitle')}
+      userName={adminSession?.displayName ?? t('admin.shell.adminFallback')}
       userEmail={adminSession?.companySlug}
-      navItems={ADMIN_NAV}
+      navItems={adminNav}
       activeNavId={activeTab}
       onNavChange={setActiveTab}
       onLogout={() => void handleLogout()}
@@ -1149,7 +1153,7 @@ export default function AdminDashboard() {
             size="sm"
             onClick={() => setLocation('/admin/onboarding')}
           >
-            Configuración inicial
+            {t('admin.dashboard.initialSetup')}
           </Button>
         </>
       }
@@ -1172,9 +1176,9 @@ export default function AdminDashboard() {
             <Card className="app-shell-card p-6 border-0 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
+                  <h2 className="text-2xl font-bold text-foreground">{t('admin.dashboard.title')}</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Seguimiento en vivo · Estado del equipo hoy
+                    {t('admin.dashboard.subtitle')}
                     {workforceTodayQuery.data?.date
                       ? ` · ${workforceTodayQuery.data.date.split('-').reverse().join('/')}`
                       : ''}
@@ -1186,7 +1190,7 @@ export default function AdminDashboard() {
                   onClick={() => void workforceTodayQuery.refetch()}
                   disabled={workforceTodayQuery.isFetching}
                 >
-                  {workforceTodayQuery.isFetching ? 'Actualizando…' : 'Actualizar'}
+                  {workforceTodayQuery.isFetching ? t('common.updating') : t('common.refresh')}
                 </Button>
               </div>
 
@@ -1194,13 +1198,13 @@ export default function AdminDashboard() {
                 <section className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-5">
                   <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-3 flex items-center gap-2">
                     <span className="inline-block size-2.5 rounded-full bg-emerald-500" />
-                    Trabajando ahora
+                    {t('admin.dashboard.workforce.workingNow')}
                     <Badge variant="secondary" className="ml-auto">
                       {(workforceTodayQuery.data?.working ?? []).length}
                     </Badge>
                   </h3>
                   {(workforceTodayQuery.data?.working ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nadie fichado en este momento.</p>
+                    <p className="text-sm text-muted-foreground">{t('admin.dashboard.workforce.nobodyWorking')}</p>
                   ) : (
                     <ul className="space-y-2">
                       {(workforceTodayQuery.data?.working ?? []).map((row) => (
@@ -1211,7 +1215,7 @@ export default function AdminDashboard() {
                           <div className="min-w-0">
                             <span className="font-medium text-foreground">{row.employeeName}</span>
                             <span className="block text-sm text-muted-foreground sm:inline sm:ml-2">
-                              Entrada {formatClockTime(row.entryTime)}
+                              {t('admin.dashboard.workforce.entryAt', { time: formatClockTime(row.entryTime) })}
                             </span>
                           </div>
                           <Button
@@ -1223,7 +1227,7 @@ export default function AdminDashboard() {
                             onClick={() => handleAdminForceClockOut(row)}
                           >
                             <LogOut className="w-3.5 h-3.5 mr-1" />
-                            Fichar salida
+                            {t('admin.dashboard.workforce.forceClockOut')}
                           </Button>
                         </li>
                       ))}
@@ -1234,13 +1238,13 @@ export default function AdminDashboard() {
                 <section className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-5">
                   <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
                     <span className="inline-block size-2.5 rounded-full bg-amber-500" />
-                    En pausa
+                    {t('admin.dashboard.workforce.onBreak')}
                     <Badge variant="secondary" className="ml-auto">
                       {(workforceTodayQuery.data?.onBreak ?? []).length}
                     </Badge>
                   </h3>
                   {(workforceTodayQuery.data?.onBreak ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nadie en pausa.</p>
+                    <p className="text-sm text-muted-foreground">{t('admin.dashboard.workforce.nobodyOnBreak')}</p>
                   ) : (
                     <ul className="space-y-2">
                       {(workforceTodayQuery.data?.onBreak ?? []).map((row) => (
@@ -1251,7 +1255,9 @@ export default function AdminDashboard() {
                           <div className="min-w-0">
                             <span className="font-medium text-foreground">{row.employeeName}</span>
                             <span className="block text-sm text-muted-foreground sm:inline sm:ml-2">
-                              Entrada {formatClockTime(row.entryTime)} · En pausa
+                              {t('admin.dashboard.workforce.entryAtOnBreak', {
+                                time: formatClockTime(row.entryTime),
+                              })}
                             </span>
                           </div>
                           <Button
@@ -1263,7 +1269,7 @@ export default function AdminDashboard() {
                             onClick={() => handleAdminForceClockOut(row)}
                           >
                             <LogOut className="w-3.5 h-3.5 mr-1" />
-                            Fichar salida
+                            {t('admin.dashboard.workforce.forceClockOut')}
                           </Button>
                         </li>
                       ))}
@@ -1274,13 +1280,13 @@ export default function AdminDashboard() {
                 <section className="rounded-xl border border-teal-200 dark:border-teal-900/50 bg-teal-50/60 dark:bg-teal-950/20 p-5">
                   <h3 className="text-lg font-semibold text-teal-800 dark:text-teal-200 mb-3 flex items-center gap-2">
                     <Palmtree className="w-4 h-4" />
-                    Vacaciones / libre hoy
+                    {t('admin.dashboard.workforce.onTimeOff')}
                     <Badge variant="secondary" className="ml-auto">
                       {(workforceTodayQuery.data?.onTimeOff ?? []).length}
                     </Badge>
                   </h3>
                   {(workforceTodayQuery.data?.onTimeOff ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nadie de baja hoy.</p>
+                    <p className="text-sm text-muted-foreground">{t('admin.dashboard.workforce.nobodyOnTimeOff')}</p>
                   ) : (
                     <ul className="space-y-2">
                       {(workforceTodayQuery.data?.onTimeOff ?? []).map((row) => (
@@ -1290,7 +1296,7 @@ export default function AdminDashboard() {
                         >
                           <span className="font-medium text-foreground">{row.employeeName}</span>
                           <span className="text-sm text-muted-foreground">
-                            {row.kind === 'vacation' ? 'Vacaciones' : 'Día libre'}
+                            {row.kind === 'vacation' ? t('admin.dashboard.workforce.vacation') : t('admin.dashboard.workforce.dayOff')}
                           </span>
                         </li>
                       ))}
@@ -1301,13 +1307,13 @@ export default function AdminDashboard() {
                 <section className="rounded-xl border border-border bg-muted/30 p-5">
                   <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Sin fichar hoy
+                    {t('admin.dashboard.workforce.notClockedIn')}
                     <Badge variant="secondary" className="ml-auto">
                       {(workforceTodayQuery.data?.notClockedIn ?? []).length}
                     </Badge>
                   </h3>
                   {(workforceTodayQuery.data?.notClockedIn ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Todos han fichado o están de baja.</p>
+                    <p className="text-sm text-muted-foreground">{t('admin.dashboard.workforce.everyoneClockedOrOff')}</p>
                   ) : (
                     <ul className="flex flex-wrap gap-2">
                       {(workforceTodayQuery.data?.notClockedIn ?? []).map((row) => (
@@ -1325,7 +1331,7 @@ export default function AdminDashboard() {
               {(workforceTodayQuery.data?.finishedToday ?? []).length > 0 ? (
                 <section className="mt-6 rounded-xl border border-border p-5">
                   <h3 className="text-lg font-semibold text-foreground mb-3">
-                    Ya han terminado jornada hoy
+                    {t('admin.dashboard.workforce.finishedToday')}
                   </h3>
                   <ul className="space-y-2">
                     {(workforceTodayQuery.data?.finishedToday ?? []).map((row) => (
@@ -1335,7 +1341,7 @@ export default function AdminDashboard() {
                       >
                         <span className="font-medium text-foreground">{row.employeeName}</span>
                         <span className="text-muted-foreground">
-                          Salida {formatClockTime(row.exitTime)}
+                          {t('admin.dashboard.workforce.exitAt', { time: formatClockTime(row.exitTime) })}
                         </span>
                       </li>
                     ))}
@@ -1355,7 +1361,7 @@ export default function AdminDashboard() {
               {!showEmployeeForm ? (
                 <>
                   <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-2xl font-bold text-foreground">Gestión de Empleados</h2>
+                    <h2 className="text-2xl font-bold text-foreground">{t('admin.employees.title')}</h2>
                     <Button
                       type="button"
                       onClick={handleStartCreateEmployee}
@@ -1363,13 +1369,12 @@ export default function AdminDashboard() {
                       disabled={atEmployeeLimit}
                     >
                       <Plus className="size-4" />
-                      Crear Empleado
+                      {t('admin.employees.create')}
                     </Button>
                   </div>
                   {atEmployeeLimit ? (
                     <p className="mb-4 text-xs text-muted-foreground">
-                      Has alcanzado el límite de empleados de tu plan. La empresa será dada de baja
-                      automáticamente.
+                      {t('admin.employees.atLimit')}
                     </p>
                   ) : null}
 

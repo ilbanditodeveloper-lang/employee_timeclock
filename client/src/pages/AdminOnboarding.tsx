@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, MapPin, Scale, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useLocale } from "@/contexts/LocaleContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,18 +28,19 @@ const TIMEZONE_OPTIONS = [
   { value: "Atlantic/Canary", label: "Atlantic/Canary (Canarias)" },
 ];
 
-const STEPS = [
-  { id: 1, title: "Datos del negocio", icon: Building2 },
-  { id: 2, title: "Local y fichaje", icon: MapPin },
-  { id: 3, title: "Legal básico", icon: Scale },
-  { id: 4, title: "Primer empleado", icon: Users },
-  { id: 5, title: "Finalizar", icon: CheckCircle2 },
+const STEPS_META = [
+  { id: 1, key: "business" as const, icon: Building2 },
+  { id: 2, key: "location" as const, icon: MapPin },
+  { id: 3, key: "legal" as const, icon: Scale },
+  { id: 4, key: "firstEmployee" as const, icon: Users },
+  { id: 5, key: "finish" as const, icon: CheckCircle2 },
 ] as const;
 
 const MADRID_LAT = 40.4168;
 const MADRID_LNG = -3.7038;
 
 export default function AdminOnboarding() {
+  const { t } = useLocale();
   const [, setLocation] = useLocation();
   const { adminSession } = useAuthContext();
   const { isAuthLoading, isAdminAuthenticated } = useRequireAdminAuth();
@@ -77,6 +80,15 @@ export default function AdminOnboarding() {
   const [employeePhone, setEmployeePhone] = useState("");
   const [employeeUsername, setEmployeeUsername] = useState("");
   const [employeePassword, setEmployeePassword] = useState("");
+
+  const steps = useMemo(
+    () =>
+      STEPS_META.map((s) => ({
+        ...s,
+        title: t(`admin.onboarding.steps.${s.key}`),
+      })),
+    [t]
+  );
 
   useEffect(() => {
     if (isAuthLoading || !isAdminAuthenticated) return;
@@ -281,22 +293,25 @@ export default function AdminOnboarding() {
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4" />
-            Panel
+            {t("admin.dashboard.title")}
           </button>
-          <Button type="button" variant="ghost" size="sm" onClick={handleSkip} disabled={skipOnboarding.isPending}>
-            Saltar por ahora
-          </Button>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher compact />
+            <Button type="button" variant="ghost" size="sm" onClick={handleSkip} disabled={skipOnboarding.isPending}>
+              Saltar por ahora
+            </Button>
+          </div>
         </div>
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Configuración inicial</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("admin.onboarding.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Paso {step} de 5 — configura lo mínimo para empezar
           </p>
         </div>
 
         <div className="flex justify-between mb-8 gap-1">
-          {STEPS.map((s) => {
+          {steps.map((s) => {
             const Icon = s.icon;
             const active = s.id === step;
             const done = s.id < step;
@@ -319,7 +334,7 @@ export default function AdminOnboarding() {
         <Card className="p-6 shadow-lg space-y-6">
           {step === 1 && (
             <>
-              <h2 className="text-lg font-semibold">Datos del negocio</h2>
+              <h2 className="text-lg font-semibold">{t("admin.onboarding.steps.business")}</h2>
               <div className="space-y-4">
                 <div>
                   <Label>Nombre comercial *</Label>
