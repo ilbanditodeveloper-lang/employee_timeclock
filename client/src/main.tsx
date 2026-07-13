@@ -143,16 +143,6 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
           window.dispatchEvent(new CustomEvent("timeclock-update-available"));
         };
 
-        const activateUpdate = () => {
-          if (registration.waiting) {
-            notifyUpdateAvailable();
-            registration.waiting.postMessage({ type: "SKIP_WAITING" });
-          }
-        };
-
-        // If there is already an update waiting, activate it now.
-        activateUpdate();
-
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
@@ -160,7 +150,6 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
             // A new service worker is installed and ready to take control.
             if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
               notifyUpdateAvailable();
-              activateUpdate();
             }
           });
         });

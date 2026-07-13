@@ -55,7 +55,7 @@ export default function AdminLogin() {
     }
   };
 
-  if (isAuthLoading || isAdminAuthenticated) {
+  if (isAdminAuthenticated) {
     return null;
   }
 

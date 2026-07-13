@@ -137,6 +137,8 @@ async function startServer() {
       }
     }
     if (!ENV.isProduction && allowedOrigins.length === 0) return true;
+    // Allow Vercel production and preview deployments.
+    if (origin && /^https:\/\/[\w-]+\.vercel\.app$/.test(origin)) return true;
     return false;
   };
 

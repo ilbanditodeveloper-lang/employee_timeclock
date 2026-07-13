@@ -61,7 +61,7 @@ export default function EmployeeLogin() {
     }
   };
 
-  if (isAuthLoading || isEmployeeAuthenticated) {
+  if (isEmployeeAuthenticated) {
     return null;
   }
 

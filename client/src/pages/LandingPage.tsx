@@ -140,7 +140,7 @@ function PhoneMockup() {
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
-  const { adminSession, employeeSession, isAuthLoading } = useAuthContext();
+  const { adminSession, employeeSession } = useAuthContext();
   const { t, locale } = useLocale();
   const apiConfig = useLandingConfig();
   const config = useLocalizedLandingConfig(apiConfig);
@@ -233,18 +233,9 @@ export default function LandingPage() {
   );
 
   useEffect(() => {
-    if (isAuthLoading) return;
     if (adminSession) setLocation("/admin");
     else if (employeeSession) setLocation("/employee");
-  }, [adminSession, employeeSession, isAuthLoading, setLocation]);
-
-  if (isAuthLoading || adminSession || employeeSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <p className="text-slate-500">{t("common.loading")}</p>
-      </div>
-    );
-  }
+  }, [adminSession, employeeSession, setLocation]);
 
   return (
     <div className="min-h-screen bg-white text-slate-900 scroll-smooth">

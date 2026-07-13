@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useLocale } from "@/contexts/LocaleContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -7,12 +7,11 @@ import { Link, useLocation } from "wouter";
 import { Clock, Users, AlertCircle, Sparkles, ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
   const { t } = useLocale();
-  const { adminSession, employeeSession, isAuthLoading, setAdminSession, setEmployeeSession } =
+  const { adminSession, employeeSession, setAdminSession, setEmployeeSession } =
     useAuthContext();
   const [, setLocation] = useLocation();
   const configQuery = trpc.publicApi.getAppConfig.useQuery();
@@ -40,13 +39,11 @@ export default function Home() {
   );
 
   useEffect(() => {
-    if (isAuthLoading) return;
     if (adminSession) setLocation("/admin");
     else if (employeeSession) setLocation("/employee");
-  }, [adminSession, employeeSession, isAuthLoading, setLocation]);
+  }, [adminSession, employeeSession, setLocation]);
 
-  const handleDemo = async (role: "admin" | "employee") => {
-    try {
+  const handleDemo = async (role: "admin" | "employee") => {    try {
       const result = await enterDemo.mutateAsync({ role });
       if (role === "admin") {
         setAdminSession({ companySlug: "demo", displayName: "Admin Demo" });
@@ -72,25 +69,6 @@ export default function Home() {
       toast.error(e instanceof Error ? e.message : t("auth.home.demo.failed"));
     }
   };
-
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50/50 to-blue-100/40">
-        <div className="text-center">
-          <div className="mx-auto mb-4 size-12 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700" />
-          <p className="text-slate-600">{t("common.loading")}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (adminSession || employeeSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50/50 to-blue-100/40">
-        <p className="text-slate-500">{t("common.redirecting")}</p>
-      </div>
-    );
-  }
 
   const demoMode = configQuery.data?.demoMode ?? false;
 

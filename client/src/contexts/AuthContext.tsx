@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdminAuthenticated = serverSession?.type === "admin";
   const isEmployeeAuthenticated = serverSession?.type === "employee";
   const isSuperAdminAuthenticated = serverSession?.type === "superadmin";
-  const isAuthLoading = !sessionQuery.isFetched;
+  const isAuthLoading = sessionQuery.isLoading && !sessionQuery.isError;
 
   useEffect(() => {
     if (!sessionQuery.isFetched) return;

@@ -1,4 +1,4 @@
-const CACHE_NAME = "timeclock-v5";
+const CACHE_NAME = "timeclock-v6";
 const PRECACHE_URLS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 function offlineResponse() {
@@ -46,12 +46,14 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
 
+  // Let the browser handle cross-origin requests (e.g. external APIs).
+  if (url.origin !== self.location.origin) return;
+
   // Never cache API, tRPC, health or auth-related routes.
   if (
-    url.origin === self.location.origin &&
-    (url.pathname.startsWith("/api/") ||
-      url.pathname.startsWith("/api/trpc") ||
-      url.pathname === "/healthz")
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/api/trpc") ||
+    url.pathname === "/healthz"
   ) {
     event.respondWith(fetch(event.request));
     return;
@@ -93,7 +95,6 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  event.respondWith(fetch(event.request));
 });
 
 // Push notification event listener
