@@ -28,8 +28,11 @@ import { cn } from "@/lib/utils";
 import { buildSubscriptionPlanLabels } from "@shared/subscriptionPlans";
 import SuperAdminCompaniesPanel from "@/components/SuperAdminCompaniesPanel";
 import SuperAdminUpcomingPaymentsPanel from "@/components/SuperAdminUpcomingPaymentsPanel";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
 type SuperAdminTab = "dashboard" | "companies" | "landing";
+
+const SUPERADMIN_TABS = ["dashboard", "companies", "landing"] as const;
 
 function packFeaturesToText(features: string[]) {
   return features.join("\n");
@@ -49,7 +52,11 @@ export default function SuperAdmin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthed, setIsAuthed] = useState(false);
-  const [activeTab, setActiveTab] = useState<SuperAdminTab>("dashboard");
+  const [activeTab, setActiveTab] = useUrlTab<SuperAdminTab>(
+    "/superadmin",
+    SUPERADMIN_TABS,
+    "dashboard"
+  );
   const [landingDraft, setLandingDraft] = useState<LandingPageConfig>(DEFAULT_LANDING_PAGE_CONFIG);
 
   const loginMutation = trpc.publicApi.superAdminLogin.useMutation();

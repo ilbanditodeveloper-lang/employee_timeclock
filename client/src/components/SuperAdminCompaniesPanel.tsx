@@ -171,7 +171,7 @@ export default function SuperAdminCompaniesPanel({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return companies.filter((c) => {
+    const rows = companies.filter((c) => {
       if (filterPlan !== "all" && c.subscriptionPlan !== filterPlan) return false;
       if (filterActive === "active" && !c.isActive) return false;
       if (filterActive === "inactive" && c.isActive) return false;
@@ -198,11 +198,24 @@ export default function SuperAdminCompaniesPanel({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [companies, search, filterPlan, filterActive, filterStage, filterUrgent]);
+    // Keep the open CRM card visible even if filters would hide it.
+    if (editingCompanyId != null && !rows.some((c) => c.id === editingCompanyId)) {
+      const editing = companies.find((c) => c.id === editingCompanyId);
+      if (editing) return [editing, ...rows];
+    }
+    return rows;
+  }, [companies, search, filterPlan, filterActive, filterStage, filterUrgent, editingCompanyId]);
 
   const refetch = () => void listCompanies.refetch();
 
   const openCompanyEditor = (company: CompanyRow) => {
+    // Avoid browser autofill dumping a saved username into the search box
+    // (which would hide every company when opening the CRM card).
+    setSearch("");
+    setFilterPlan("all");
+    setFilterActive("all");
+    setFilterStage("all");
+    setFilterUrgent(false);
     setEditingCompanyId(company.id);
     setSubscriptionForm({
       plan: (company.subscriptionPlan ?? "trial") as SubscriptionPlan,
@@ -402,6 +415,8 @@ export default function SuperAdminCompaniesPanel({
                 value={createForm.adminUsername}
                 onChange={(e) => setCreateForm((p) => ({ ...p, adminUsername: e.target.value }))}
                 className="mt-1"
+                autoComplete="off"
+                name="new-company-admin-username"
                 required
               />
             </div>
@@ -412,6 +427,8 @@ export default function SuperAdminCompaniesPanel({
                 value={createForm.adminPassword}
                 onChange={(e) => setCreateForm((p) => ({ ...p, adminPassword: e.target.value }))}
                 className="mt-1"
+                autoComplete="new-password"
+                name="new-company-admin-password"
                 required
               />
             </div>
@@ -444,6 +461,8 @@ export default function SuperAdminCompaniesPanel({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
+              autoComplete="off"
+              name="company-search"
             />
           </div>
           <select
@@ -716,9 +735,9 @@ export default function SuperAdminCompaniesPanel({
                               }))
                             }
                           >
-                            {CRM_ACTIVITY_TYPES.map((t) => (
-                              <option key={t} value={t}>
-                                {CRM_ACTIVITY_LABELS[t]}
+                            {CRM_ACTIVITY_TYPES.map((activityType) => (
+                              <option key={activityType} value={activityType}>
+                                {CRM_ACTIVITY_LABELS[activityType]}
                               </option>
                             ))}
                           </select>
@@ -815,6 +834,8 @@ export default function SuperAdminCompaniesPanel({
                             onChange={(e) =>
                               setAdminForm((p) => ({ ...p, adminUsername: e.target.value }))
                             }
+                            autoComplete="off"
+                            name="crm-admin-username"
                           />
                           <Input
                             type="password"
@@ -823,6 +844,8 @@ export default function SuperAdminCompaniesPanel({
                             onChange={(e) =>
                               setAdminForm((p) => ({ ...p, adminPassword: e.target.value }))
                             }
+                            autoComplete="new-password"
+                            name="crm-admin-password"
                           />
                           <Button type="button" size="sm" variant="secondary" onClick={() => void handleSaveAdmin()}>
                             {t("superadmin.companies.editor.updateAdmin")}

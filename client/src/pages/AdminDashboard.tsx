@@ -41,6 +41,7 @@ import {
   getTimePartsInTimeZone,
   resolveAppTimeZone,
 } from '@shared/timezone';
+import { useUrlTab } from '@/hooks/useUrlTab';
 import {
   downloadEmployeeDataJson,
   downloadEnhancedLaborReportExcel,
@@ -92,8 +93,12 @@ export default function AdminDashboard() {
     ],
     [t]
   );
+  const adminTabIds = useMemo(
+    () => adminNav.map((item) => item.id) as string[],
+    [adminNav]
+  );
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useUrlTab('/admin', adminTabIds, 'dashboard');
   const [timeOffCalMonth, setTimeOffCalMonth] = useState(() => new Date());
   
   // Restaurant form state

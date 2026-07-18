@@ -49,9 +49,6 @@ function Router() {
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/admin-login"} component={AdminLogin} />
       <Route path={"/superadmin"} component={SuperAdmin} />
-      <Route path={"/employee"} component={() => (
-        <EmployeePrivacyGate><EmployeeDashboard /></EmployeePrivacyGate>
-      )} />
       <Route path={"/employee/calendar"} component={() => (
         <EmployeePrivacyGate><EmployeeCalendar /></EmployeePrivacyGate>
       )} />
@@ -69,6 +66,9 @@ function Router() {
       )} />
       <Route path={"/employee/legal"} component={() => (
         <EmployeePrivacyGate><EmployeeLegal /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee"} component={() => (
+        <EmployeePrivacyGate><EmployeeDashboard /></EmployeePrivacyGate>
       )} />
       <Route path={"/legal/privacy"} component={PrivacyPolicy} />
       <Route path={"/legal/terms"} component={TermsOfUse} />
