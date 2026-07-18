@@ -99,6 +99,10 @@ export const companies = pgTable("companies", {
   gpsJustificationCategory: varchar("gpsJustificationCategory", { length: 64 }),
   gpsActivatedBy: integer("gpsActivatedBy"),
   gpsActivatedAt: timestamp("gpsActivatedAt"),
+  /** Bumped when company legal data changes so employees must re-accept the notice. */
+  employeePrivacyNoticeVersion: varchar("employeePrivacyNoticeVersion", { length: 32 })
+    .default("2026-06-22-v2")
+    .notNull(),
   legalHoldEnabled: boolean("legalHoldEnabled").default(false).notNull(),
   minimumRetentionYears: integer("minimumRetentionYears").default(4).notNull(),
   anonymizeAfterRetention: boolean("anonymizeAfterRetention").default(false).notNull(),

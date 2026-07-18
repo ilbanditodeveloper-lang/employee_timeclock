@@ -120,6 +120,13 @@
       "when": 1782092000000,
       "tag": "0016_fix_legal_compliance_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782093000000,
+      "tag": "0017_employee_privacy_notice_version",
+      "breakpoints": true
     }
   ]
 }

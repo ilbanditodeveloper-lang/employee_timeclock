@@ -288,7 +288,9 @@ export default function AdminLegalPanel() {
           </div>
           <span className="rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
             {t("admin.legal.employeeInfo.version", {
-              version: EMPLOYEE_PRIVACY_NOTICE_VERSION,
+              version:
+                companyLegalQuery.data?.employeePrivacyNoticeVersion ??
+                EMPLOYEE_PRIVACY_NOTICE_VERSION,
             })}
           </span>
         </div>

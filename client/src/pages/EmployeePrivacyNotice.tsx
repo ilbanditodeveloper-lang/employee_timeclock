@@ -22,13 +22,26 @@ export default function EmployeePrivacyNotice({ onAccepted, embedded }: Props) {
   const { t } = useLocale();
   const { employeeSession, setEmployeeSession } = useAuthContext();
   const companySlug = employeeSession?.companySlug ?? "default";
+  const utils = trpc.useUtils();
 
   const companyLegalQuery = trpc.publicApi.getPublicCompanyLegal.useQuery({ companySlug });
   const accept = trpc.publicApi.acceptEmployeePrivacyNotice.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       if (employeeSession) {
         setEmployeeSession({ ...employeeSession, needsPrivacyNotice: false });
       }
+      // Update cached session immediately so the clock screen appears without reload.
+      utils.publicApi.getSession.setData(undefined, (prev) => {
+        if (!prev?.session || prev.session.type !== "employee") return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            needsPrivacyNotice: false,
+          },
+        };
+      });
+      await utils.publicApi.getSession.invalidate();
       toast.success(t("legal.employeeNotice.accepted"));
       onAccepted?.();
     },
@@ -46,6 +59,7 @@ export default function EmployeePrivacyNotice({ onAccepted, embedded }: Props) {
       country: company?.country,
       locationEnabled: company?.locationEnabled,
       dataRetentionYears: company?.dataRetentionYears,
+      employeePrivacyNoticeVersion: company?.employeePrivacyNoticeVersion,
     },
     {
       employeeName: employeeSession?.displayName,
@@ -79,7 +93,12 @@ export default function EmployeePrivacyNotice({ onAccepted, embedded }: Props) {
         <Button
           className="w-full"
           disabled={!read || accept.isPending || companyLegalQuery.isLoading}
-          onClick={() => accept.mutate(emptyCreds)}
+          onClick={() =>
+            accept.mutate({
+              ...emptyCreds,
+              documentVersion: noticeDocument.version,
+            })
+          }
         >
           {accept.isPending ? t("legal.employeeNotice.saving") : t("legal.employeeNotice.continue")}
         </Button>

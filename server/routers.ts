@@ -1,4 +1,9 @@
-import { COOKIE_NAME, EMPLOYEE_PRIVACY_NOTICE_VERSION, DUPLICATE_EMPLOYEE_EMAIL_MSG, EARLY_CLOCK_MINUTES } from "@shared/const";
+import { COOKIE_NAME, DUPLICATE_EMPLOYEE_EMAIL_MSG, EARLY_CLOCK_MINUTES } from "@shared/const";
+import {
+  bumpPrivacyNoticeVersion,
+  didPrivacyNoticeLegalDataChange,
+  getCompanyPrivacyNoticeVersion,
+} from "@shared/privacyNoticeVersion";
 import {
   formatScheduleTime,
   getClockWindowMinutes,
@@ -1688,10 +1693,11 @@ export const appRouter = router({
       const scheduleRows = await getSchedulesByEmployee(employee.id, employee.companyId);
       const scheduleMap = rowsToScheduleMap(scheduleRows);
       const company = await getCompanyById(employee.companyId);
+      const noticeVersion = getCompanyPrivacyNoticeVersion(company);
       const acceptance = await getLegalAcceptance(
         employee.id,
         "employee_privacy_notice",
-        EMPLOYEE_PRIVACY_NOTICE_VERSION
+        noticeVersion
       );
       await setSessionCookie(ctx.res, ctx.req, {
         type: "employee",
@@ -1709,7 +1715,7 @@ export const appRouter = router({
         lateGraceMinutes: employee.lateGraceMinutes ?? 5,
         locationEnabled: company?.locationEnabled ?? false,
         needsPrivacyNotice: !acceptance,
-        privacyNoticeVersion: EMPLOYEE_PRIVACY_NOTICE_VERSION,
+        privacyNoticeVersion: noticeVersion,
         timezone: company?.timezone ?? "Europe/Madrid",
       };
     }),
@@ -2442,10 +2448,11 @@ export const appRouter = router({
         if (session.companyId) {
           const company = await getCompanyById(session.companyId);
           const employee = await getEmployeeById(session.employeeId, session.companyId);
+          const noticeVersion = getCompanyPrivacyNoticeVersion(company);
           const acceptance = await getLegalAcceptance(
             session.employeeId,
             "employee_privacy_notice",
-            EMPLOYEE_PRIVACY_NOTICE_VERSION
+            noticeVersion
           );
           return {
             session: {
@@ -2454,6 +2461,7 @@ export const appRouter = router({
               timezone: company?.timezone ?? "Europe/Madrid",
               lateGraceMinutes: employee?.lateGraceMinutes ?? 5,
               needsPrivacyNotice: !acceptance,
+              privacyNoticeVersion: noticeVersion,
             },
           };
         }
@@ -2478,10 +2486,11 @@ export const appRouter = router({
         const { admin, company } = await resolveAdminAuth(ctx, input);
         const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
         if (!restaurant) return [];
+        const noticeVersion = getCompanyPrivacyNoticeVersion(company);
         return listEmployeePrivacyAcceptances(
           company.id,
           restaurant.id,
-          EMPLOYEE_PRIVACY_NOTICE_VERSION
+          noticeVersion
         );
       }),
 
@@ -2537,6 +2546,28 @@ export const appRouter = router({
           if (input.legalOnboardingAcknowledged) {
             update.onboardingLegalAcknowledgedAt = new Date();
           }
+          const demoCompany = getDemoCompany();
+          const nextLegal = {
+            legalName:
+              input.legalName !== undefined ? (input.legalName.trim() || null) : demoCompany.legalName,
+            taxId: input.taxId !== undefined ? (input.taxId.trim() || null) : demoCompany.taxId,
+            address: input.address !== undefined ? (input.address.trim() || null) : demoCompany.address,
+            privacyContactEmail:
+              input.privacyContactEmail !== undefined
+                ? input.privacyContactEmail.trim() || null
+                : demoCompany.privacyContactEmail,
+            locationEnabled:
+              input.locationEnabled !== undefined
+                ? input.locationEnabled
+                : demoCompany.locationEnabled,
+            dataRetentionYears:
+              input.dataRetentionYears !== undefined
+                ? input.dataRetentionYears
+                : demoCompany.dataRetentionYears,
+          };
+          if (didPrivacyNoticeLegalDataChange(demoCompany, nextLegal)) {
+            update.employeePrivacyNoticeVersion = bumpPrivacyNoticeVersion();
+          }
           return demoUpdateCompanyLegal(update);
         }
         const db = await getDb();
@@ -2581,6 +2612,29 @@ export const appRouter = router({
         if (input.legalOnboardingAcknowledged) {
           update.onboardingLegalAcknowledgedAt = new Date();
         }
+
+        const nextLegal = {
+          legalName:
+            input.legalName !== undefined ? (input.legalName.trim() || null) : company.legalName,
+          taxId: input.taxId !== undefined ? (input.taxId.trim() || null) : company.taxId,
+          address: input.address !== undefined ? (input.address.trim() || null) : company.address,
+          privacyContactEmail:
+            input.privacyContactEmail !== undefined
+              ? input.privacyContactEmail.trim() || null
+              : company.privacyContactEmail,
+          locationEnabled:
+            input.locationEnabled !== undefined
+              ? Boolean(update.locationEnabled ?? input.locationEnabled)
+              : company.locationEnabled,
+          dataRetentionYears:
+            input.dataRetentionYears !== undefined
+              ? input.dataRetentionYears
+              : company.dataRetentionYears,
+        };
+        if (didPrivacyNoticeLegalDataChange(company, nextLegal)) {
+          update.employeePrivacyNoticeVersion = bumpPrivacyNoticeVersion();
+        }
+
         await db.update(companies).set(update).where(eq(companies.id, company.id));
         if (input.locationEnabled === true && !company.locationEnabled) {
           await writeAuditLog({
@@ -2743,13 +2797,14 @@ export const appRouter = router({
           timezone: company.timezone,
           locationEnabled: company.locationEnabled,
           dataRetentionYears: company.dataRetentionYears,
+          employeePrivacyNoticeVersion: getCompanyPrivacyNoticeVersion(company),
         };
       }),
 
     acceptEmployeePrivacyNotice: publicProcedure
       .input(
         optionalCreds.extend({
-          documentVersion: z.string().default(EMPLOYEE_PRIVACY_NOTICE_VERSION),
+          documentVersion: z.string().min(1).max(32).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -2763,12 +2818,15 @@ export const appRouter = router({
         }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
+        const company = await getCompanyById(employee.companyId);
+        const noticeVersion =
+          input.documentVersion?.trim() || getCompanyPrivacyNoticeVersion(company);
         const existing = await getLegalAcceptance(
           employee.id,
           "employee_privacy_notice",
-          input.documentVersion
+          noticeVersion
         );
-        if (existing) return { success: true, alreadyAccepted: true };
+        if (existing) return { success: true, alreadyAccepted: true, documentVersion: noticeVersion };
         const ip =
           (ctx.req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
           ctx.req.socket.remoteAddress ??
@@ -2777,10 +2835,10 @@ export const appRouter = router({
           companyId: employee.companyId,
           employeeId: employee.id,
           documentType: "employee_privacy_notice",
-          documentVersion: input.documentVersion,
+          documentVersion: noticeVersion,
           ipAddress: ip,
         });
-        return { success: true, alreadyAccepted: false };
+        return { success: true, alreadyAccepted: false, documentVersion: noticeVersion };
       }),
 
     listAuditLogs: publicProcedure

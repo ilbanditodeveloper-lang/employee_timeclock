@@ -23,6 +23,7 @@ export const demoCompany = {
   gpsJustificationCategory: null as string | null,
   gpsActivatedBy: null as number | null,
   gpsActivatedAt: null as Date | null,
+  employeePrivacyNoticeVersion: EMPLOYEE_PRIVACY_NOTICE_VERSION,
   legalHoldEnabled: false,
   minimumRetentionYears: 4,
   anonymizeAfterRetention: false,
@@ -353,9 +354,10 @@ export function getDemoTimeOff(status?: string) {
 }
 
 export function getDemoPrivacyAcceptances() {
+  const version = getDemoPrivacyNoticeVersion();
   return employees.map((emp) => {
     const acc = privacyAcceptances.find(
-      (a) => a.employeeId === emp.id && a.documentVersion === EMPLOYEE_PRIVACY_NOTICE_VERSION
+      (a) => a.employeeId === emp.id && a.documentVersion === version
     );
     return {
       employeeId: emp.id,
@@ -395,6 +397,14 @@ export function demoUpsertRestaurant(input: {
 export function demoUpdateCompanyLegal(input: Record<string, unknown>) {
   company = { ...company, ...input, updatedAt: new Date() } as typeof company;
   return { success: true };
+}
+
+export function demoBumpPrivacyNoticeVersion(version: string) {
+  company = { ...company, employeePrivacyNoticeVersion: version, updatedAt: new Date() };
+}
+
+export function getDemoPrivacyNoticeVersion() {
+  return company.employeePrivacyNoticeVersion || EMPLOYEE_PRIVACY_NOTICE_VERSION;
 }
 
 export function demoClockIn(employeeId: number) {
@@ -452,13 +462,14 @@ export function demoAdminForceClockOut(
 }
 
 export function demoAcceptPrivacy(employeeId: number, ip: string | null) {
+  const version = getDemoPrivacyNoticeVersion();
   const existing = privacyAcceptances.find(
-    (a) => a.employeeId === employeeId && a.documentVersion === EMPLOYEE_PRIVACY_NOTICE_VERSION
+    (a) => a.employeeId === employeeId && a.documentVersion === version
   );
   if (existing) return { success: true, alreadyAccepted: true };
   privacyAcceptances.push({
     employeeId,
-    documentVersion: EMPLOYEE_PRIVACY_NOTICE_VERSION,
+    documentVersion: version,
     acceptedAt: new Date(),
     ipAddress: ip,
   });
@@ -466,8 +477,9 @@ export function demoAcceptPrivacy(employeeId: number, ip: string | null) {
 }
 
 export function demoHasPrivacyAcceptance(employeeId: number) {
+  const version = getDemoPrivacyNoticeVersion();
   return privacyAcceptances.some(
-    (a) => a.employeeId === employeeId && a.documentVersion === EMPLOYEE_PRIVACY_NOTICE_VERSION
+    (a) => a.employeeId === employeeId && a.documentVersion === version
   );
 }
 

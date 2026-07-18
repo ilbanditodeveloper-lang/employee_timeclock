@@ -9,6 +9,8 @@ export type CompanyLegalInfo = {
   country?: string | null;
   locationEnabled?: boolean;
   dataRetentionYears?: number;
+  /** Company-specific notice version (bumped when legal data changes). */
+  employeePrivacyNoticeVersion?: string | null;
 };
 
 export type EmployeeNoticeContext = {
@@ -69,8 +71,11 @@ export function buildEmployeePrivacyNotice(
       }.`
     : "";
 
+  const noticeVersion =
+    company.employeePrivacyNoticeVersion?.trim() || EMPLOYEE_PRIVACY_NOTICE_VERSION;
+
   return {
-    version: EMPLOYEE_PRIVACY_NOTICE_VERSION,
+    version: noticeVersion,
     title: "CLÁUSULA INFORMATIVA SOBRE PROTECCIÓN DE DATOS",
     subtitle: "Registro de jornada laboral mediante aplicación digital",
     disclaimer:
