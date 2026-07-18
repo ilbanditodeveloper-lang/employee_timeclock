@@ -259,5 +259,147 @@ export const adminExt = {
         "Payment completed. Your plan will activate in a few seconds.",
       billingPaymentCancelled: "Payment cancelled",
     },
+    legal: {
+      processorNotice:
+        "TimeClock acts as data processor. Your company is the controller of your employees' data.",
+      templateDisclaimer:
+        "Templates are indicative; review them with your advisor before official use.",
+      defaults: {
+        companyName: "My company",
+      },
+      employeeInfo: {
+        title: "Company legal information",
+        description:
+          "Controller details for privacy notices, DPA, and inspection reports.",
+        version: "Employee notice version: {{version}}",
+      },
+      fields: {
+        legalName: "Legal name",
+        taxId: "Tax ID (CIF / NIF)",
+        address: "Registered address",
+        privacyEmail: "Privacy contact email",
+        retentionYears: "Clock-record retention years (min. 4)",
+        locationEnabled: "Validate GPS location on clock-in",
+        gpsCategory: "Geolocation reason",
+        gpsJustification: "Detailed justification",
+        employee: "Employee",
+        year: "Year",
+        month: "Month",
+        from: "From",
+        to: "To",
+      },
+      placeholders: {
+        legalName: "e.g. My Company Ltd.",
+        taxId: "B12345678",
+        address: "Street, number, city",
+        privacyEmail: "privacy@company.com",
+        selectCategory: "Select a reason",
+        pdfEmployee: "Employee (optional)",
+        selectEmployee: "Select an employee",
+      },
+      gps: {
+        activationWarning:
+          "To enable GPS you must provide a reason and justification (min. 10 characters). This is recorded in the audit log.",
+        defaultJustification:
+          "Verify the employee is at the workplace when clocking in, preventing records from home or other unauthorized locations.",
+        categories: {
+          workplace_geofence: {
+            label: "Clock-in only at the workplace (recommended)",
+            hint: "To prevent employees from clocking in from home or elsewhere.",
+          },
+          multiple_sites: {
+            label: "Multiple work sites",
+            hint: "If the company has more than one location where clock-in is allowed.",
+          },
+          itinerant_workers: {
+            label: "Itinerant workers",
+            hint: "Delivery, construction sites, client visits, etc.",
+          },
+          off_site_work: {
+            label: "Regular work away from the main site",
+            hint: "Partial remote work or frequent travel.",
+          },
+          other: {
+            label: "Other reason",
+            hint: "Enter the justification in the text field.",
+          },
+        },
+      },
+      actions: {
+        save: "Save legal data",
+        saving: "Saving…",
+        print: "Print notice",
+        pdfBlank: "Blank PDF",
+        pdfEmployee: "PDF with employee details",
+        exportMonthlyCsv: "Export monthly CSV report",
+        downloadPackage: "Download inspection package",
+      },
+      acceptances: {
+        title: "Employee notice acceptances",
+        description: "Digital read/accept status of the privacy notice.",
+        pendingCount: "{{count}} pending",
+        empty: "No employees registered.",
+        columns: {
+          employee: "Employee",
+          username: "Username",
+          status: "Status",
+          acceptedAt: "Accepted",
+          ip: "IP",
+        },
+        status: {
+          digital: "Digital",
+          pending: "Pending",
+          inactive: "Inactive",
+        },
+      },
+      saasAcceptances: {
+        title: "SaaS legal acceptances (company)",
+        description: "Terms, privacy, and DPA accepted by the administrator.",
+        empty: "No acceptances recorded yet.",
+        columns: {
+          document: "Document",
+          version: "Version",
+          date: "Date",
+          hash: "Hash",
+        },
+      },
+      monthlyReport: {
+        title: "Monthly labor report",
+        description: "Generate a CSV of the employee's clock records for the selected month.",
+        employeeHint: "Choose the employee to export.",
+        yearHint: "Report year",
+        monthHint: "Month (1–12)",
+      },
+      inspectionPackage: {
+        title: "Inspection package",
+        description:
+          "Download a ZIP with legal data and clock records for the period for Labor Inspection.",
+        missingData: "Missing official data: {{missing}}",
+        fromHint: "Period start",
+        toHint: "Period end",
+      },
+      gdprRequests: {
+        title: "GDPR requests",
+        description: "Log of rights exercised by employees (access, erasure, etc.).",
+        empty: "No GDPR requests recorded.",
+      },
+      missingFields: {
+        legalName: "legal name",
+        taxId: "tax ID",
+        privacyEmail: "privacy contact email",
+      },
+      toasts: {
+        saved: "Legal data saved",
+        minRetention: "Minimum retention is 4 years",
+        incomplete: "Complete the official data: {{missing}}",
+        gpsRequired: "Provide GPS reason and justification (min. 10 characters) to enable location",
+        selectEmployee: "Select an employee",
+        monthlyGenerated: "Monthly report generated",
+        exportFailed: "Could not export the report",
+        inspectionPeriodRequired: "Enter the inspection period",
+        inspectionGenerated: "Inspection package downloaded",
+        inspectionFailed: "Could not generate the package",
+      },
+    },
   },
 } as const;

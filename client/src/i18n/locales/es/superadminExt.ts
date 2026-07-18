@@ -24,6 +24,39 @@ export const superadminExt = {
         editLanding: "Editar landing",
         openPublicWeb: "Abrir web pública",
       },
+      upcomingPayments: {
+        title: "Próximos pagos",
+        description:
+          "Renovaciones Stripe, fin de prueba y cobros pendientes de todas las empresas, ordenados por fecha.",
+        empty: "No hay pagos programados con fecha conocida.",
+        inactiveCompany: "Empresa dada de baja",
+        amountUnknown: "—",
+        billingUnknown: "sin datos",
+        stats: {
+          total: "{{count}} en calendario",
+          next30: "{{count}} en 30 días",
+          overdue: "{{count}} vencidos",
+        },
+        columns: {
+          company: "Empresa",
+          plan: "Plan",
+          amount: "Importe estimado",
+          type: "Tipo",
+          date: "Fecha",
+          billing: "Estado Stripe",
+        },
+        kind: {
+          renewal: "Renovación",
+          trialEnd: "Fin de prueba",
+          overdue: "Pago vencido",
+        },
+        relative: {
+          overdue: "Vencido",
+          today: "Hoy",
+          tomorrow: "Mañana",
+          inDays: "En {{days}} días",
+        },
+      },
     },
     landing: {
       title: "Ajustes de la landing page",

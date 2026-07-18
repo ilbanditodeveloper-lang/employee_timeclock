@@ -2492,7 +2492,9 @@ export const appRouter = router({
           legalName: z.string().optional(),
           taxId: z.string().optional(),
           address: z.string().optional(),
-          privacyContactEmail: z.string().email().optional().or(z.literal("")),
+          privacyContactEmail: z
+            .union([z.string().email(), z.literal("")])
+            .optional(),
           country: z.string().length(2).optional(),
           timezone: z.string().optional(),
           locationEnabled: z.boolean().optional(),
@@ -2501,15 +2503,18 @@ export const appRouter = router({
           province: z.string().optional(),
           legalContactName: z.string().optional(),
           gpsJustification: z.string().optional(),
-          gpsJustificationCategory: z
-            .enum([
-              "workplace_geofence",
-              "itinerant_workers",
-              "multiple_sites",
-              "off_site_work",
-              "other",
-            ])
-            .optional(),
+          gpsJustificationCategory: z.preprocess(
+            (val) => (val === "" || val === null ? undefined : val),
+            z
+              .enum([
+                "workplace_geofence",
+                "itinerant_workers",
+                "multiple_sites",
+                "off_site_work",
+                "other",
+              ])
+              .optional()
+          ),
         })
       )
       .mutation(async ({ ctx, input }) => {

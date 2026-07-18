@@ -259,5 +259,147 @@ export const adminExt = {
         "Pago completado. Tu plan se activará en unos segundos.",
       billingPaymentCancelled: "Pago cancelado",
     },
+    legal: {
+      processorNotice:
+        "TimeClock actúa como encargado del tratamiento. Tu empresa es el responsable de los datos de tus empleados.",
+      templateDisclaimer:
+        "Las plantillas son orientativas; revísalas con tu asesor antes de uso oficial.",
+      defaults: {
+        companyName: "Mi empresa",
+      },
+      employeeInfo: {
+        title: "Información legal de la empresa",
+        description:
+          "Datos del responsable del tratamiento para avisos de privacidad, DPA e informes de inspección.",
+        version: "Versión aviso empleados: {{version}}",
+      },
+      fields: {
+        legalName: "Razón social",
+        taxId: "CIF / NIF",
+        address: "Dirección fiscal",
+        privacyEmail: "Email de contacto privacidad",
+        retentionYears: "Años de retención de fichajes (mín. 4)",
+        locationEnabled: "Validar ubicación GPS al fichar",
+        gpsCategory: "Motivo de la geolocalización",
+        gpsJustification: "Justificación detallada",
+        employee: "Empleado",
+        year: "Año",
+        month: "Mes",
+        from: "Desde",
+        to: "Hasta",
+      },
+      placeholders: {
+        legalName: "Ej. Mi Empresa S.L.",
+        taxId: "B12345678",
+        address: "Calle, número, ciudad",
+        privacyEmail: "privacidad@empresa.com",
+        selectCategory: "Selecciona un motivo",
+        pdfEmployee: "Empleado (opcional)",
+        selectEmployee: "Selecciona un empleado",
+      },
+      gps: {
+        activationWarning:
+          "Al activar GPS debes indicar el motivo y una justificación (mín. 10 caracteres). Queda registrado en auditoría.",
+        defaultJustification:
+          "Comprobar que el empleado está en el centro de trabajo al fichar, evitando registros desde domicilio u otras ubicaciones no autorizadas.",
+        categories: {
+          workplace_geofence: {
+            label: "Fichaje solo en el centro de trabajo (recomendado)",
+            hint: "Para evitar que los empleados fichen desde casa u otra ubicación.",
+          },
+          multiple_sites: {
+            label: "Varios centros de trabajo",
+            hint: "Si la empresa tiene más de un local donde se puede fichar.",
+          },
+          itinerant_workers: {
+            label: "Trabajadores itinerantes",
+            hint: "Reparto, obras, visitas a clientes, etc.",
+          },
+          off_site_work: {
+            label: "Trabajo habitual fuera del centro",
+            hint: "Teletrabajo parcial o desplazamientos frecuentes.",
+          },
+          other: {
+            label: "Otro motivo",
+            hint: "Indique la justificación en el campo de texto.",
+          },
+        },
+      },
+      actions: {
+        save: "Guardar datos legales",
+        saving: "Guardando…",
+        print: "Imprimir aviso",
+        pdfBlank: "PDF en blanco",
+        pdfEmployee: "PDF con datos del empleado",
+        exportMonthlyCsv: "Exportar informe mensual CSV",
+        downloadPackage: "Descargar paquete de inspección",
+      },
+      acceptances: {
+        title: "Aceptaciones del aviso a empleados",
+        description: "Estado de lectura/aceptación digital del aviso de privacidad.",
+        pendingCount: "{{count}} pendientes",
+        empty: "No hay empleados registrados.",
+        columns: {
+          employee: "Empleado",
+          username: "Usuario",
+          status: "Estado",
+          acceptedAt: "Aceptado",
+          ip: "IP",
+        },
+        status: {
+          digital: "Digital",
+          pending: "Pendiente",
+          inactive: "Inactivo",
+        },
+      },
+      saasAcceptances: {
+        title: "Aceptaciones legales SaaS (empresa)",
+        description: "Términos, privacidad y DPA aceptados por el administrador.",
+        empty: "Sin aceptaciones registradas todavía.",
+        columns: {
+          document: "Documento",
+          version: "Versión",
+          date: "Fecha",
+          hash: "Hash",
+        },
+      },
+      monthlyReport: {
+        title: "Informe laboral mensual",
+        description: "Genera un CSV con fichajes del empleado en el mes seleccionado.",
+        employeeHint: "Elige el trabajador a exportar.",
+        yearHint: "Año del informe",
+        monthHint: "Mes (1–12)",
+      },
+      inspectionPackage: {
+        title: "Paquete de inspección",
+        description:
+          "Descarga un ZIP con datos legales y fichajes del periodo para Inspección de Trabajo.",
+        missingData: "Faltan datos oficiales: {{missing}}",
+        fromHint: "Inicio del periodo",
+        toHint: "Fin del periodo",
+      },
+      gdprRequests: {
+        title: "Solicitudes RGPD",
+        description: "Registro de derechos ejercidos por empleados (acceso, borrado, etc.).",
+        empty: "No hay solicitudes RGPD registradas.",
+      },
+      missingFields: {
+        legalName: "razón social",
+        taxId: "CIF/NIF",
+        privacyEmail: "email de contacto privacidad",
+      },
+      toasts: {
+        saved: "Datos legales guardados",
+        minRetention: "La retención mínima es de 4 años",
+        incomplete: "Completa los datos oficiales: {{missing}}",
+        gpsRequired: "Indica motivo y justificación GPS (mín. 10 caracteres) para activar la ubicación",
+        selectEmployee: "Selecciona un empleado",
+        monthlyGenerated: "Informe mensual generado",
+        exportFailed: "No se pudo exportar el informe",
+        inspectionPeriodRequired: "Indica el periodo de inspección",
+        inspectionGenerated: "Paquete de inspección descargado",
+        inspectionFailed: "No se pudo generar el paquete",
+      },
+    },
   },
 } as const;

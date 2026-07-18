@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { buildSubscriptionPlanLabels } from "@shared/subscriptionPlans";
 import SuperAdminCompaniesPanel from "@/components/SuperAdminCompaniesPanel";
+import SuperAdminUpcomingPaymentsPanel from "@/components/SuperAdminUpcomingPaymentsPanel";
 
 type SuperAdminTab = "dashboard" | "companies" | "landing";
 
@@ -423,6 +424,11 @@ export default function SuperAdmin() {
                   </div>
                 </AppShellPanel>
               </div>
+
+              <SuperAdminUpcomingPaymentsPanel
+                companies={companies}
+                pricingPacks={landingQuery.data?.pricingPacks}
+              />
 
               <AppShellPanel
                 title={t("superadmin.dashboard.quickAccess.title")}

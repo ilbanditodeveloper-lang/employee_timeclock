@@ -97,6 +97,8 @@ export default function AdminLegalPanel() {
     setAddress(c.address ?? "");
     setPrivacyContactEmail(c.privacyContactEmail ?? "");
     setLocationEnabled(c.locationEnabled ?? false);
+    setGpsJustificationCategory(c.gpsJustificationCategory ?? "");
+    setGpsJustification(c.gpsJustification ?? "");
     setDataRetentionYears(String(c.dataRetentionYears ?? 4));
   }, [companyLegalQuery.data]);
 
@@ -172,12 +174,20 @@ export default function AdminLegalPanel() {
         })
       );
     }
-    if (locationEnabled && !companyLegalQuery.data?.locationEnabled) {
+    const enablingGps =
+      locationEnabled && !companyLegalQuery.data?.locationEnabled;
+    if (enablingGps) {
       if (!gpsJustificationCategory || gpsJustification.trim().length < 10) {
         toast.error(t("admin.legal.toasts.gpsRequired"));
         return;
       }
     }
+    const validCategory = GPS_JUSTIFICATION_CATEGORIES.some(
+      (c) => c.value === gpsJustificationCategory
+    )
+      ? (gpsJustificationCategory as GpsJustificationCategory)
+      : undefined;
+
     updateLegal.mutate({
       ...emptyCreds,
       legalName,
@@ -186,10 +196,12 @@ export default function AdminLegalPanel() {
       privacyContactEmail,
       locationEnabled,
       dataRetentionYears: years,
-      gpsJustification: locationEnabled ? gpsJustification.trim() : undefined,
-      gpsJustificationCategory: locationEnabled
-        ? (gpsJustificationCategory as GpsJustificationCategory)
-        : undefined,
+      ...(enablingGps || locationEnabled
+        ? {
+            gpsJustification: gpsJustification.trim() || undefined,
+            gpsJustificationCategory: validCategory,
+          }
+        : {}),
     });
   };
 

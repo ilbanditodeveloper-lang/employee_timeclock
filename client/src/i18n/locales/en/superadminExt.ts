@@ -24,6 +24,39 @@ export const superadminExt = {
         editLanding: "Edit landing",
         openPublicWeb: "Open public website",
       },
+      upcomingPayments: {
+        title: "Upcoming payments",
+        description:
+          "Stripe renewals, trial endings, and overdue charges for all companies, sorted by date.",
+        empty: "No scheduled payments with a known date.",
+        inactiveCompany: "Deactivated company",
+        amountUnknown: "—",
+        billingUnknown: "no data",
+        stats: {
+          total: "{{count}} scheduled",
+          next30: "{{count}} in 30 days",
+          overdue: "{{count}} overdue",
+        },
+        columns: {
+          company: "Company",
+          plan: "Plan",
+          amount: "Estimated amount",
+          type: "Type",
+          date: "Date",
+          billing: "Stripe status",
+        },
+        kind: {
+          renewal: "Renewal",
+          trialEnd: "Trial end",
+          overdue: "Overdue payment",
+        },
+        relative: {
+          overdue: "Overdue",
+          today: "Today",
+          tomorrow: "Tomorrow",
+          inDays: "In {{days}} days",
+        },
+      },
     },
     landing: {
       title: "Landing page settings",
