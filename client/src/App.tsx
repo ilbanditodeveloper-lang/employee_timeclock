@@ -29,6 +29,16 @@ import PlatformDpa from "./pages/PlatformDpa";
 import EmployeePrivacyNotice from "./pages/EmployeePrivacyNotice";
 import RegisterBusiness from "./pages/RegisterBusiness";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
+import EmployeePrivacyGate from "./components/EmployeePrivacyGate";
+import { useAuthContext } from "./contexts/AuthContext";
+
+function EmployeeNoticeRoute() {
+  const { isEmployeeAuthenticated, employeeSession } = useAuthContext();
+  const needsAccept = Boolean(
+    isEmployeeAuthenticated && employeeSession?.needsPrivacyNotice
+  );
+  return <EmployeePrivacyNotice embedded={needsAccept} />;
+}
 
 function Router() {
   return (
@@ -39,17 +49,34 @@ function Router() {
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/admin-login"} component={AdminLogin} />
       <Route path={"/superadmin"} component={SuperAdmin} />
-      <Route path={"/employee"} component={EmployeeDashboard} />
-      <Route path={"/employee/calendar"} component={EmployeeCalendar} />
-      <Route path={"/employee/schedule"} component={EmployeeSchedule} />
-      <Route path={"/employee/calculator"} component={EmployeeCalculator} />
-      <Route path={"/employee/incident"} component={EmployeeIncident} />
-      <Route path={"/employee/time-off"} component={EmployeeTimeOff} />
-      <Route path={"/employee/legal"} component={EmployeeLegal} />
+      <Route path={"/employee"} component={() => (
+        <EmployeePrivacyGate><EmployeeDashboard /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee/calendar"} component={() => (
+        <EmployeePrivacyGate><EmployeeCalendar /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee/schedule"} component={() => (
+        <EmployeePrivacyGate><EmployeeSchedule /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee/calculator"} component={() => (
+        <EmployeePrivacyGate><EmployeeCalculator /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee/incident"} component={() => (
+        <EmployeePrivacyGate><EmployeeIncident /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee/time-off"} component={() => (
+        <EmployeePrivacyGate><EmployeeTimeOff /></EmployeePrivacyGate>
+      )} />
+      <Route path={"/employee/legal"} component={() => (
+        <EmployeePrivacyGate><EmployeeLegal /></EmployeePrivacyGate>
+      )} />
       <Route path={"/legal/privacy"} component={PrivacyPolicy} />
       <Route path={"/legal/terms"} component={TermsOfUse} />
       <Route path={"/legal/dpa"} component={PlatformDpa} />
-      <Route path={"/legal/employee-notice"} component={() => <EmployeePrivacyNotice />} />
+      <Route
+        path={"/legal/employee-notice"}
+        component={EmployeeNoticeRoute}
+      />
       <Route path={"/admin/onboarding"} component={AdminOnboarding} />
       <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/404"} component={NotFound} />

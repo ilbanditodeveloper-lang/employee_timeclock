@@ -81,8 +81,11 @@ export default function AdminLegalPanel() {
   const employeesQuery = trpc.publicApi.listEmployees.useQuery(emptyCreds);
   const trpcUtils = trpc.useUtils();
   const updateLegal = trpc.publicApi.updateCompanyLegal.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success(t("admin.legal.toasts.saved"));
+      if (result.privacyNoticeReacceptanceRequired) {
+        toast.message(t("admin.legal.toasts.employeesMustReaccept"));
+      }
       companyLegalQuery.refetch();
       acceptancesQuery.refetch();
     },

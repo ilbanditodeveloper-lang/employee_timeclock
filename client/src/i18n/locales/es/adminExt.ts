@@ -390,6 +390,8 @@ export const adminExt = {
       },
       toasts: {
         saved: "Datos legales guardados",
+        employeesMustReaccept:
+          "Los empleados deberán aceptar de nuevo el aviso de privacidad actualizado al entrar.",
         minRetention: "La retención mínima es de 4 años",
         incomplete: "Completa los datos oficiales: {{missing}}",
         gpsRequired: "Indica motivo y justificación GPS (mín. 10 caracteres) para activar la ubicación",

@@ -8,7 +8,6 @@ import { trpc } from '@/lib/trpc';
 import { useAuthContext, useRequireEmployeeAuth } from '@/contexts/AuthContext';
 import { useLocale } from '@/contexts/LocaleContext';
 import { employeeQueryInput } from '@/lib/authApi';
-import EmployeePrivacyNotice from '@/pages/EmployeePrivacyNotice';
 import {
   formatScheduleTime,
   getClockWindowMinutes,
@@ -499,14 +498,6 @@ export default function EmployeeDashboard() {
 
   if (isAuthLoading || !isEmployeeAuthenticated) {
     return null;
-  }
-
-  if (employeeSession?.needsPrivacyNotice) {
-    return (
-      <div className="min-h-screen bg-slate-900/40 flex items-center justify-center p-4">
-        <EmployeePrivacyNotice embedded />
-      </div>
-    );
   }
 
   const canClockIn =

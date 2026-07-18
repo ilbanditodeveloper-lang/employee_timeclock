@@ -2567,8 +2567,12 @@ export const appRouter = router({
           };
           if (didPrivacyNoticeLegalDataChange(demoCompany, nextLegal)) {
             update.employeePrivacyNoticeVersion = bumpPrivacyNoticeVersion();
+            return {
+              ...demoUpdateCompanyLegal(update),
+              privacyNoticeReacceptanceRequired: true,
+            };
           }
-          return demoUpdateCompanyLegal(update);
+          return { ...demoUpdateCompanyLegal(update), privacyNoticeReacceptanceRequired: false };
         }
         const db = await getDb();
         if (!db) throw new Error("Database not available");
@@ -2631,8 +2635,10 @@ export const appRouter = router({
               ? input.dataRetentionYears
               : company.dataRetentionYears,
         };
+        let privacyNoticeReacceptanceRequired = false;
         if (didPrivacyNoticeLegalDataChange(company, nextLegal)) {
           update.employeePrivacyNoticeVersion = bumpPrivacyNoticeVersion();
+          privacyNoticeReacceptanceRequired = true;
         }
 
         await db.update(companies).set(update).where(eq(companies.id, company.id));
@@ -2668,7 +2674,7 @@ export const appRouter = router({
           performedByType: "admin",
           performedById: admin.id,
         });
-        return { success: true };
+        return { success: true, privacyNoticeReacceptanceRequired };
       }),
 
     getOnboardingStatus: publicProcedure.input(optionalCreds).query(async ({ ctx, input }) => {
