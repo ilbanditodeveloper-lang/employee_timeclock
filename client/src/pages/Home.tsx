@@ -167,6 +167,16 @@ export default function Home() {
                 {t("auth.home.employeeAccess")}
               </Button>
               <Button
+                onClick={() => setLocation("/multifichaje")}
+                variant="outline"
+                className={cn(
+                  "h-11 w-full border border-blue-300 text-base text-blue-900",
+                  "hover:bg-blue-50"
+                )}
+              >
+                {t("auth.home.multiClockAccess")}
+              </Button>
+              <Button
                 onClick={() => setLocation("/admin-login")}
                 variant="outline"
                 className={cn(

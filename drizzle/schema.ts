@@ -198,6 +198,7 @@ export const employees = pgTable(
     username: varchar("username", { length: 100 }).notNull(),
     email: varchar("email", { length: 255 }),
     password: varchar("password", { length: 255 }).notNull(),
+    pinCode: varchar("pinCode", { length: 255 }),
     phone: varchar("phone", { length: 20 }),
     lateGraceMinutes: integer("lateGraceMinutes").default(5).notNull(),
     contractType: contractTypeEnum("contractType").default("full_time").notNull(),

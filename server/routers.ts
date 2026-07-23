@@ -65,7 +65,7 @@ import {
   deleteCompanyCompletely,
 } from "./db";
 import { getVapidPublicKey, sendPushNotification } from "./notificationService";
-import { hashPassword } from "./_core/password";
+import { hashPassword, verifyPassword } from "./_core/password";
 import {
   parseScopedUsername,
   requireSuperAdminCredentials,
@@ -170,6 +170,7 @@ import {
   getDemoCompany,
   getDemoRestaurant,
   getDemoEmployees,
+  getDemoTimeclocks,
 } from "./demo/store";
 
 const optionalCreds = z.object({
@@ -179,6 +180,53 @@ const optionalCreds = z.object({
 });
 
 type OptionalCredsInput = z.infer<typeof optionalCreds>;
+const EMPLOYEE_PIN_REGEX = /^\d{4}$/;
+
+function normalizeEmployeePin(raw: string | undefined | null): string {
+  return (raw ?? "").trim();
+}
+
+async function assertEmployeePinUnique(companyId: number, pin: string, excludeEmployeeId?: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existingEmployees = await db
+    .select({ id: employees.id, pinCode: employees.pinCode })
+    .from(employees)
+    .where(and(eq(employees.companyId, companyId), eq(employees.isActive, true)));
+
+  for (const existing of existingEmployees) {
+    if (excludeEmployeeId && existing.id === excludeEmployeeId) continue;
+    if (!existing.pinCode) continue;
+    if (verifyPassword(pin, existing.pinCode).isValid) {
+      throwBusinessError("El código de 4 dígitos ya está en uso por otro empleado.");
+    }
+  }
+}
+
+async function findEmployeeByPinInRestaurant(companyId: number, restaurantId: number, pin: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const candidates = await db
+    .select()
+    .from(employees)
+    .where(
+      and(
+        eq(employees.companyId, companyId),
+        eq(employees.restaurantId, restaurantId),
+        eq(employees.isActive, true)
+      )
+    );
+
+  const matches = candidates.filter(
+    (candidate) => candidate.pinCode && verifyPassword(pin, candidate.pinCode).isValid
+  );
+  if (matches.length > 1) {
+    throwBusinessError("Hay empleados con el mismo PIN. Revisa la configuración en el panel.");
+  }
+  return matches[0];
+}
 
 async function resolveAdminWithRestaurant(
   ctx: Parameters<typeof resolveAdminAuth>[0],
@@ -936,6 +984,7 @@ export const appRouter = router({
         employeeEmail: z.string().trim().optional().or(z.literal("")),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().min(6),
+        employeePin: z.string().regex(EMPLOYEE_PIN_REGEX),
         employeePhone: z.string().trim().optional().or(z.literal("")),
         lateGraceMinutes: z.number().min(0).max(120).default(5),
         contractType: z.enum(["full_time", "part_time", "temporary", "other"]).optional(),
@@ -967,6 +1016,11 @@ export const appRouter = router({
       if (!contact.valid) {
         throwBusinessError(contact.message ?? "Indique email o teléfono de contacto del empleado");
       }
+      const employeePin = normalizeEmployeePin(input.employeePin);
+      if (!EMPLOYEE_PIN_REGEX.test(employeePin)) {
+        throwBusinessError("El código de empleado debe tener exactamente 4 dígitos.");
+      }
+      await assertEmployeePinUnique(company.id, employeePin);
       if (contact.normalizedEmail) {
         const existingEmail = await getEmployeeByEmail(contact.normalizedEmail, restaurant.companyId);
         if (existingEmail) {
@@ -981,6 +1035,7 @@ export const appRouter = router({
           username: input.employeeUsername,
           email: contact.normalizedEmail,
           password: hashPassword(input.employeePassword),
+          pinCode: hashPassword(employeePin),
           phone: contact.normalizedPhone,
           lateGraceMinutes: input.lateGraceMinutes,
           contractType: input.contractType ?? "full_time",
@@ -1017,6 +1072,7 @@ export const appRouter = router({
         employeeEmail: z.string().trim().optional().or(z.literal("")),
         employeeUsername: z.string().min(3),
         employeePassword: z.string().optional(),
+        employeePin: z.string().regex(EMPLOYEE_PIN_REGEX).optional(),
         employeePhone: z.string().trim().optional().or(z.literal("")),
         lateGraceMinutes: z.number().min(0).max(120).default(5),
         contractType: z.enum(["full_time", "part_time", "temporary", "other"]).optional(),
@@ -1075,6 +1131,14 @@ export const appRouter = router({
       if (input.employeePassword) {
         updateData.password = hashPassword(input.employeePassword);
       }
+      const employeePin = normalizeEmployeePin(input.employeePin);
+      if (employeePin) {
+        if (!EMPLOYEE_PIN_REGEX.test(employeePin)) {
+          throwBusinessError("El código de empleado debe tener exactamente 4 dígitos.");
+        }
+        await assertEmployeePinUnique(company.id, employeePin, input.employeeId);
+        updateData.pinCode = hashPassword(employeePin);
+      }
       await db.update(employees).set(updateData).where(eq(employees.id, input.employeeId));
 
       await db.delete(schedules).where(eq(schedules.employeeId, input.employeeId));
@@ -1097,7 +1161,11 @@ export const appRouter = router({
       const { admin, company } = await resolveAdminAuth(ctx, input);
       const restaurant = await resolveAdminRestaurantForCompany(admin.id, company.id, (input as { restaurantId?: number }).restaurantId);
       if (!restaurant) return [];
-      return await getEmployeesByRestaurant(restaurant.id, company.id);
+      const rows = await getEmployeesByRestaurant(restaurant.id, company.id);
+      return rows.map(({ password: _password, pinCode, ...employee }) => ({
+        ...employee,
+        pinConfigured: Boolean(pinCode),
+      }));
     }),
 
     getEmployeeRestaurant: publicProcedure.input(
@@ -1742,6 +1810,141 @@ export const appRouter = router({
         timezone: company?.timezone ?? "Europe/Madrid",
       };
     }),
+
+    multiClockByPin: publicProcedure
+      .input(
+        optionalCreds.extend({
+          pin: z.string().regex(EMPLOYEE_PIN_REGEX),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        checkRateLimitWithIp("multiclock-pin", getClientIp(ctx.req), input.pin);
+        const pin = normalizeEmployeePin(input.pin);
+        if (!EMPLOYEE_PIN_REGEX.test(pin)) {
+          throwBusinessError("Código inválido. Debe tener 4 dígitos.");
+        }
+
+        const { company, restaurant } = await resolveAdminWithRestaurant(ctx, input);
+        if (!restaurant) throwBusinessError("Negocio no encontrado");
+
+        if (isDemoRequestActive()) {
+          const demoPinMap: Record<string, number> = {
+            "1111": 1,
+            "2222": 2,
+          };
+          const employeeId = demoPinMap[pin];
+          if (!employeeId) {
+            throwBusinessError("Código no válido");
+          }
+          const employee = getDemoEmployees().find((row) => row.id === employeeId && row.isActive);
+          if (!employee) {
+            throwBusinessError("Empleado no disponible");
+          }
+          const hasOpenRecord = getDemoTimeclocks([employeeId]).some(
+            (clock) => !clock.exitTime && clock.status !== "voided"
+          );
+          if (hasOpenRecord) {
+            demoClockOut(employeeId);
+            return {
+              success: true as const,
+              action: "clock_out" as const,
+              employeeId: employee.id,
+              employeeName: employee.name,
+            };
+          }
+          demoClockIn(employeeId);
+          return {
+            success: true as const,
+            action: "clock_in" as const,
+            employeeId: employee.id,
+            employeeName: employee.name,
+          };
+        }
+
+        const employee = await findEmployeeByPinInRestaurant(company.id, restaurant.id, pin);
+        if (!employee) {
+          throwBusinessError("Código no válido");
+        }
+
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const openRecord = await getLatestOpenTimeclockByEmployee(employee.id, company.id);
+        if (openRecord) {
+          const now = new Date();
+          await closeOpenBreakForTimeclock(openRecord.id, company.id, now);
+          await db
+            .update(timeclocks)
+            .set({
+              exitTime: now,
+              exitLatitude: null,
+              exitLongitude: null,
+            })
+            .where(eq(timeclocks.id, openRecord.id));
+          return {
+            success: true as const,
+            action: "clock_out" as const,
+            employeeId: employee.id,
+            employeeName: employee.name,
+          };
+        }
+
+        const now = new Date();
+        const graceMinutes = employee.lateGraceMinutes ?? 5;
+        const tz = company?.timezone ?? "Europe/Madrid";
+        const dayOfWeek = getDayOfWeekInTimeZone(now, tz);
+        const todayTimeclocks = await getTodayTimeclocksByEmployee(
+          employee.id,
+          now,
+          employee.companyId,
+          tz
+        );
+        const completedShifts = todayTimeclocks.filter((tc) => tc.exitTime).length;
+        const scheduleRows = await getSchedulesByEmployee(employee.id, employee.companyId);
+        const scheduleMap = rowsToScheduleMap(scheduleRows);
+        const dayKey = SCHEDULE_DAY_KEYS[dayOfWeek] ?? "monday";
+        const entrySlot = resolveClockEntrySlot({ completedShiftsToday: completedShifts });
+        if (entrySlot && shouldEnforceClockWindow(scheduleMap, dayKey, entrySlot)) {
+          const entryTime = getEffectiveEntryTimeForSlot(scheduleMap[dayKey], entrySlot);
+          const parsed = entryTime ? parseScheduleEntryTime(entryTime) : null;
+          if (parsed) {
+            const { earliest, latest } = getClockWindowMinutes(
+              parsed.hour,
+              parsed.minute,
+              graceMinutes,
+              EARLY_CLOCK_MINUTES
+            );
+            const nowMinutes = getMinutesSinceMidnightInTimeZone(now, tz);
+            if (nowMinutes < earliest) {
+              throwBusinessError(
+                `Fichaje disponible desde ${EARLY_CLOCK_MINUTES} min antes de tu hora (${formatScheduleTime(parsed.hour, parsed.minute)}).`
+              );
+            }
+            if (nowMinutes > latest) {
+              throwBusinessError(
+                `Fichaje no permitido: has superado los ${graceMinutes} minutos de gracia desde la hora de entrada.`
+              );
+            }
+          }
+        }
+
+        await db.insert(timeclocks).values({
+          companyId: employee.companyId,
+          employeeId: employee.id,
+          entryTime: now,
+          isLate: false,
+          status: "valid",
+          source: "tablet",
+          latitude: null,
+          longitude: null,
+        });
+        return {
+          success: true as const,
+          action: "clock_in" as const,
+          employeeId: employee.id,
+          employeeName: employee.name,
+        };
+      }),
 
     clockIn: publicProcedure.input(
       optionalCreds.extend({

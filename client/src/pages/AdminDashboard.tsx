@@ -115,6 +115,8 @@ export default function AdminDashboard() {
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeeUsername, setEmployeeUsername] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
+  const [employeePin, setEmployeePin] = useState('');
+  const [employeePinConfigured, setEmployeePinConfigured] = useState(false);
   const [employeePhone, setEmployeePhone] = useState('');
   const [employeeContractType, setEmployeeContractType] = useState<
     'full_time' | 'part_time' | 'temporary' | 'other'
@@ -833,6 +835,7 @@ export default function AdminDashboard() {
 
   const handleCreateEmployee = () => {
     const contact = validateEmployeeEmailOrPhone(employeeEmail, employeePhone);
+    const normalizedPin = employeePin.trim();
     if (
       !employeeName ||
       !contact.valid ||
@@ -848,6 +851,18 @@ export default function AdminDashboard() {
       toast.error(t('admin.toasts.passwordTooShort'));
       return;
     }
+    if (!editingEmployeeId && !/^\d{4}$/.test(normalizedPin)) {
+      toast.error(t("admin.toasts.employeePinRequired"));
+      return;
+    }
+    if (editingEmployeeId && !employeePinConfigured && !/^\d{4}$/.test(normalizedPin)) {
+      toast.error(t("admin.toasts.employeePinRequired"));
+      return;
+    }
+    if (editingEmployeeId && normalizedPin && !/^\d{4}$/.test(normalizedPin)) {
+      toast.error(t("admin.toasts.employeePinInvalid"));
+      return;
+    }
     const parsedGraceMinutes = Number(lateGraceMinutes);
     const graceMinutesValue = Number.isFinite(parsedGraceMinutes)
       ? Math.max(0, parsedGraceMinutes)
@@ -860,6 +875,7 @@ export default function AdminDashboard() {
           employeeEmail: contact.normalizedEmail ?? '',
           employeeUsername,
           employeePassword: employeePassword || undefined,
+          employeePin: normalizedPin || undefined,
           employeePhone: contact.normalizedPhone ?? '',
           lateGraceMinutes: graceMinutesValue,
           contractType: employeeContractType,
@@ -873,6 +889,7 @@ export default function AdminDashboard() {
           employeeEmail: contact.normalizedEmail ?? '',
           employeeUsername,
           employeePassword,
+          employeePin: normalizedPin,
           employeePhone: contact.normalizedPhone ?? '',
           lateGraceMinutes: graceMinutesValue,
           contractType: employeeContractType,
@@ -913,6 +930,8 @@ export default function AdminDashboard() {
     setEmployeeEmail('');
     setEmployeeUsername('');
     setEmployeePassword('');
+    setEmployeePin('');
+    setEmployeePinConfigured(false);
     setEmployeePhone('');
     setEmployeeContractType('full_time');
     setEmployeeWeeklyHours('');
@@ -942,6 +961,8 @@ export default function AdminDashboard() {
     setEmployeeEmail(employee.email ?? '');
     setEmployeeUsername(employee.username);
     setEmployeePassword('');
+    setEmployeePin('');
+    setEmployeePinConfigured(Boolean((employee as { pinConfigured?: boolean }).pinConfigured));
     setEmployeePhone(employee.phone || '');
     setEmployeeContractType(
       (employee as { contractType?: typeof employeeContractType }).contractType ?? 'full_time'
@@ -1460,6 +1481,32 @@ export default function AdminDashboard() {
                     onChange={(e) => setEmployeePassword(e.target.value)}
                     className="input-elegant"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    {t('admin.employees.form.pinLabel')}
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    placeholder={t('admin.employees.form.pinPlaceholder')}
+                    value={employeePin}
+                    onChange={(e) =>
+                      setEmployeePin(e.target.value.replace(/\D/g, '').slice(0, 4))
+                    }
+                    className="input-elegant"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {editingEmployeeId
+                      ? employeePinConfigured
+                        ? t('admin.employees.form.pinHintEditKeep')
+                        : t('admin.employees.form.pinHintEditSet')
+                      : t('admin.employees.form.pinHintCreate')}
+                  </p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

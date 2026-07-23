@@ -71,6 +71,13 @@ export const adminExt = {
         usernameClock: "Usuario para fichar",
         usernamePlaceholder: "juan.garcia",
         passwordPlaceholder: "••••••••",
+        pinLabel: "Código de 4 dígitos (multifichaje)",
+        pinPlaceholder: "1234",
+        pinHintCreate: "Obligatorio para que pueda fichar en el modo multifichaje del local.",
+        pinHintEditKeep:
+          "Deja este campo vacío para mantener el PIN actual. Escribe 4 dígitos para cambiarlo.",
+        pinHintEditSet:
+          "Este empleado aún no tiene PIN. Introduce 4 dígitos para activar multifichaje.",
         contractType: "Tipo de contrato",
         weeklyHours: "Horas semanales contratadas",
         weeklyHoursPlaceholder: "20",
@@ -264,6 +271,8 @@ export const adminExt = {
       employeeFormIncomplete:
         "Completa nombre, usuario, contraseña y al menos email o teléfono de contacto",
       passwordTooShort: "La contraseña debe tener al menos 6 caracteres",
+      employeePinRequired: "Introduce un código de 4 dígitos para el multifichaje",
+      employeePinInvalid: "El código debe tener exactamente 4 dígitos",
       employeeUpdated: "Empleado {{name}} actualizado correctamente",
       employeeCreated: "Empleado {{name}} creado correctamente",
       employeeUpdateFailed: "Error al actualizar empleado",

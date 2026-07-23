@@ -18,9 +18,14 @@ export function formatDurationFromMs(ms: number): string {
   return formatDurationHm(minutesFromMs(ms));
 }
 
-export function durationMinutesBetween(startIso: string, endIso: string): number {
-  const start = new Date(startIso).getTime();
-  const end = new Date(endIso).getTime();
+function toTimestamp(value: string | Date): number {
+  if (value instanceof Date) return value.getTime();
+  return new Date(value).getTime();
+}
+
+export function durationMinutesBetween(startIso: string | Date, endIso: string | Date): number {
+  const start = toTimestamp(startIso);
+  const end = toTimestamp(endIso);
   if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
   return minutesFromMs(end - start);
 }

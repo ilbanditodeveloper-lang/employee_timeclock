@@ -134,6 +134,13 @@
       "when": 1782094000000,
       "tag": "0018_landing_media",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782095000000,
+      "tag": "0019_employee_pin_multiclock",
+      "breakpoints": true
     }
   ]
 }

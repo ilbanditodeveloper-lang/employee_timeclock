@@ -71,6 +71,14 @@ export const adminExt = {
         usernameClock: "Clock-in username",
         usernamePlaceholder: "john.smith",
         passwordPlaceholder: "••••••••",
+        pinLabel: "4-digit code (multi-clock)",
+        pinPlaceholder: "1234",
+        pinHintCreate:
+          "Required so the employee can clock in from your local multi-clock screen.",
+        pinHintEditKeep:
+          "Leave empty to keep the current PIN. Enter 4 digits to replace it.",
+        pinHintEditSet:
+          "This employee has no PIN yet. Enter 4 digits to enable multi-clock.",
         contractType: "Contract type",
         weeklyHours: "Weekly contracted hours",
         weeklyHoursPlaceholder: "20",
@@ -264,6 +272,8 @@ export const adminExt = {
       employeeFormIncomplete:
         "Complete name, username, password, and at least email or phone contact",
       passwordTooShort: "Password must be at least 6 characters",
+      employeePinRequired: "Enter a 4-digit code for multi-clock",
+      employeePinInvalid: "Code must be exactly 4 digits",
       employeeUpdated: "Employee {{name}} updated successfully",
       employeeCreated: "Employee {{name}} created successfully",
       employeeUpdateFailed: "Error updating employee",

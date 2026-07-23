@@ -79,6 +79,7 @@ export default function AdminOnboarding() {
   const [employeePhone, setEmployeePhone] = useState("");
   const [employeeUsername, setEmployeeUsername] = useState("");
   const [employeePassword, setEmployeePassword] = useState("");
+  const [employeePin, setEmployeePin] = useState("");
 
   const steps = useMemo(
     () =>
@@ -227,6 +228,7 @@ export default function AdminOnboarding() {
       return true;
     }
     const contact = validateEmployeeEmailOrPhone(employeeEmail, employeePhone);
+    const normalizedPin = employeePin.trim();
     if (
       !employeeName.trim() ||
       !contact.valid ||
@@ -238,6 +240,10 @@ export default function AdminOnboarding() {
       );
       return false;
     }
+    if (!/^\d{4}$/.test(normalizedPin)) {
+      toast.error(t("admin.toasts.employeePinRequired"));
+      return false;
+    }
     await createEmployee.mutateAsync({
       ...emptyCreds,
       employeeName: employeeName.trim(),
@@ -245,6 +251,7 @@ export default function AdminOnboarding() {
       employeePhone: contact.normalizedPhone ?? "",
       employeeUsername: employeeUsername.trim(),
       employeePassword,
+      employeePin: normalizedPin,
       lateGraceMinutes: 5,
       schedule: createDefaultEmployeeSchedule(),
     });
@@ -611,6 +618,24 @@ export default function AdminOnboarding() {
                     onChange={(e) => setEmployeePassword(e.target.value)}
                     className="mt-1"
                   />
+                </div>
+                <div>
+                  <Label>{t("admin.employees.form.pinLabel")}</Label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={employeePin}
+                    onChange={(e) =>
+                      setEmployeePin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                    }
+                    className="mt-1"
+                    placeholder={t("admin.employees.form.pinPlaceholder")}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("admin.employees.form.pinHintCreate")}
+                  </p>
                 </div>
               </div>
             </>

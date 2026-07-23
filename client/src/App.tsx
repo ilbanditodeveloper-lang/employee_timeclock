@@ -13,6 +13,8 @@ import LandingPage from "./pages/LandingPage";
 import Home from "./pages/Home";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import AdminLogin from "./pages/AdminLogin";
+import MultiClockLogin from "./pages/MultiClockLogin";
+import MultiClockTerminal from "./pages/MultiClockTerminal";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeIncident from "./pages/EmployeeIncident";
 import EmployeeCalendar from "./pages/EmployeeCalendar";
@@ -48,6 +50,8 @@ function Router() {
       <Route path={"/register-business"} component={RegisterBusiness} />
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/admin-login"} component={AdminLogin} />
+      <Route path={"/multifichaje"} component={MultiClockLogin} />
+      <Route path={"/multifichaje/panel"} component={MultiClockTerminal} />
       <Route path={"/superadmin"} component={SuperAdmin} />
       <Route path={"/employee/calendar"} component={() => (
         <EmployeePrivacyGate><EmployeeCalendar /></EmployeePrivacyGate>
