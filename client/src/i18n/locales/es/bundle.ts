@@ -161,6 +161,28 @@ export const es = {
       },
       cta: "Probar la app",
     },
+    multiClock: {
+      eyebrow: "Nuevo: multifichaje",
+      title: "Un terminal compartido para fichar en el local",
+      description:
+        "Activa el modo multifichaje para que el negocio inicie sesión una vez y el equipo fiche entrada/salida con su código de 4 dígitos.",
+      cta: "Ver acceso multifichaje",
+      bullets: {
+        companyLogin: "El negocio entra al terminal con su cuenta de administrador.",
+        employeePin: "Cada empleado ficha rápido con su PIN de 4 dígitos.",
+        welcomeGoodbye: "La pantalla muestra bienvenida al entrar y despedida al salir.",
+        sharedDevice: "Ideal para tablet o PC fijo en barra, recepción o oficina.",
+      },
+      mockup: {
+        title: "Terminal multifichaje",
+        subtitle: "Fichaje rápido por código",
+        pinLabel: "Código del empleado",
+        pinHint: "Al completar 4 dígitos se registra automáticamente.",
+        clear: "Limpiar",
+        success: "Bienvenido, empleado",
+        logout: "Cerrar sesión multifichaje",
+      },
+    },
     pricing: {
       title: "Planes y precios",
       mostPopular: "Más popular",

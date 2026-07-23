@@ -161,6 +161,28 @@ export const en = {
       },
       cta: "Try the app",
     },
+    multiClock: {
+      eyebrow: "New: multi-clock",
+      title: "A shared terminal for clock-ins at your workplace",
+      description:
+        "Enable multi-clock mode so the business signs in once and staff clock in/out with their 4-digit code.",
+      cta: "Open multi-clock access",
+      bullets: {
+        companyLogin: "The business opens the terminal with the admin account.",
+        employeePin: "Each employee clocks quickly with their 4-digit PIN.",
+        welcomeGoodbye: "The screen shows a welcome on clock-in and goodbye on clock-out.",
+        sharedDevice: "Perfect for a fixed tablet or desktop at the counter or office.",
+      },
+      mockup: {
+        title: "Multi-clock terminal",
+        subtitle: "Fast code clock-in",
+        pinLabel: "Employee code",
+        pinHint: "Clock entry is submitted when all 4 digits are entered.",
+        clear: "Clear",
+        success: "Welcome, employee",
+        logout: "Sign out multi-clock",
+      },
+    },
     pricing: {
       title: "Plans and pricing",
       mostPopular: "Most popular",

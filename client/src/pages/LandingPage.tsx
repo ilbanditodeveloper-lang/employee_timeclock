@@ -31,6 +31,7 @@ import {
   Clock,
   FileDown,
   House,
+  Keyboard,
   LayoutDashboard,
   MapPin,
   MessageCircle,
@@ -138,6 +139,52 @@ function PhoneMockup() {
   );
 }
 
+function MultiClockPanelMockup() {
+  const { t } = useLocale();
+  const keypad = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "L", "0", "<"];
+
+  return (
+    <div className="w-full max-w-[360px] overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-xl">
+      <div className="bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 px-5 py-6 text-white">
+        <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-xl bg-white/15">
+          <Keyboard className="size-5" />
+        </div>
+        <p className="text-center text-xl font-bold">{t("landing.multiClock.mockup.title")}</p>
+        <p className="mt-1 text-center text-sm text-blue-100/90">
+          {t("landing.multiClock.mockup.subtitle")}
+        </p>
+      </div>
+      <div className="space-y-4 p-5">
+        <div>
+          <p className="mb-1 text-xs font-medium text-slate-600">
+            {t("landing.multiClock.mockup.pinLabel")}
+          </p>
+          <div className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-center text-lg tracking-[0.55rem] leading-[2.75rem] text-slate-700">
+            • • • •
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">{t("landing.multiClock.mockup.pinHint")}</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {keypad.map((key) => (
+            <div
+              key={key}
+              className="flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700"
+            >
+              {key === "L" ? t("landing.multiClock.mockup.clear") : key}
+            </div>
+          ))}
+        </div>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-800">
+          {t("landing.multiClock.mockup.success")}
+        </div>
+        <div className="rounded-md border border-slate-200 py-2 text-center text-sm text-slate-600">
+          {t("landing.multiClock.mockup.logout")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { adminSession, employeeSession } = useAuthContext();
@@ -220,6 +267,16 @@ export default function LandingPage() {
       t("landing.dashboardPreview.bullets.timeOffCalendar"),
       t("landing.dashboardPreview.bullets.payrollReports"),
       t("landing.dashboardPreview.bullets.optionalGeolocation"),
+    ],
+    [t, locale]
+  );
+
+  const multiClockBullets = useMemo(
+    () => [
+      t("landing.multiClock.bullets.companyLogin"),
+      t("landing.multiClock.bullets.employeePin"),
+      t("landing.multiClock.bullets.welcomeGoodbye"),
+      t("landing.multiClock.bullets.sharedDevice"),
     ],
     [t, locale]
   );
@@ -369,6 +426,41 @@ export default function LandingPage() {
                 <p className="text-sm text-slate-600 leading-relaxed">{text}</p>
               </Card>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Multi-clock terminal */}
+      <section className="py-20 bg-slate-50">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 lg:grid-cols-2 lg:items-center lg:px-8">
+          <div>
+            <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-800">
+              <Keyboard className="size-3.5" />
+              {t("landing.multiClock.eyebrow")}
+            </p>
+            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+              {t("landing.multiClock.title")}
+            </h2>
+            <p className="mt-4 text-slate-600 leading-relaxed">
+              {t("landing.multiClock.description")}
+            </p>
+            <ul className="mt-6 space-y-3">
+              {multiClockBullets.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
+                  <Check className="size-5 shrink-0 text-blue-600 mt-0.5" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <Link href="/multifichaje">
+              <Button className="mt-8 bg-blue-700 hover:bg-blue-800 gap-2">
+                <Keyboard className="size-4" />
+                {t("landing.multiClock.cta")}
+              </Button>
+            </Link>
+          </div>
+          <div className="flex justify-center lg:justify-end">
+            <MultiClockPanelMockup />
           </div>
         </div>
       </section>
