@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ export default function MultiClockTerminal() {
     clearAllSessions,
   } = useAuthContext();
   const trpcUtils = trpc.useUtils();
+  const pinInputRef = useRef<HTMLInputElement | null>(null);
   const [pin, setPin] = useState("");
   const [feedback, setFeedback] = useState<MultiClockFeedback | null>(null);
   const multiClockByPin = trpc.publicApi.multiClockByPin.useMutation();
@@ -85,6 +86,58 @@ export default function MultiClockTerminal() {
     if (multiClockByPin.isPending) return;
     setPin((prev) => prev.slice(0, -1));
   };
+
+  const handleClear = () => {
+    if (multiClockByPin.isPending) return;
+    setPin("");
+  };
+
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+    pinInputRef.current?.focus();
+  }, [isAdminAuthenticated]);
+
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+      if (/^\d$/.test(event.key)) {
+        event.preventDefault();
+        appendDigit(event.key);
+        return;
+      }
+
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        handleBackspace();
+        return;
+      }
+
+      if (event.key === "Delete") {
+        event.preventDefault();
+        handleClear();
+        return;
+      }
+
+      if (event.key === "Enter" && pin.length === 4 && !multiClockByPin.isPending) {
+        event.preventDefault();
+        void submitPin(pin);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    appendDigit,
+    handleBackspace,
+    handleClear,
+    isAdminAuthenticated,
+    multiClockByPin.isPending,
+    pin,
+    submitPin,
+  ]);
 
   const handleLogout = async () => {
     try {
@@ -149,6 +202,7 @@ export default function MultiClockTerminal() {
             {t("auth.multiClock.pinLabel")}
           </label>
           <Input
+            ref={pinInputRef}
             type="password"
             inputMode="numeric"
             pattern="[0-9]*"
@@ -178,7 +232,7 @@ export default function MultiClockTerminal() {
             type="button"
             variant="outline"
             className="h-12"
-            onClick={() => setPin("")}
+            onClick={handleClear}
             disabled={multiClockByPin.isPending}
           >
             {t("common.clear")}
