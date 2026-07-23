@@ -117,7 +117,7 @@ export default function MultiClockTerminal() {
 
   return (
     <AccessPageShell
-      backHref="/acceso"
+      showBackLink={false}
       icon={Keyboard}
       title={t("auth.multiClock.title")}
       subtitle={t("auth.multiClock.subtitle")}

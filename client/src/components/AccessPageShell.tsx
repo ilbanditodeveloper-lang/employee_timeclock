@@ -7,6 +7,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 type AccessPageShellProps = {
   backHref?: string;
   backLabel?: string;
+  showBackLink?: boolean;
   icon: LucideIcon;
   title: string;
   subtitle: string;
@@ -19,6 +20,7 @@ type AccessPageShellProps = {
 export default function AccessPageShell({
   backHref = "/acceso",
   backLabel = "Volver",
+  showBackLink = true,
   icon: Icon,
   title,
   subtitle,
@@ -38,14 +40,20 @@ export default function AccessPageShell({
       />
 
       <div className={`relative mx-auto w-full ${maxWidthClass}`}>
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Link
-            href={backHref}
-            className="inline-flex items-center gap-2 text-sm text-slate-600 transition-colors hover:text-blue-800"
-          >
-            <ArrowLeft className="size-4" />
-            {resolvedBackLabel}
-          </Link>
+        <div
+          className={`mb-6 flex items-center gap-3 ${
+            showBackLink ? "justify-between" : "justify-end"
+          }`}
+        >
+          {showBackLink ? (
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-2 text-sm text-slate-600 transition-colors hover:text-blue-800"
+            >
+              <ArrowLeft className="size-4" />
+              {resolvedBackLabel}
+            </Link>
+          ) : null}
           <LanguageSwitcher compact />
         </div>
 
