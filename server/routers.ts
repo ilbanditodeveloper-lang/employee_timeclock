@@ -521,6 +521,29 @@ export const appRouter = router({
         return { success: true as const, config };
       }),
 
+    superAdminUploadLandingImage: publicProcedure
+      .input(
+        optionalCreds.extend({
+          dataBase64: z.string().min(32).max(2_000_000),
+          contentType: z.string().min(3).max(128),
+          purpose: z.string().max(64).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveSuperAdminAuth(ctx, input);
+        const { insertLandingMedia } = await import("./landingMedia");
+        const media = await insertLandingMedia({
+          dataBase64: input.dataBase64,
+          contentType: input.contentType,
+          purpose: input.purpose,
+        });
+        return {
+          success: true as const,
+          id: media.id,
+          url: media.urlPath,
+        };
+      }),
+
     superAdminSetCompanySubscription: publicProcedure
       .input(
         optionalCreds.extend({

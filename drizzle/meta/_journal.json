@@ -127,6 +127,13 @@
       "when": 1782093000000,
       "tag": "0017_employee_privacy_notice_version",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782094000000,
+      "tag": "0018_landing_media",
+      "breakpoints": true
     }
   ]
 }

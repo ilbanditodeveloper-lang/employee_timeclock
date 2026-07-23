@@ -97,6 +97,12 @@ export const superadminExt = {
         sectionTitle: "Fotos «Para quién es» (6 sectores)",
         label: "Etiqueta",
         imageUrl: "URL de la imagen",
+        changePhoto: "Cambiar foto",
+        uploading: "Subiendo…",
+        uploadSuccess: "Foto actualizada. Pulsa Guardar ajustes web para publicar.",
+        uploadFailed: "No se pudo subir la foto",
+        fileTooLarge: "La imagen es demasiado grande",
+        pickImage: "Elige una imagen JPG, PNG o WebP",
       },
       faq: {
         sectionTitle: "Preguntas frecuentes (FAQ)",

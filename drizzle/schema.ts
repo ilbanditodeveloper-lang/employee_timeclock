@@ -468,6 +468,18 @@ export const platformSettings = pgTable("platform_settings", {
 
 export type PlatformSetting = typeof platformSettings.$inferSelect;
 
+/** Uploaded images for the public landing (audience section, etc.). */
+export const landingMedia = pgTable("landing_media", {
+  id: serial("id").primaryKey(),
+  purpose: varchar("purpose", { length: 64 }).default("audience").notNull(),
+  contentType: varchar("contentType", { length: 128 }).notNull(),
+  dataBase64: text("dataBase64").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LandingMedia = typeof landingMedia.$inferSelect;
+export type InsertLandingMedia = typeof landingMedia.$inferInsert;
+
 export const legalDocuments = pgTable(
   "legal_documents",
   {

@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink, Pencil } from "lucide-react";
+import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink, Pencil, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
+import { compressImageForUpload } from "@/lib/compressImage";
 import AccessPageShell from "@/components/AccessPageShell";
 import AppShellLayout, {
   AppShellKpiCard,
@@ -58,6 +59,7 @@ export default function SuperAdmin() {
     "dashboard"
   );
   const [landingDraft, setLandingDraft] = useState<LandingPageConfig>(DEFAULT_LANDING_PAGE_CONFIG);
+  const [uploadingAudienceIndex, setUploadingAudienceIndex] = useState<number | null>(null);
 
   const loginMutation = trpc.publicApi.superAdminLogin.useMutation();
   const trpcUtils = trpc.useUtils();
@@ -68,6 +70,7 @@ export default function SuperAdmin() {
     enabled: isAuthed,
   });
   const saveLanding = trpc.publicApi.superAdminUpdateLandingSettings.useMutation();
+  const uploadLandingImage = trpc.publicApi.superAdminUploadLandingImage.useMutation();
   const logoutMutation = trpc.publicApi.logoutSession.useMutation();
 
   const superAdminNav = useMemo<AppShellNavItem[]>(
@@ -165,6 +168,32 @@ export default function SuperAdmin() {
       items[index] = { ...items[index], ...patch };
       return { ...prev, audienceImages: items };
     });
+  };
+
+  const handleAudiencePhotoUpload = async (index: number, file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error(t("superadmin.landing.audience.pickImage"));
+      return;
+    }
+    setUploadingAudienceIndex(index);
+    try {
+      const { dataBase64, contentType } = await compressImageForUpload(file);
+      const result = await uploadLandingImage.mutateAsync({
+        ...emptyCreds,
+        dataBase64,
+        contentType,
+        purpose: `audience-${landingDraft.audienceImages[index]?.id ?? index}`,
+      });
+      updateAudience(index, { imageUrl: result.url });
+      toast.success(t("superadmin.landing.audience.uploadSuccess"));
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : t("superadmin.landing.audience.uploadFailed");
+      toast.error(msg || t("superadmin.landing.audience.uploadFailed"));
+    } finally {
+      setUploadingAudienceIndex(null);
+    }
   };
 
   const updateHero = (patch: Partial<LandingHero>) => {
@@ -717,6 +746,35 @@ export default function SuperAdmin() {
                           className="h-28 rounded-lg bg-cover bg-center border border-border"
                           style={{ backgroundImage: `url(${item.imageUrl})` }}
                         />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            id={`audience-photo-${item.id}`}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="sr-only"
+                            disabled={uploadingAudienceIndex !== null}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              void handleAudiencePhotoUpload(index, file);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={uploadingAudienceIndex !== null}
+                            onClick={() =>
+                              document.getElementById(`audience-photo-${item.id}`)?.click()
+                            }
+                          >
+                            <ImagePlus className="size-4" />
+                            {uploadingAudienceIndex === index
+                              ? t("superadmin.landing.audience.uploading")
+                              : t("superadmin.landing.audience.changePhoto")}
+                          </Button>
+                        </div>
                         <div>
                           <Label>{t("superadmin.landing.audience.label")}</Label>
                           <Input
@@ -731,7 +789,7 @@ export default function SuperAdmin() {
                             value={item.imageUrl}
                             onChange={(e) => updateAudience(index, { imageUrl: e.target.value })}
                             className="mt-1"
-                            placeholder="https://..."
+                            placeholder="https://... o /api/landing-media/…"
                           />
                         </div>
                       </div>

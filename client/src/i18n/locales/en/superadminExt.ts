@@ -97,6 +97,12 @@ export const superadminExt = {
         sectionTitle: "«Who it's for» photos (6 sectors)",
         label: "Label",
         imageUrl: "Image URL",
+        changePhoto: "Change photo",
+        uploading: "Uploading…",
+        uploadSuccess: "Photo updated. Click Save web settings to publish.",
+        uploadFailed: "Could not upload the photo",
+        fileTooLarge: "The image is too large",
+        pickImage: "Choose a JPG, PNG, or WebP image",
       },
       faq: {
         sectionTitle: "Frequently asked questions (FAQ)",

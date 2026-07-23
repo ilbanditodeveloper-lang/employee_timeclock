@@ -110,6 +110,30 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json(healthPayload());
   });
+
+  app.get("/api/landing-media/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).send("Invalid id");
+        return;
+      }
+      const { getLandingMediaById } = await import("../landingMedia.js");
+      const media = await getLandingMediaById(id);
+      if (!media) {
+        res.status(404).send("Not found");
+        return;
+      }
+      const buffer = Buffer.from(media.dataBase64, "base64");
+      res.setHeader("Content-Type", media.contentType);
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.setHeader("Content-Length", String(buffer.length));
+      res.send(buffer);
+    } catch (error) {
+      console.error("landing-media serve error:", error);
+      res.status(500).send("Error");
+    }
+  });
   const localhostOriginRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
   const allowedOrigins = [
     "http://localhost:3000",
