@@ -281,6 +281,16 @@ export default function LandingPage() {
     [t, locale]
   );
 
+  const employeeAccessBullets = useMemo(
+    () => [
+      t("landing.employeeAccess.bullets.clockActions"),
+      t("landing.employeeAccess.bullets.incidents"),
+      t("landing.employeeAccess.bullets.scheduleAndCalendar"),
+      t("landing.employeeAccess.bullets.liveStatus"),
+    ],
+    [t, locale]
+  );
+
   const pricingCtaHref = (packId: string) =>
     isCheckoutPlan(packId) ? `/register-business?plan=${packId}` : "/register-business";
 
@@ -461,6 +471,48 @@ export default function LandingPage() {
           </div>
           <div className="flex justify-center lg:justify-end">
             <MultiClockPanelMockup />
+          </div>
+        </div>
+      </section>
+
+      {/* Employee access */}
+      <section className="py-20 bg-white">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 lg:grid-cols-2 lg:items-center lg:px-8">
+          <div className="order-2 flex justify-center lg:order-1 lg:justify-start">
+            <div className="w-full max-w-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+              <img
+                src="/employee-access-app.png"
+                alt={t("landing.employeeAccess.imageAlt")}
+                className="h-auto w-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          </div>
+          <div className="order-1 lg:order-2">
+            <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-800">
+              <Smartphone className="size-3.5" />
+              {t("landing.employeeAccess.eyebrow")}
+            </p>
+            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+              {t("landing.employeeAccess.title")}
+            </h2>
+            <p className="mt-4 text-slate-600 leading-relaxed">
+              {t("landing.employeeAccess.description")}
+            </p>
+            <ul className="mt-6 space-y-3">
+              {employeeAccessBullets.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
+                  <Check className="size-5 shrink-0 text-blue-600 mt-0.5" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <Link href="/acceso">
+              <Button className="mt-8 bg-blue-700 hover:bg-blue-800 gap-2">
+                <Smartphone className="size-4" />
+                {t("landing.employeeAccess.cta")}
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

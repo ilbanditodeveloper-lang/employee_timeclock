@@ -183,6 +183,20 @@ export const en = {
         logout: "Sign out multi-clock",
       },
     },
+    employeeAccess: {
+      eyebrow: "Employee access",
+      title: "Your staff clock in from the app",
+      description:
+        "Each employee can sign in from mobile, tablet, or desktop to register their workday in seconds and see their current status.",
+      imageAlt: "TimeClock employee access screen",
+      cta: "Try employee access",
+      bullets: {
+        clockActions: "Clock in, break, and clock out in one tap.",
+        incidents: "Report incidents when needed.",
+        scheduleAndCalendar: "View schedule, calendar, and time off.",
+        liveStatus: "Current status visible to both employee and admin.",
+      },
+    },
     pricing: {
       title: "Plans and pricing",
       mostPopular: "Most popular",

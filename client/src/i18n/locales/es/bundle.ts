@@ -183,6 +183,20 @@ export const es = {
         logout: "Cerrar sesión multifichaje",
       },
     },
+    employeeAccess: {
+      eyebrow: "Acceso empleado",
+      title: "Tus empleados fichan desde la app",
+      description:
+        "Cada empleado puede entrar desde móvil, tablet o PC para registrar su jornada en segundos y ver su estado al momento.",
+      imageAlt: "Pantalla de acceso de empleado en TimeClock",
+      cta: "Probar acceso empleado",
+      bullets: {
+        clockActions: "Entrada, pausa y salida en un toque.",
+        incidents: "Reporte de incidencias cuando lo necesiten.",
+        scheduleAndCalendar: "Consulta de horario, calendario y vacaciones.",
+        liveStatus: "Estado actual visible para empleado y administrador.",
+      },
+    },
     pricing: {
       title: "Planes y precios",
       mostPopular: "Más popular",
