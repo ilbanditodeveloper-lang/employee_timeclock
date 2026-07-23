@@ -25,9 +25,9 @@ export default function MultiClockTerminal() {
     isAuthLoading,
     isAdminAuthenticated,
     adminSession,
-    setAdminSession,
-    setEmployeeSession,
+    clearAllSessions,
   } = useAuthContext();
+  const trpcUtils = trpc.useUtils();
   const [pin, setPin] = useState("");
   const [feedback, setFeedback] = useState<MultiClockFeedback | null>(null);
   const multiClockByPin = trpc.publicApi.multiClockByPin.useMutation();
@@ -89,12 +89,13 @@ export default function MultiClockTerminal() {
   const handleLogout = async () => {
     try {
       await logoutSession.mutateAsync();
-      setAdminSession(null);
-      setEmployeeSession(null);
-      setLocation("/acceso");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("auth.multiClock.logoutError"));
+    } catch {
+      // ignore transient API errors; continue local cleanup
     }
+    clearAllSessions();
+    trpcUtils.publicApi.getSession.setData(undefined, { session: null });
+    await trpcUtils.publicApi.getSession.invalidate();
+    window.location.href = "/multifichaje";
   };
 
   const feedbackTitle = useMemo(() => {
