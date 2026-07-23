@@ -23,6 +23,7 @@ export const superadminExt = {
         viewAll: "Ver todas las empresas",
         editLanding: "Editar landing",
         openPublicWeb: "Abrir web pública",
+        viewStats: "Ver estadísticas",
       },
       upcomingPayments: {
         title: "Próximos pagos",
@@ -56,6 +57,38 @@ export const superadminExt = {
           tomorrow: "Mañana",
           inDays: "En {{days}} días",
         },
+      },
+    },
+    pages: {
+      stats: {
+        title: "Estadísticas",
+        subtitle: "Actividad de la plataforma y señal de visitas",
+      },
+    },
+    stats: {
+      menuLabel: "Estadísticas",
+      kpis: {
+        newCompanies30d: "Empresas nuevas (30d)",
+        adminAccess24h: "Accesos admin (24h)",
+        adminAccess7d: "Accesos admin (7d)",
+        onboardingCompleted: "Onboarding completado",
+        trialExpired: "Pruebas vencidas",
+      },
+      activity: {
+        title: "Últimos accesos de administradores",
+        description: "Empresas con actividad reciente del panel admin.",
+        lastAccess: "Último acceso: {{date}}",
+        employees: "{{count}} empleados",
+        empty: "Aún no hay accesos de administradores registrados.",
+      },
+      visits: {
+        title: "Visitas web públicas",
+        description: "Control de visitas de la landing y acciones de mejora.",
+        notConfigured:
+          "Todavía no hay un contador de visitas públicas conectado en esta instalación.",
+        hint:
+          "Mientras tanto, aquí sí puedes revisar la actividad real de acceso al panel de administradores.",
+        openLanding: "Abrir landing pública",
       },
     },
     landing: {

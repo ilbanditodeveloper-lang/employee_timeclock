@@ -6,7 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Shield, Building2, Globe, Plus, Trash2, LayoutDashboard, Users, UserCheck, Clock, ExternalLink, Pencil, ImagePlus } from "lucide-react";
+import {
+  Shield,
+  Building2,
+  Globe,
+  Plus,
+  Trash2,
+  LayoutDashboard,
+  Users,
+  UserCheck,
+  Clock,
+  ExternalLink,
+  ImagePlus,
+  BarChart3,
+} from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { emptyCreds } from "@/lib/authApi";
@@ -31,9 +44,9 @@ import SuperAdminCompaniesPanel from "@/components/SuperAdminCompaniesPanel";
 import SuperAdminUpcomingPaymentsPanel from "@/components/SuperAdminUpcomingPaymentsPanel";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
-type SuperAdminTab = "dashboard" | "companies" | "landing";
+type SuperAdminTab = "dashboard" | "companies" | "landing" | "stats";
 
-const SUPERADMIN_TABS = ["dashboard", "companies", "landing"] as const;
+const SUPERADMIN_TABS = ["dashboard", "companies", "landing", "stats"] as const;
 
 function packFeaturesToText(features: string[]) {
   return features.join("\n");
@@ -44,6 +57,16 @@ function textToFeatures(text: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function formatDateTime(value: Date | string | null | undefined, locale: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "es-ES", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
 }
 
 export default function SuperAdmin() {
@@ -78,6 +101,7 @@ export default function SuperAdmin() {
       { id: "dashboard", label: t("nav.superadmin.dashboard"), icon: LayoutDashboard },
       { id: "companies", label: t("nav.superadmin.companies"), icon: Building2 },
       { id: "landing", label: t("nav.superadmin.landing"), icon: Globe },
+      { id: "stats", label: t("superadmin.stats.menuLabel"), icon: BarChart3 },
     ],
     [t]
   );
@@ -95,6 +119,10 @@ export default function SuperAdmin() {
       landing: {
         title: t("superadmin.pages.landing.title"),
         subtitle: t("superadmin.pages.landing.subtitle"),
+      },
+      stats: {
+        title: t("superadmin.pages.stats.title"),
+        subtitle: t("superadmin.pages.stats.subtitle"),
       },
     }),
     [t]
@@ -117,6 +145,60 @@ export default function SuperAdmin() {
     () => buildSubscriptionPlanLabels(landingQuery.data?.pricingPacks),
     [landingQuery.data?.pricingPacks]
   );
+
+  const analytics = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const monthMs = 30 * dayMs;
+
+    let newCompanies30d = 0;
+    let adminAccess24h = 0;
+    let adminAccess7d = 0;
+    let onboardingCompleted = 0;
+    let trialExpired = 0;
+
+    const recentAdminAccess = companies
+      .map((company) => {
+        const createdAt = company.createdAt ? new Date(company.createdAt) : null;
+        const createdAtMs =
+          createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : null;
+        if (createdAtMs != null && now - createdAtMs <= monthMs) {
+          newCompanies30d += 1;
+        }
+
+        const lastSignedIn = company.adminLastSignedIn ? new Date(company.adminLastSignedIn) : null;
+        const lastSignedInMs =
+          lastSignedIn && !Number.isNaN(lastSignedIn.getTime()) ? lastSignedIn.getTime() : null;
+        if (lastSignedInMs != null) {
+          const diff = now - lastSignedInMs;
+          if (diff <= dayMs) adminAccess24h += 1;
+          if (diff <= 7 * dayMs) adminAccess7d += 1;
+        }
+
+        if (company.onboardingCompleted) onboardingCompleted += 1;
+        if (company.trialExpired) trialExpired += 1;
+
+        return {
+          id: company.id,
+          name: company.name,
+          employeeCount: company.employeeCount ?? 0,
+          adminLastSignedIn: company.adminLastSignedIn ?? null,
+          adminLastSignedInMs: lastSignedInMs,
+        };
+      })
+      .filter((row) => row.adminLastSignedInMs != null)
+      .sort((a, b) => (b.adminLastSignedInMs ?? 0) - (a.adminLastSignedInMs ?? 0))
+      .slice(0, 8);
+
+    return {
+      newCompanies30d,
+      adminAccess24h,
+      adminAccess7d,
+      onboardingCompleted,
+      trialExpired,
+      recentAdminAccess,
+    };
+  }, [companies]);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -483,8 +565,98 @@ export default function SuperAdmin() {
                     <ExternalLink className="mr-2 size-4" />
                     {t("superadmin.dashboard.quickAccess.openPublicWeb")}
                   </Button>
+                  <Button type="button" variant="outline" onClick={() => setActiveTab("stats")}>
+                    <BarChart3 className="mr-2 size-4" />
+                    {t("superadmin.dashboard.quickAccess.viewStats")}
+                  </Button>
                 </div>
               </AppShellPanel>
+            </div>
+          ) : null}
+
+          {activeTab === "stats" ? (
+            <div className="w-full space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                <AppShellKpiCard
+                  label={t("superadmin.stats.kpis.newCompanies30d")}
+                  value={analytics.newCompanies30d}
+                  icon={<Building2 className="size-5" />}
+                  accent="blue"
+                />
+                <AppShellKpiCard
+                  label={t("superadmin.stats.kpis.adminAccess24h")}
+                  value={analytics.adminAccess24h}
+                  icon={<Clock className="size-5" />}
+                  accent="emerald"
+                />
+                <AppShellKpiCard
+                  label={t("superadmin.stats.kpis.adminAccess7d")}
+                  value={analytics.adminAccess7d}
+                  icon={<BarChart3 className="size-5" />}
+                  accent="amber"
+                />
+                <AppShellKpiCard
+                  label={t("superadmin.stats.kpis.onboardingCompleted")}
+                  value={analytics.onboardingCompleted}
+                  icon={<UserCheck className="size-5" />}
+                  accent="blue"
+                />
+                <AppShellKpiCard
+                  label={t("superadmin.stats.kpis.trialExpired")}
+                  value={analytics.trialExpired}
+                  icon={<Users className="size-5" />}
+                  accent="rose"
+                />
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-3">
+                <AppShellPanel
+                  title={t("superadmin.stats.activity.title")}
+                  description={t("superadmin.stats.activity.description")}
+                  className="xl:col-span-2"
+                >
+                  <div className="space-y-2">
+                    {analytics.recentAdminAccess.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3"
+                      >
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.name}</p>
+                          <p className="text-xs text-slate-500">
+                            {t("superadmin.stats.activity.lastAccess", {
+                              date: formatDateTime(item.adminLastSignedIn, locale),
+                            })}{" "}
+                            ·{" "}
+                            {t("superadmin.stats.activity.employees", {
+                              count: item.employeeCount,
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {analytics.recentAdminAccess.length === 0 ? (
+                      <p className="text-sm text-slate-500">{t("superadmin.stats.activity.empty")}</p>
+                    ) : null}
+                  </div>
+                </AppShellPanel>
+
+                <AppShellPanel
+                  title={t("superadmin.stats.visits.title")}
+                  description={t("superadmin.stats.visits.description")}
+                >
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-600">{t("superadmin.stats.visits.notConfigured")}</p>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
+                      <p className="text-xs text-blue-900">{t("superadmin.stats.visits.hint")}</p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => setLocation("/")}>
+                      <ExternalLink className="mr-2 size-4" />
+                      {t("superadmin.stats.visits.openLanding")}
+                    </Button>
+                  </div>
+                </AppShellPanel>
+              </div>
             </div>
           ) : null}
 
