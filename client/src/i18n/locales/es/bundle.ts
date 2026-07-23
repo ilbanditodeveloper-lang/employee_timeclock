@@ -472,7 +472,7 @@ export const es = {
       dayDetail: "Detalle del día",
       selectRangeHint: "Selecciona un rango para ver el detalle.",
       selectDayHint: "Selecciona un día para ver el detalle.",
-      hoursRegistered: "Horas registradas: {{hours}}h",
+      hoursRegistered: "Horas registradas: {{duration}}",
       incidents: "Incidencias: {{count}}",
       clockIn: "Entrada:",
       clockOut: "Salida:",

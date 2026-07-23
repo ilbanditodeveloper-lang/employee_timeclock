@@ -471,7 +471,7 @@ export const en = {
       dayDetail: "Day details",
       selectRangeHint: "Select a range to see details.",
       selectDayHint: "Select a day to see details.",
-      hoursRegistered: "Hours recorded: {{hours}}h",
+      hoursRegistered: "Hours recorded: {{duration}}",
       incidents: "Incidents: {{count}}",
       clockIn: "Clock in:",
       clockOut: "Clock out:",

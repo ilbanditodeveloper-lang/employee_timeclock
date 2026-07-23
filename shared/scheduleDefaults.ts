@@ -38,7 +38,7 @@ export function createEmptySchedule(): WeekSchedule {
 export function createDefaultEmployeeSchedule(): WeekSchedule {
   const schedule = createEmptySchedule();
   for (const day of ["monday", "tuesday", "wednesday", "thursday", "friday"] as const) {
-    schedule[day] = { entry1: "09:00", entry2: "", exit1: "17:00", exit2: "", isActive: true };
+    schedule[day] = { entry1: "09:00", entry2: "", exit1: "", exit2: "", isActive: true };
   }
   schedule.saturday = { entry1: "", entry2: "", exit1: "", exit2: "", isActive: false };
   schedule.sunday = { entry1: "", entry2: "", exit1: "", exit2: "", isActive: false };

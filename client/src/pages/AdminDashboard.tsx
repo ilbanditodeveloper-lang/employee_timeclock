@@ -62,6 +62,8 @@ import {
   type WeekSchedule,
 } from '@shared/scheduleDefaults';
 import { validateEmployeeEmailOrPhone } from '@shared/employeeContact';
+import EmployeeWeekScheduleEditor from '@/components/EmployeeWeekScheduleEditor';
+import { durationMinutesBetween, formatDurationHm } from '@shared/formatDuration';
 
 export default function AdminDashboard() {
   const { t, locale } = useLocale();
@@ -148,35 +150,6 @@ export default function AdminDashboard() {
   const [shiftEmployeeId, setShiftEmployeeId] = useState('');
   const [shiftSchedule, setShiftSchedule] = useState<WeekSchedule>(() => createEmptySchedule());
   const [scheduleSectionOpen, setScheduleSectionOpen] = useState(false);
-
-  const hourOptions = Array.from({ length: 24 }, (_, i) =>
-    String(i).padStart(2, '0')
-  );
-  const minuteOptions = Array.from({ length: 60 }, (_, i) =>
-    String(i).padStart(2, '0')
-  );
-
-  const parseTime = (value: string) => {
-    if (!value) return { hour: '', minute: '' };
-    const [hour, minute] = value.split(':');
-    return { hour: hour || '', minute: minute || '' };
-  };
-
-  const buildTime = (hour: string, minute: string) => {
-    if (!hour && !minute) return '';
-    const normalizedHour = hour || '00';
-    const normalizedMinute = minute || '00';
-    return `${normalizedHour}:${normalizedMinute}`;
-  };
-
-  const updateScheduleTime = (
-    day: keyof typeof employeeSchedule,
-    field: 'entry1' | 'entry2',
-    hour: string,
-    minute: string
-  ) => {
-    handleScheduleChange(day, field, buildTime(hour, minute));
-  };
 
   const salaryTotal = (() => {
     const hours = Number(workedHours);
@@ -615,83 +588,12 @@ export default function AdminDashboard() {
     return null;
   };
 
-  const totalHours = filteredTimeclocks.reduce((total, entry) => {
+  const totalMinutes = filteredTimeclocks.reduce((total, entry) => {
     if (entry.status === 'voided') return total;
     if (!entry.entryTime || !entry.exitTime) return total;
-    const start = new Date(entry.entryTime).getTime();
-    const end = new Date(entry.exitTime).getTime();
-    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return total;
-    return total + (end - start) / (1000 * 60 * 60);
+    return total + durationMinutesBetween(entry.entryTime, entry.exitTime);
   }, 0);
-
-  const handleScheduleChange = (
-    day: keyof typeof employeeSchedule,
-    field: 'entry1' | 'entry2',
-    value: string
-  ) => {
-    setEmployeeSchedule(prev => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleScheduleToggle = (day: keyof typeof employeeSchedule) => {
-    setEmployeeSchedule(prev => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        isActive: !prev[day].isActive,
-      },
-    }));
-  };
-
-  const handleShiftTypeChange = (
-    day: keyof typeof shiftSchedule,
-    shiftType: 'split' | 'morning' | 'afternoon' | 'off'
-  ) => {
-    if (shiftType === 'off') {
-      setShiftSchedule(prev => ({
-        ...prev,
-        [day]: { entry1: '', entry2: '', exit1: '', exit2: '', isActive: false },
-      }));
-      return;
-    }
-    if (shiftType === 'split') {
-      setShiftSchedule(prev => ({
-        ...prev,
-        [day]: {
-          entry1: '09:00',
-          exit1: '16:00',
-          entry2: '16:00',
-          exit2: '22:00',
-          isActive: true,
-        },
-      }));
-      return;
-    }
-    if (shiftType === 'morning') {
-      setShiftSchedule(prev => ({
-        ...prev,
-        [day]: { entry1: '09:00', entry2: '', exit1: '17:00', exit2: '', isActive: true },
-      }));
-      return;
-    }
-    setShiftSchedule(prev => ({
-      ...prev,
-      [day]: { entry1: '16:00', entry2: '', exit1: '22:00', exit2: '', isActive: true },
-    }));
-  };
-
-  const getShiftType = (day: keyof typeof shiftSchedule): 'split' | 'morning' | 'afternoon' | 'off' => {
-    const value = shiftSchedule[day];
-    if (!value.isActive || (!value.entry1 && !value.entry2)) return 'off';
-    if (value.entry1 && value.entry2) return 'split';
-    const hour = Number((value.entry1 || '0').split(':')[0]);
-    return hour >= 14 ? 'afternoon' : 'morning';
-  };
+  const totalDurationLabel = formatDurationHm(totalMinutes);
 
   const handleSaveEmployeeShifts = () => {
     if (!shiftEmployeeId) {
@@ -1649,118 +1551,13 @@ export default function AdminDashboard() {
                     />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-4 pb-4 space-y-4">
-                  <div className="grid grid-cols-1 gap-4">
-                    {scheduleDays.map(day => (
-                      <div
-                        key={day.key}
-                        className="grid grid-cols-1 md:grid-cols-[120px,1fr,1fr,auto] gap-2 items-center"
-                      >
-                        <span className="text-sm text-foreground">
-                          {day.label}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const time = parseTime(employeeSchedule[day.key].entry1);
-                            return (
-                              <>
-                                <select
-                                  className="input-elegant"
-                                  value={time.hour}
-                                  onChange={(e) =>
-                                    updateScheduleTime(day.key, 'entry1', e.target.value, time.minute)
-                                  }
-                                >
-                                  <option value="">HH</option>
-                                  {hourOptions.map((hour) => (
-                                    <option key={hour} value={hour}>
-                                      {hour}
-                                    </option>
-                                  ))}
-                                </select>
-                                <span className="text-muted-foreground">:</span>
-                                <select
-                                  className="input-elegant"
-                                  value={time.minute}
-                                  onChange={(e) =>
-                                    updateScheduleTime(day.key, 'entry1', time.hour, e.target.value)
-                                  }
-                                >
-                                  <option value="">MM</option>
-                                  {minuteOptions.map((minute) => (
-                                    <option key={minute} value={minute}>
-                                      {minute}
-                                    </option>
-                                  ))}
-                                </select>
-                              </>
-                            );
-                          })()}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleScheduleChange(day.key, 'entry1', '')}
-                          >
-                            {t('common.clear')}
-                          </Button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const time = parseTime(employeeSchedule[day.key].entry2);
-                            return (
-                              <>
-                                <select
-                                  className="input-elegant"
-                                  value={time.hour}
-                                  onChange={(e) =>
-                                    updateScheduleTime(day.key, 'entry2', e.target.value, time.minute)
-                                  }
-                                >
-                                  <option value="">HH</option>
-                                  {hourOptions.map((hour) => (
-                                    <option key={hour} value={hour}>
-                                      {hour}
-                                    </option>
-                                  ))}
-                                </select>
-                                <span className="text-muted-foreground">:</span>
-                                <select
-                                  className="input-elegant"
-                                  value={time.minute}
-                                  onChange={(e) =>
-                                    updateScheduleTime(day.key, 'entry2', time.hour, e.target.value)
-                                  }
-                                >
-                                  <option value="">MM</option>
-                                  {minuteOptions.map((minute) => (
-                                    <option key={minute} value={minute}>
-                                      {minute}
-                                    </option>
-                                  ))}
-                                </select>
-                              </>
-                            );
-                          })()}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleScheduleChange(day.key, 'entry2', '')}
-                          >
-                            {t('common.clear')}
-                          </Button>
-                        </div>
-                        <label className="flex items-center gap-2 text-sm text-foreground">
-                          <input
-                            type="checkbox"
-                            checked={employeeSchedule[day.key].isActive}
-                            onChange={() => handleScheduleToggle(day.key)}
-                          />
-                          {t('common.active')}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
+                    <EmployeeWeekScheduleEditor
+                      key={editingEmployeeId ?? `new-${employeeFormKey}`}
+                      schedule={employeeSchedule}
+                      onChange={setEmployeeSchedule}
+                      scheduleDays={scheduleDays}
+                      layout="form"
+                    />
                   </CollapsibleContent>
                 </Collapsible>
 
@@ -1811,30 +1608,14 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {scheduleDays.map((day) => (
-                  <div key={day.key} className="border border-border rounded-lg p-4 space-y-3">
-                    <p className="font-medium text-foreground">{day.label}</p>
-                    <div>
-                      <label className="block text-xs text-muted-foreground mb-1">{t('admin.shifts.shiftTypeLabel')}</label>
-                      <select
-                        className="input-elegant"
-                        value={getShiftType(day.key)}
-                        onChange={(event) =>
-                          handleShiftTypeChange(
-                            day.key,
-                            event.target.value as 'split' | 'morning' | 'afternoon' | 'off'
-                          )
-                        }
-                      >
-                        <option value="off">{t('common.shiftTypes.off')}</option>
-                        <option value="morning">{t('common.shiftTypes.morning')}</option>
-                        <option value="afternoon">{t('common.shiftTypes.afternoon')}</option>
-                        <option value="split">{t('common.shiftTypes.split')}</option>
-                      </select>
-                    </div>
-                  </div>
-                ))}
+              <div className="mb-6">
+                <EmployeeWeekScheduleEditor
+                  key={shiftEmployeeId || "none"}
+                  schedule={shiftSchedule}
+                  onChange={setShiftSchedule}
+                  scheduleDays={scheduleDays}
+                  layout="grid"
+                />
               </div>
 
               <Button
@@ -1961,7 +1742,7 @@ export default function AdminDashboard() {
                   <AccordionTrigger className="text-sm font-semibold text-foreground">
                     {t('admin.hours.registerTitle', {
                       count: filteredTimeclocks.length,
-                      hours: totalHours.toFixed(2),
+                      duration: totalDurationLabel,
                     })}
                   </AccordionTrigger>
                   <AccordionContent className="pt-2">
@@ -1999,6 +1780,12 @@ export default function AdminDashboard() {
                           {entry.exitTime ? formatClockTime(entry.exitTime) : t('admin.timeclock.pending')}
                           {entry.exitTime ? ` · ${formatClockDateShort(entry.exitTime)}` : ""}
                         </p>
+                        {entry.entryTime && entry.exitTime && entry.status !== "voided" ? (
+                          <p className="text-xs text-muted-foreground">
+                            {t('admin.timeclock.durationLabel')}{" "}
+                            {formatDurationHm(durationMinutesBetween(entry.entryTime, entry.exitTime))}
+                          </p>
+                        ) : null}
                         {(entry.correctionReason || entry.voidReason) && (
                           <p className="text-xs text-muted-foreground mt-1">
                             {t('admin.timeclock.reasonLabel')} {entry.correctionReason || entry.voidReason}

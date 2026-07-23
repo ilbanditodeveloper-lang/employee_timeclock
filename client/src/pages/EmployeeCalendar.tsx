@@ -12,6 +12,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { employeeQueryInput } from "@/lib/authApi";
 import EmployeeShellLayout from "@/components/EmployeeShellLayout";
 import { formatTimeInTimeZone, resolveAppTimeZone, todayYmdInTimeZone } from "@shared/timezone";
+import { durationMinutesBetween, formatDurationHm } from "@shared/formatDuration";
 import { cn } from "@/lib/utils";
 
 export default function EmployeeCalendar() {
@@ -106,13 +107,11 @@ export default function EmployeeCalendar() {
     selectedDate,
   ]);
 
-  const totalHours = filteredTimeclocks.reduce((total, entry) => {
+  const totalMinutes = filteredTimeclocks.reduce((total, entry) => {
     if (!entry.entryTime || !entry.exitTime) return total;
-    const start = new Date(entry.entryTime).getTime();
-    const end = new Date(entry.exitTime).getTime();
-    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return total;
-    return total + (end - start) / (1000 * 60 * 60);
+    return total + durationMinutesBetween(entry.entryTime, entry.exitTime);
   }, 0);
+  const totalDurationLabel = formatDurationHm(totalMinutes);
 
   if (isAuthLoading || !isEmployeeAuthenticated) {
     return null;
@@ -232,7 +231,7 @@ export default function EmployeeCalendar() {
                     : t("employee.calendar.selectDayHint")}
                 </p>
                 <p className="mt-3 text-sm text-foreground">
-                  {t("employee.calendar.hoursRegistered", { hours: totalHours.toFixed(2) })}
+                  {t("employee.calendar.hoursRegistered", { duration: totalDurationLabel })}
                 </p>
                 <p className="text-sm text-foreground">
                   {t("employee.calendar.incidents", { count: "0" })}
